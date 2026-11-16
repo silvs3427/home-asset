@@ -28,7 +28,7 @@ export function createApp() {
         if (!origin) return null;
         return config.corsOrigins.includes(origin) ? origin : null;
       },
-      allowMethods: ["GET", "POST", "OPTIONS"],
+      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
       maxAge: 600,
       credentials: false,
@@ -54,7 +54,7 @@ export function createApp() {
       name: "HomeAsset API",
       docs: "See repository README for local run instructions.",
       privacy:
-        "Homeowner controls the ledger. Homes are property-scoped. No silent data sharing. Auth required for personal data.",
+        "Homeowner controls the ledger. Homes and assets are property-scoped. No silent data sharing. Auth required for personal data.",
     }),
   );
 

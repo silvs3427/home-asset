@@ -245,3 +245,190 @@ describe("HomeAsset API — accounts & properties", () => {
     assert.ok(faceBody.user.faces.includes("contractor"));
   });
 });
+
+type AssetBody = {
+  asset: {
+    id: string;
+    propertyId: string;
+    name: string;
+    category: string;
+    manufacturer: string | null;
+    model: string | null;
+    serial: string | null;
+    location: string | null;
+    provenance: string;
+  };
+};
+
+async function createHome(
+  app: ReturnType<typeof createApp>,
+  token: string,
+  name: string,
+) {
+  const created = await app.request("/properties", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      name,
+      addressLine1: "1 Test St",
+      city: "Austin",
+      region: "TX",
+      postalCode: "78701",
+    }),
+  });
+  assert.equal(created.status, 201);
+  const body = (await created.json()) as { property: { id: string; name: string } };
+  return body.property;
+}
+
+describe("HomeAsset API — asset registry", () => {
+  it("rejects asset list without a token", async () => {
+    const app = createApp();
+    const res = await app.request("/properties/fake/assets");
+    assert.equal(res.status, 401);
+  });
+
+  it("creates, lists, updates, and deletes assets on an owned home", async () => {
+    const app = createApp();
+    const auth = await signup(app, "assets@example.com");
+    const home = await createHome(app, auth.accessToken, "Oak Street");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const created = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "Furnace",
+        category: "hvac",
+        manufacturer: "Carrier",
+        model: "59TN6",
+        serial: "SN-1001",
+        installDate: "2022-06-15",
+        installerVendor: "Cool Air Co",
+        location: "Basement",
+        notes: "Annual filter change each fall",
+      }),
+    });
+    assert.equal(created.status, 201);
+    const createdBody = (await created.json()) as AssetBody;
+    assert.equal(createdBody.asset.name, "Furnace");
+    assert.equal(createdBody.asset.propertyId, home.id);
+    assert.equal(createdBody.asset.manufacturer, "Carrier");
+    assert.equal(createdBody.asset.serial, "SN-1001");
+    assert.equal(createdBody.asset.provenance, "homeowner");
+
+    const list = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(list.status, 200);
+    const listBody = (await list.json()) as { assets: Array<{ id: string }> };
+    assert.equal(listBody.assets.length, 1);
+
+    const detail = await app.request(
+      `/properties/${home.id}/assets/${createdBody.asset.id}`,
+      { headers: { authorization: headers.authorization } },
+    );
+    assert.equal(detail.status, 200);
+
+    const patched = await app.request(
+      `/properties/${home.id}/assets/${createdBody.asset.id}`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ location: "Utility closet", serial: "SN-1001-B" }),
+      },
+    );
+    assert.equal(patched.status, 200);
+    const patchedBody = (await patched.json()) as AssetBody;
+    assert.equal(patchedBody.asset.location, "Utility closet");
+    assert.equal(patchedBody.asset.serial, "SN-1001-B");
+    assert.equal(patchedBody.asset.manufacturer, "Carrier");
+
+    const deleted = await app.request(
+      `/properties/${home.id}/assets/${createdBody.asset.id}`,
+      { method: "DELETE", headers: { authorization: headers.authorization } },
+    );
+    assert.equal(deleted.status, 200);
+
+    const empty = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    const emptyBody = (await empty.json()) as { assets: unknown[] };
+    assert.equal(emptyBody.assets.length, 0);
+  });
+
+  it("never leaks assets across accounts or homes", async () => {
+    const app = createApp();
+    const alice = await signup(app, "alice-assets@example.com");
+    const bob = await signup(app, "bob-assets@example.com");
+    const aliceHome = await createHome(app, alice.accessToken, "Alice Home");
+    const aliceCabin = await createHome(app, alice.accessToken, "Alice Cabin");
+    const bobHome = await createHome(app, bob.accessToken, "Bob Home");
+
+    const create = await app.request(`/properties/${aliceHome.id}/assets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${alice.accessToken}`,
+      },
+      body: JSON.stringify({
+        name: "Generator",
+        category: "generator",
+        manufacturer: "Generac",
+        model: "7043",
+        serial: "PRIV-1",
+      }),
+    });
+    assert.equal(create.status, 201);
+    const asset = ((await create.json()) as AssetBody).asset;
+
+    // Bob cannot list Alice's home assets.
+    const bobList = await app.request(`/properties/${aliceHome.id}/assets`, {
+      headers: { authorization: `Bearer ${bob.accessToken}` },
+    });
+    assert.equal(bobList.status, 404);
+
+    // Bob cannot read Alice's asset by id under his own home.
+    const bobSteal = await app.request(
+      `/properties/${bobHome.id}/assets/${asset.id}`,
+      { headers: { authorization: `Bearer ${bob.accessToken}` } },
+    );
+    assert.equal(bobSteal.status, 404);
+
+    // Alice's second home does not include the first home's asset.
+    const cabinList = await app.request(`/properties/${aliceCabin.id}/assets`, {
+      headers: { authorization: `Bearer ${alice.accessToken}` },
+    });
+    assert.equal(cabinList.status, 200);
+    const cabinBody = (await cabinList.json()) as { assets: unknown[] };
+    assert.equal(cabinBody.assets.length, 0);
+
+    // Wrong property id for a known asset id → not found (no cross-home leak).
+    const crossHome = await app.request(
+      `/properties/${aliceCabin.id}/assets/${asset.id}`,
+      { headers: { authorization: `Bearer ${alice.accessToken}` } },
+    );
+    assert.equal(crossHome.status, 404);
+  });
+
+  it("rejects invalid asset payloads", async () => {
+    const app = createApp();
+    const auth = await signup(app, "bad-asset@example.com");
+    const home = await createHome(app, auth.accessToken, "Home");
+    const res = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({ name: "", category: "spaceship" }),
+    });
+    assert.equal(res.status, 400);
+  });
+});

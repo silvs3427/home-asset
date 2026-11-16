@@ -90,8 +90,8 @@ export default function HomeShellScreen() {
                   {formatPropertyAddress(activeProperty)}
                 </Text>
                 <Text style={styles.ledgerNote}>
-                  This home&apos;s ledger is empty for now. Assets, documents, and
-                  recalls will live here — scoped to this home only.
+                  Assets for this home live in the registry below. Documents and
+                  recalls come next — always scoped to this home only.
                 </Text>
               </>
             ) : (
@@ -104,15 +104,32 @@ export default function HomeShellScreen() {
               </>
             )}
 
+            {activeProperty ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push("/assets")}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.primaryLabel}>View assets</Text>
+              </Pressable>
+            ) : null}
+
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push("/add-home")}
               style={({ pressed }) => [
-                styles.primaryBtn,
+                activeProperty ? styles.secondaryBtn : styles.primaryBtn,
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.primaryLabel}>
+              <Text
+                style={
+                  activeProperty ? styles.secondaryLabel : styles.primaryLabel
+                }
+              >
                 {activeProperty ? "Add another home" : "Add home"}
               </Text>
             </Pressable>
@@ -268,6 +285,20 @@ const styles = StyleSheet.create({
   },
   primaryLabel: {
     color: "#F3F6F4",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  secondaryBtn: {
+    marginTop: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#1B3A2F",
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  secondaryLabel: {
+    color: "#1B3A2F",
     fontSize: 16,
     fontWeight: "600",
   },
