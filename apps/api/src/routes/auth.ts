@@ -12,9 +12,8 @@ const credentialsSchema = z.object({
 });
 
 /**
- * Auth stub: email + password suitable for normal app login later.
- * In-memory only for EPIC 0 — swap store in EPIC 1 without changing these routes.
- * No silent third-party sharing of credentials or profile data.
+ * Everyday email + password sign-up / sign-in (normal app login).
+ * Users persist in SQLite; no silent third-party sharing of credentials.
  */
 export const authRoutes = new Hono();
 

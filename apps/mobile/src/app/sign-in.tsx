@@ -12,16 +12,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth";
+import type { AppFace } from "@/lib/api";
 
 /**
- * Everyday email + password sign-in stub (D13).
- * Starting face defaults to homeowner; contractor face comes in EPIC 1.
+ * Everyday email + password sign-in (D13).
+ * Sign-up asks homeowner or contractor on the same login path.
  */
 export default function SignInScreen() {
   const { user, signIn, signUp } = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [startingFace, setStartingFace] = useState<AppFace>("homeowner");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +36,7 @@ export default function SignInScreen() {
     setBusy(true);
     try {
       if (mode === "signup") {
-        await signUp(email.trim(), password, "homeowner");
+        await signUp(email.trim(), password, startingFace);
       } else {
         await signIn(email.trim(), password);
       }
@@ -80,6 +82,39 @@ export default function SignInScreen() {
             onChangeText={setPassword}
           />
 
+          {mode === "signup" ? (
+            <View style={styles.faceBlock}>
+              <Text style={styles.label}>I&apos;m signing up as</Text>
+              <View style={styles.faceRow}>
+                {(
+                  [
+                    ["homeowner", "Homeowner"],
+                    ["contractor", "Contractor"],
+                  ] as const
+                ).map(([value, label]) => {
+                  const selected = startingFace === value;
+                  return (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="button"
+                      onPress={() => setStartingFace(value)}
+                      style={[styles.faceChip, selected && styles.faceChipOn]}
+                    >
+                      <Text
+                        style={[
+                          styles.faceChipLabel,
+                          selected && styles.faceChipLabelOn,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Pressable
@@ -96,7 +131,11 @@ export default function SignInScreen() {
               <ActivityIndicator color="#F3F6F4" />
             ) : (
               <Text style={styles.primaryLabel}>
-                {mode === "signup" ? "Create homeowner account" : "Sign in"}
+                {mode === "signup"
+                  ? startingFace === "homeowner"
+                    ? "Create homeowner account"
+                    : "Create contractor account"
+                  : "Sign in"}
               </Text>
             )}
           </Pressable>
@@ -119,7 +158,7 @@ export default function SignInScreen() {
 
         <Text style={styles.privacyNote}>
           We don&apos;t silently share your home data. You approve what becomes
-          official. Contractor tools come later on the same login.
+          official. One login can use both faces later.
         </Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -169,6 +208,35 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: "#14241D",
+  },
+  faceBlock: {
+    marginTop: 4,
+  },
+  faceRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
+  },
+  faceChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#C5D2CB",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  faceChipOn: {
+    borderColor: "#1B3A2F",
+    backgroundColor: "#1B3A2F",
+  },
+  faceChipLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1B3A2F",
+  },
+  faceChipLabelOn: {
+    color: "#F3F6F4",
   },
   error: {
     marginTop: 8,

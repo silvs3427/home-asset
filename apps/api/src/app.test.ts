@@ -5,19 +5,53 @@ import { __resetUsersForTests } from "./lib/users.js";
 
 type AuthBody = {
   accessToken: string;
-  user: { email: string; activeFace: string; faces: string[] };
+  user: {
+    email: string;
+    activeFace: string;
+    faces: string[];
+    activePropertyId: string | null;
+  };
 };
 
 type MeBody = {
-  user: { email: string };
-  privacy: { silentSharing: boolean; approveBeforeOfficial: boolean };
+  user: { email: string; activePropertyId: string | null };
+  properties: Array<{ id: string; name: string }>;
+  activeProperty: { id: string; name: string } | null;
+  privacy: {
+    silentSharing: boolean;
+    approveBeforeOfficial: boolean;
+    dataScope: string;
+  };
+};
+
+type PropertiesBody = {
+  properties: Array<{ id: string; name: string; city: string }>;
+  activePropertyId: string | null;
 };
 
 afterEach(() => {
   __resetUsersForTests();
 });
 
-describe("HomeAsset API foundation", () => {
+async function signup(
+  app: ReturnType<typeof createApp>,
+  email: string,
+  face: "homeowner" | "contractor" = "homeowner",
+) {
+  const res = await app.request("/auth/signup", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      email,
+      password: "securepass1",
+      startingFace: face,
+    }),
+  });
+  assert.equal(res.status, 201);
+  return (await res.json()) as AuthBody;
+}
+
+describe("HomeAsset API — accounts & properties", () => {
   it("health check is public", async () => {
     const app = createApp();
     const res = await app.request("/health");
@@ -26,28 +60,18 @@ describe("HomeAsset API foundation", () => {
     assert.equal(body.ok, true);
   });
 
-  it("rejects /me without a token", async () => {
+  it("rejects /me and /properties without a token", async () => {
     const app = createApp();
-    const res = await app.request("/me");
-    assert.equal(res.status, 401);
+    assert.equal((await app.request("/me")).status, 401);
+    assert.equal((await app.request("/properties")).status, 401);
   });
 
   it("signs up, returns token, and serves authenticated /me", async () => {
     const app = createApp();
-    const signup = await app.request("/auth/signup", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        email: "homeowner@example.com",
-        password: "securepass1",
-        startingFace: "homeowner",
-      }),
-    });
-    assert.equal(signup.status, 201);
-    const signupBody = (await signup.json()) as AuthBody;
+    const signupBody = await signup(app, "homeowner@example.com");
     assert.ok(signupBody.accessToken);
     assert.equal(signupBody.user.activeFace, "homeowner");
-    assert.equal(signupBody.user.faces[0], "homeowner");
+    assert.equal(signupBody.user.activePropertyId, null);
 
     const me = await app.request("/me", {
       headers: { authorization: `Bearer ${signupBody.accessToken}` },
@@ -55,21 +79,16 @@ describe("HomeAsset API foundation", () => {
     assert.equal(me.status, 200);
     const meBody = (await me.json()) as MeBody;
     assert.equal(meBody.user.email, "homeowner@example.com");
+    assert.equal(meBody.properties.length, 0);
+    assert.equal(meBody.activeProperty, null);
     assert.equal(meBody.privacy.silentSharing, false);
     assert.equal(meBody.privacy.approveBeforeOfficial, true);
+    assert.equal(meBody.privacy.dataScope, "property");
   });
 
-  it("logs in with the same credentials", async () => {
+  it("logs in with the same credentials after restart-safe store", async () => {
     const app = createApp();
-    await app.request("/auth/signup", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        email: "pro@example.com",
-        password: "securepass1",
-        startingFace: "contractor",
-      }),
-    });
+    await signup(app, "pro@example.com", "contractor");
 
     const login = await app.request("/auth/login", {
       method: "POST",
@@ -97,5 +116,132 @@ describe("HomeAsset API foundation", () => {
     assert.equal(res.status, 401);
     const body = (await res.json()) as { error: string };
     assert.equal(body.error, "invalid_credentials");
+  });
+
+  it("creates a home, auto-selects it, and lists only owned homes", async () => {
+    const app = createApp();
+    const a = await signup(app, "alice@example.com");
+    const b = await signup(app, "bob@example.com");
+
+    const created = await app.request("/properties", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${a.accessToken}`,
+      },
+      body: JSON.stringify({
+        name: "Oak Street",
+        addressLine1: "12 Oak St",
+        city: "Austin",
+        region: "TX",
+        postalCode: "78701",
+        country: "US",
+      }),
+    });
+    assert.equal(created.status, 201);
+    const createdBody = (await created.json()) as {
+      property: { id: string; name: string };
+      user: { activePropertyId: string };
+    };
+    assert.equal(createdBody.property.name, "Oak Street");
+    assert.equal(createdBody.user.activePropertyId, createdBody.property.id);
+
+    const listA = await app.request("/properties", {
+      headers: { authorization: `Bearer ${a.accessToken}` },
+    });
+    const listABody = (await listA.json()) as PropertiesBody;
+    assert.equal(listABody.properties.length, 1);
+    assert.equal(listABody.activePropertyId, createdBody.property.id);
+
+    // Bob cannot see Alice's home (property-scoped + ownership).
+    const listB = await app.request("/properties", {
+      headers: { authorization: `Bearer ${b.accessToken}` },
+    });
+    const listBBody = (await listB.json()) as PropertiesBody;
+    assert.equal(listBBody.properties.length, 0);
+
+    const steal = await app.request(`/properties/${createdBody.property.id}`, {
+      headers: { authorization: `Bearer ${b.accessToken}` },
+    });
+    assert.equal(steal.status, 404);
+  });
+
+  it("supports thin multi-home switcher", async () => {
+    const app = createApp();
+    const auth = await signup(app, "multi@example.com");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const first = await app.request("/properties", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "Primary",
+        addressLine1: "1 Main",
+        city: "Denver",
+        region: "CO",
+        postalCode: "80202",
+      }),
+    });
+    const firstBody = (await first.json()) as { property: { id: string } };
+
+    const second = await app.request("/properties", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "Cabin",
+        addressLine1: "9 Lake Rd",
+        city: "Boulder",
+        region: "CO",
+        postalCode: "80302",
+      }),
+    });
+    const secondBody = (await second.json()) as {
+      property: { id: string };
+      user: { activePropertyId: string };
+    };
+    // First home stays active until user switches.
+    assert.equal(secondBody.user.activePropertyId, firstBody.property.id);
+
+    const select = await app.request(
+      `/properties/${secondBody.property.id}/select`,
+      { method: "POST", headers: { authorization: headers.authorization } },
+    );
+    assert.equal(select.status, 200);
+    const selectBody = (await select.json()) as {
+      property: { id: string; name: string };
+      user: { activePropertyId: string };
+    };
+    assert.equal(selectBody.property.name, "Cabin");
+    assert.equal(selectBody.user.activePropertyId, secondBody.property.id);
+
+    const me = await app.request("/me", {
+      headers: { authorization: headers.authorization },
+    });
+    const meBody = (await me.json()) as MeBody;
+    assert.equal(meBody.properties.length, 2);
+    assert.equal(meBody.activeProperty?.name, "Cabin");
+  });
+
+  it("switches face on the same login and refreshes the token", async () => {
+    const app = createApp();
+    const auth = await signup(app, "faces@example.com", "homeowner");
+
+    const face = await app.request("/me/face", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({ face: "contractor", enableIfMissing: true }),
+    });
+    assert.equal(face.status, 200);
+    const faceBody = (await face.json()) as AuthBody;
+    assert.ok(faceBody.accessToken);
+    assert.equal(faceBody.user.activeFace, "contractor");
+    assert.ok(faceBody.user.faces.includes("homeowner"));
+    assert.ok(faceBody.user.faces.includes("contractor"));
   });
 });

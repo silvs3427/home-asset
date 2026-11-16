@@ -1,14 +1,16 @@
-/** Product faces on one login (EPIC 1 will flesh this out). */
+/** Product faces on one login (thin switch; CRM-lite comes later). */
 export type AppFace = "homeowner" | "contractor";
 
 export type UserRecord = {
   id: string;
   email: string;
   passwordHash: string;
-  /** Faces this account may use. Stub defaults to homeowner. */
+  /** Faces this account may use. */
   faces: AppFace[];
-  /** Active face for this session context (client may switch later). */
+  /** Active face for this session context. */
   activeFace: AppFace;
+  /** Currently selected home (null until first home is added). */
+  activePropertyId: string | null;
   createdAt: string;
 };
 
@@ -17,6 +19,39 @@ export type PublicUser = {
   email: string;
   faces: AppFace[];
   activeFace: AppFace;
+  activePropertyId: string | null;
+};
+
+/**
+ * A home the user owns. Every future asset/doc/recall row scopes to propertyId.
+ * Solo-owner membership only — no RBAC / co-owners in this epic.
+ */
+export type PropertyRecord = {
+  id: string;
+  ownerUserId: string;
+  name: string;
+  addressLine1: string;
+  addressLine2: string | null;
+  city: string;
+  region: string;
+  postalCode: string;
+  country: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Public home payload — never includes other users' data. */
+export type PublicProperty = {
+  id: string;
+  name: string;
+  addressLine1: string;
+  addressLine2: string | null;
+  city: string;
+  region: string;
+  postalCode: string;
+  country: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type JwtClaims = {
@@ -36,5 +71,29 @@ export function toPublicUser(user: UserRecord): PublicUser {
     email: user.email,
     faces: user.faces,
     activeFace: user.activeFace,
+    activePropertyId: user.activePropertyId,
   };
+}
+
+export function toPublicProperty(property: PropertyRecord): PublicProperty {
+  return {
+    id: property.id,
+    name: property.name,
+    addressLine1: property.addressLine1,
+    addressLine2: property.addressLine2,
+    city: property.city,
+    region: property.region,
+    postalCode: property.postalCode,
+    country: property.country,
+    createdAt: property.createdAt,
+    updatedAt: property.updatedAt,
+  };
+}
+
+export function formatPropertyAddress(property: PublicProperty | PropertyRecord): string {
+  const line2 = property.addressLine2?.trim();
+  const street = line2
+    ? `${property.addressLine1}, ${line2}`
+    : property.addressLine1;
+  return `${street}, ${property.city}, ${property.region} ${property.postalCode}, ${property.country}`;
 }

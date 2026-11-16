@@ -9,10 +9,15 @@ import {
   type ReactNode,
 } from "react";
 import {
+  createProperty as apiCreateProperty,
   fetchMe,
   login as apiLogin,
+  selectProperty as apiSelectProperty,
   signup as apiSignup,
+  switchFace as apiSwitchFace,
   type AppFace,
+  type CreatePropertyInput,
+  type PublicProperty,
   type PublicUser,
 } from "./api";
 
@@ -22,6 +27,8 @@ type AuthState = {
   ready: boolean;
   user: PublicUser | null;
   accessToken: string | null;
+  properties: PublicProperty[];
+  activeProperty: PublicProperty | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (
     email: string,
@@ -29,6 +36,10 @@ type AuthState = {
     startingFace?: AppFace,
   ) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshHomes: () => Promise<void>;
+  addHome: (input: CreatePropertyInput) => Promise<PublicProperty>;
+  selectHome: (propertyId: string) => Promise<void>;
+  setFace: (face: AppFace) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -45,6 +56,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<PublicUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [properties, setProperties] = useState<PublicProperty[]>([]);
+  const [activeProperty, setActiveProperty] = useState<PublicProperty | null>(
+    null,
+  );
+
+  const applyMe = useCallback(
+    (token: string, me: Awaited<ReturnType<typeof fetchMe>>) => {
+      setAccessToken(token);
+      setUser(me.user);
+      setProperties(me.properties);
+      setActiveProperty(me.activeProperty);
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -54,8 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!stored) return;
         const me = await fetchMe(stored);
         if (cancelled) return;
-        setAccessToken(stored);
-        setUser(me.user);
+        applyMe(stored, me);
       } catch {
         await saveToken(null);
       } finally {
@@ -65,13 +89,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyMe]);
 
-  const applySession = useCallback(async (token: string, nextUser: PublicUser) => {
-    await saveToken(token);
-    setAccessToken(token);
-    setUser(nextUser);
-  }, []);
+  const applySession = useCallback(
+    async (token: string, nextUser: PublicUser) => {
+      await saveToken(token);
+      setAccessToken(token);
+      setUser(nextUser);
+      const me = await fetchMe(token);
+      setProperties(me.properties);
+      setActiveProperty(me.activeProperty);
+      setUser(me.user);
+    },
+    [],
+  );
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -93,11 +124,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await saveToken(null);
     setAccessToken(null);
     setUser(null);
+    setProperties([]);
+    setActiveProperty(null);
   }, []);
 
+  const refreshHomes = useCallback(async () => {
+    if (!accessToken) return;
+    const me = await fetchMe(accessToken);
+    setUser(me.user);
+    setProperties(me.properties);
+    setActiveProperty(me.activeProperty);
+  }, [accessToken]);
+
+  const addHome = useCallback(
+    async (input: CreatePropertyInput) => {
+      if (!accessToken) throw new Error("Sign in required.");
+      const res = await apiCreateProperty(accessToken, input);
+      if (res.user) setUser(res.user);
+      await refreshHomes();
+      return res.property;
+    },
+    [accessToken, refreshHomes],
+  );
+
+  const selectHome = useCallback(
+    async (propertyId: string) => {
+      if (!accessToken) throw new Error("Sign in required.");
+      const res = await apiSelectProperty(accessToken, propertyId);
+      if (res.user) setUser(res.user);
+      setActiveProperty(res.property);
+      setProperties((prev) => {
+        const others = prev.filter((p) => p.id !== res.property.id);
+        return [...others, res.property].sort((a, b) =>
+          a.createdAt.localeCompare(b.createdAt),
+        );
+      });
+    },
+    [accessToken],
+  );
+
+  const setFace = useCallback(
+    async (face: AppFace) => {
+      if (!accessToken) throw new Error("Sign in required.");
+      const res = await apiSwitchFace(accessToken, face, true);
+      await saveToken(res.accessToken);
+      setAccessToken(res.accessToken);
+      setUser(res.user);
+    },
+    [accessToken],
+  );
+
   const value = useMemo(
-    () => ({ ready, user, accessToken, signIn, signUp, signOut }),
-    [ready, user, accessToken, signIn, signUp, signOut],
+    () => ({
+      ready,
+      user,
+      accessToken,
+      properties,
+      activeProperty,
+      signIn,
+      signUp,
+      signOut,
+      refreshHomes,
+      addHome,
+      selectHome,
+      setFace,
+    }),
+    [
+      ready,
+      user,
+      accessToken,
+      properties,
+      activeProperty,
+      signIn,
+      signUp,
+      signOut,
+      refreshHomes,
+      addHome,
+      selectHome,
+      setFace,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

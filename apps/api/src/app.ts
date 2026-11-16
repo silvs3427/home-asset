@@ -3,11 +3,16 @@ import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { logger } from "hono/logger";
 import { config } from "./config.js";
+import { getDb } from "./db/client.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { meRoutes } from "./routes/me.js";
+import { propertyRoutes } from "./routes/properties.js";
 
 export function createApp() {
+  // Ensure schema exists before handling traffic.
+  getDb();
+
   const app = new Hono();
 
   app.use("*", secureHeaders());
@@ -42,13 +47,14 @@ export function createApp() {
   app.route("/health", healthRoutes);
   app.route("/auth", authRoutes);
   app.route("/me", meRoutes);
+  app.route("/properties", propertyRoutes);
 
   app.get("/", (c) =>
     c.json({
       name: "HomeAsset API",
       docs: "See repository README for local run instructions.",
       privacy:
-        "Homeowner controls the ledger. No silent data sharing. Auth required for personal data.",
+        "Homeowner controls the ledger. Homes are property-scoped. No silent data sharing. Auth required for personal data.",
     }),
   );
 
