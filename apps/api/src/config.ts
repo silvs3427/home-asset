@@ -12,6 +12,13 @@ function requiredInProduction(name: string, fallback: string): string {
   return fallback;
 }
 
+function resolveDatabasePath(): string {
+  const fromEnv = process.env.DATABASE_PATH?.trim();
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV === "test") return ":memory:";
+  return "./data/homeasset.sqlite";
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 8787),
   nodeEnv: process.env.NODE_ENV ?? "development",
@@ -25,4 +32,8 @@ export const config = {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
-} as const;
+  /** SQLite file path, or `:memory:` for tests. Read live so tests can reset. */
+  get databasePath() {
+    return resolveDatabasePath();
+  },
+};
