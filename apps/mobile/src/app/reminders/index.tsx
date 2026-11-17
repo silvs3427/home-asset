@@ -22,7 +22,7 @@ import { useAuth } from "@/lib/auth";
 
 /**
  * Upcoming maintenance for the current home only.
- * Mark done here; push notifications arrive in EPIC 5.
+ * Mark done here; due notices also land in the notification center.
  */
 export default function RemindersUpcomingScreen() {
   const router = useRouter();

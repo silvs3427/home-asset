@@ -54,4 +54,14 @@ export const config = {
   get storagePath() {
     return resolveStoragePath();
   },
+  /**
+   * Shared secret for cron / due-check jobs (POST /jobs/...).
+   * Required in production; optional in development (open local due-check).
+   */
+  jobsSecret: process.env.JOBS_SECRET?.trim() || "",
+  /**
+   * Optional Expo access token for live push. Without it, pushes are stubbed
+   * (logged + marked stubbed) so the path can go live with config only.
+   */
+  expoAccessToken: process.env.EXPO_ACCESS_TOKEN?.trim() || "",
 };

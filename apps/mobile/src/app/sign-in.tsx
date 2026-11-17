@@ -12,10 +12,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth";
-import type { AppFace } from "@/lib/api";
+import { ApiError, type AppFace } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/config";
 
 /**
  * Everyday email + password sign-in (D13).
+ * Talks to the local HomeAsset SQLite API — no Supabase.
  * Sign-up asks homeowner or contractor on the same login path.
  */
 export default function SignInScreen() {
@@ -26,6 +28,9 @@ export default function SignInScreen() {
   const [startingFace, setStartingFace] = useState<AppFace>("homeowner");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<"network" | "auth" | "other" | null>(
+    null,
+  );
 
   if (user) {
     return <Redirect href="/home" />;
@@ -33,6 +38,7 @@ export default function SignInScreen() {
 
   async function onSubmit() {
     setError(null);
+    setErrorKind(null);
     setBusy(true);
     try {
       if (mode === "signup") {
@@ -41,7 +47,15 @@ export default function SignInScreen() {
         await signIn(email.trim(), password);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      if (err instanceof ApiError) {
+        setErrorKind(
+          err.kind === "network" || err.kind === "auth" ? err.kind : "other",
+        );
+        setError(err.message);
+      } else {
+        setErrorKind("other");
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      }
     } finally {
       setBusy(false);
     }
@@ -115,7 +129,18 @@ export default function SignInScreen() {
             </View>
           ) : null}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorKind}>
+                {errorKind === "network"
+                  ? "Network — phone cannot reach the API"
+                  : errorKind === "auth"
+                    ? "Sign-in rejected"
+                    : "Could not continue"}
+              </Text>
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          ) : null}
 
           <Pressable
             accessibilityRole="button"
@@ -155,6 +180,13 @@ export default function SignInScreen() {
             </Text>
           </Pressable>
         </View>
+
+        <Text style={styles.apiHint}>
+          Local SQLite API (no Supabase). Target: {API_BASE_URL}
+          {"\n"}
+          Physical phone? Set EXPO_PUBLIC_API_URL to your PC&apos;s LAN IP in
+          apps/mobile/.env, then restart Expo with npx expo start --go -c.
+        </Text>
 
         <Text style={styles.privacyNote}>
           We don&apos;t silently share your home data. You approve what becomes
@@ -238,10 +270,19 @@ const styles = StyleSheet.create({
   faceChipLabelOn: {
     color: "#F3F6F4",
   },
-  error: {
+  errorBox: {
     marginTop: 8,
+    gap: 4,
+  },
+  errorKind: {
+    color: "#8B2E2E",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  error: {
     color: "#8B2E2E",
     fontSize: 14,
+    lineHeight: 20,
   },
   primaryBtn: {
     marginTop: 16,
@@ -271,8 +312,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
+  apiHint: {
+    marginTop: 24,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#5A6E64",
+  },
   privacyNote: {
-    marginTop: 28,
+    marginTop: 12,
     fontSize: 13,
     lineHeight: 18,
     color: "#5A6E64",

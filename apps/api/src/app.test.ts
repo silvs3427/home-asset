@@ -851,3 +851,258 @@ describe("HomeAsset API — maintenance reminders", () => {
     assert.equal(res.status, 400);
   });
 });
+
+type NotificationListBody = {
+  notifications: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    readAt: string | null;
+    pushStatus: string;
+    relatedReminderId: string | null;
+  }>;
+  unreadCount: number;
+};
+
+describe("HomeAsset API — notifications", () => {
+  it("rejects notification center without a token", async () => {
+    const app = createApp();
+    assert.equal((await app.request("/me/notifications")).status, 401);
+    assert.equal(
+      (await app.request("/me/notifications/preferences")).status,
+      401,
+    );
+  });
+
+  it("serves default prefs, registers a device, and creates due notices", async () => {
+    const app = createApp();
+    const auth = await signup(app, "notify@example.com");
+    const home = await createHome(app, auth.accessToken, "Notify Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const prefsRes = await app.request("/me/notifications/preferences", {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(prefsRes.status, 200);
+    const prefsBody = (await prefsRes.json()) as {
+      preferences: {
+        remindersEnabled: boolean;
+        reminderLeadDays: number;
+        pushEnabled: boolean;
+      };
+      privacy: { marketing: boolean; sms: boolean };
+    };
+    assert.equal(prefsBody.preferences.remindersEnabled, true);
+    assert.equal(prefsBody.preferences.reminderLeadDays, 3);
+    assert.equal(prefsBody.privacy.marketing, false);
+    assert.equal(prefsBody.privacy.sms, false);
+
+    const patch = await app.request("/me/notifications/preferences", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ reminderLeadDays: 7, pushEnabled: true }),
+    });
+    assert.equal(patch.status, 200);
+    const patchBody = (await patch.json()) as {
+      preferences: { reminderLeadDays: number };
+    };
+    assert.equal(patchBody.preferences.reminderLeadDays, 7);
+
+    const device = await app.request("/me/notifications/devices", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        expoPushToken: "ExponentPushToken[test-token-notify]",
+        platform: "ios",
+        deviceName: "Test Phone",
+      }),
+    });
+    assert.equal(device.status, 201);
+
+    const assetRes = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: "Water heater", category: "water_heater" }),
+    });
+    assert.equal(assetRes.status, 201);
+    const asset = ((await assetRes.json()) as AssetBody).asset;
+
+    // Due today → within any lead window.
+    const today = new Date();
+    const yy = today.getUTCFullYear();
+    const mm = String(today.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(today.getUTCDate()).padStart(2, "0");
+    const dueToday = `${yy}-${mm}-${dd}`;
+
+    const reminderRes = await app.request(`/properties/${home.id}/reminders`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        assetId: asset.id,
+        title: "Flush tank",
+        dueDate: dueToday,
+        recurrence: "yearly",
+      }),
+    });
+    assert.equal(reminderRes.status, 201);
+    const reminder = ((await reminderRes.json()) as ReminderBody).reminder;
+
+    const dueCheck = await app.request("/me/notifications/run-due-check", {
+      method: "POST",
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(dueCheck.status, 200);
+    const dueBody = (await dueCheck.json()) as {
+      result: { created: number; scanned: number };
+      unreadCount: number;
+    };
+    assert.ok(dueBody.result.scanned >= 1);
+    assert.equal(dueBody.result.created, 1);
+    assert.equal(dueBody.unreadCount, 1);
+
+    const list = await app.request("/me/notifications", {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(list.status, 200);
+    const listBody = (await list.json()) as NotificationListBody;
+    assert.equal(listBody.notifications.length, 1);
+    assert.equal(listBody.notifications[0]?.kind, "reminder_due");
+    assert.equal(listBody.notifications[0]?.relatedReminderId, reminder.id);
+    assert.equal(listBody.notifications[0]?.readAt, null);
+    // No EXPO_ACCESS_TOKEN in tests → stubbed push.
+    assert.equal(listBody.notifications[0]?.pushStatus, "stubbed");
+
+    // Idempotent: second run does not duplicate.
+    const dueCheck2 = await app.request("/me/notifications/run-due-check", {
+      method: "POST",
+      headers: { authorization: headers.authorization },
+    });
+    const dueBody2 = (await dueCheck2.json()) as {
+      result: { created: number; skippedExisting: number };
+    };
+    assert.equal(dueBody2.result.created, 0);
+    assert.ok(dueBody2.result.skippedExisting >= 1);
+
+    const read = await app.request(
+      `/me/notifications/${listBody.notifications[0]!.id}/read`,
+      { method: "POST", headers: { authorization: headers.authorization } },
+    );
+    assert.equal(read.status, 200);
+    const readBody = (await read.json()) as {
+      notification: { readAt: string | null };
+    };
+    assert.ok(readBody.notification.readAt);
+
+    const job = await app.request("/jobs/due-reminders", { method: "POST" });
+    assert.equal(job.status, 200);
+    const jobBody = (await job.json()) as {
+      ok: boolean;
+      privacy: { marketing: boolean };
+    };
+    assert.equal(jobBody.ok, true);
+    assert.equal(jobBody.privacy.marketing, false);
+  });
+
+  it("never leaks notifications across accounts", async () => {
+    const app = createApp();
+    const alice = await signup(app, "alice-notify@example.com");
+    const bob = await signup(app, "bob-notify@example.com");
+    const aliceHome = await createHome(app, alice.accessToken, "Alice N");
+    const aliceHeaders = {
+      "content-type": "application/json",
+      authorization: `Bearer ${alice.accessToken}`,
+    };
+
+    const assetRes = await app.request(`/properties/${aliceHome.id}/assets`, {
+      method: "POST",
+      headers: aliceHeaders,
+      body: JSON.stringify({ name: "Roof", category: "roof" }),
+    });
+    const asset = ((await assetRes.json()) as AssetBody).asset;
+    const today = new Date();
+    const dueToday = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`;
+    await app.request(`/properties/${aliceHome.id}/reminders`, {
+      method: "POST",
+      headers: aliceHeaders,
+      body: JSON.stringify({
+        assetId: asset.id,
+        title: "Inspect shingles",
+        dueDate: dueToday,
+        recurrence: "none",
+      }),
+    });
+    await app.request("/me/notifications/run-due-check", {
+      method: "POST",
+      headers: { authorization: aliceHeaders.authorization },
+    });
+
+    const aliceList = await app.request("/me/notifications", {
+      headers: { authorization: `Bearer ${alice.accessToken}` },
+    });
+    const aliceBody = (await aliceList.json()) as NotificationListBody;
+    assert.ok(aliceBody.notifications.length >= 1);
+    const noteId = aliceBody.notifications[0]!.id;
+
+    const bobList = await app.request("/me/notifications", {
+      headers: { authorization: `Bearer ${bob.accessToken}` },
+    });
+    const bobBody = (await bobList.json()) as NotificationListBody;
+    assert.equal(bobBody.notifications.length, 0);
+
+    const bobRead = await app.request(`/me/notifications/${noteId}/read`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${bob.accessToken}` },
+    });
+    assert.equal(bobRead.status, 404);
+  });
+
+  it("skips reminder notices when reminders preference is off", async () => {
+    const app = createApp();
+    const auth = await signup(app, "quiet@example.com");
+    const home = await createHome(app, auth.accessToken, "Quiet Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    await app.request("/me/notifications/preferences", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ remindersEnabled: false }),
+    });
+
+    const assetRes = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: "HVAC", category: "hvac" }),
+    });
+    const asset = ((await assetRes.json()) as AssetBody).asset;
+    const today = new Date();
+    const dueToday = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`;
+    await app.request(`/properties/${home.id}/reminders`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        assetId: asset.id,
+        title: "Filter",
+        dueDate: dueToday,
+        recurrence: "monthly",
+      }),
+    });
+
+    const dueCheck = await app.request("/me/notifications/run-due-check", {
+      method: "POST",
+      headers: { authorization: headers.authorization },
+    });
+    const dueBody = (await dueCheck.json()) as {
+      result: { created: number; skippedPrefs: number };
+      unreadCount: number;
+    };
+    assert.equal(dueBody.result.created, 0);
+    assert.ok(dueBody.result.skippedPrefs >= 1);
+    assert.equal(dueBody.unreadCount, 0);
+  });
+});

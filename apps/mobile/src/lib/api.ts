@@ -255,15 +255,70 @@ export function dueDateFromToday(days: number, now = new Date()): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+export type ApiErrorKind = "network" | "auth" | "client" | "server";
+
+/** Distinguishes phone↔API reachability failures from auth / validation errors. */
+export class ApiError extends Error {
+  kind: ApiErrorKind;
+  status?: number;
+
+  constructor(message: string, kind: ApiErrorKind, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.kind = kind;
+    this.status = status;
+  }
+}
+
 async function parseJson<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & {
     message?: string;
     error?: string;
   };
   if (!res.ok) {
-    throw new Error(body.message || body.error || `Request failed (${res.status})`);
+    const kind: ApiErrorKind =
+      res.status === 401 || res.status === 403
+        ? "auth"
+        : res.status >= 500
+          ? "server"
+          : "client";
+    const base =
+      body.message || body.error || `Request failed (${res.status})`;
+    const message =
+      kind === "auth"
+        ? `Sign-in failed: ${base}`
+        : kind === "server"
+          ? `Server error: ${base}`
+          : base;
+    throw new ApiError(message, kind, res.status);
   }
   return body;
+}
+
+/**
+ * fetch() that turns connection failures into a clear network ApiError
+ * (common when the phone still points at localhost instead of the PC LAN IP).
+ */
+async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const url = `${API_BASE_URL}${path}`;
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "network error";
+    throw new ApiError(
+      `Cannot reach the HomeAsset API at ${API_BASE_URL}. ` +
+        `This is a network/reachability problem (not a bad password). ` +
+        `On a physical phone set EXPO_PUBLIC_API_URL to your computer's LAN IP ` +
+        `(example http://192.168.1.10:8787) in apps/mobile/.env, keep npm run dev:api running, ` +
+        `then restart Expo with npx expo start --go -c. (${detail})`,
+      "network",
+    );
+  }
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await apiFetch(path, init);
+  return parseJson<T>(res);
 }
 
 function authHeaders(accessToken: string): HeadersInit {
@@ -278,31 +333,28 @@ export async function signup(input: {
   password: string;
   startingFace?: AppFace;
 }): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+  return requestJson<AuthResponse>("/auth/signup", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
-  return parseJson<AuthResponse>(res);
 }
 
 export async function login(input: {
   email: string;
   password: string;
 }): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+  return requestJson<AuthResponse>("/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
-  return parseJson<AuthResponse>(res);
 }
 
 export async function fetchMe(accessToken: string): Promise<MeResponse> {
-  const res = await fetch(`${API_BASE_URL}/me`, {
+  return requestJson<MeResponse>("/me", {
     headers: { authorization: `Bearer ${accessToken}` },
   });
-  return parseJson<MeResponse>(res);
 }
 
 export async function switchFace(
@@ -605,5 +657,159 @@ export async function listReminderHistory(
     `${API_BASE_URL}/properties/${propertyId}/reminders/${reminderId}/history`,
     { headers: { authorization: `Bearer ${accessToken}` } },
   );
+  return parseJson(res);
+}
+
+export type NotificationKind =
+  | "reminder_due"
+  | "recall_alert"
+  | "contractor_submit";
+
+export type PushDeliveryStatus =
+  | "pending"
+  | "sent"
+  | "skipped"
+  | "stubbed"
+  | "failed";
+
+export type PublicNotification = {
+  id: string;
+  propertyId: string | null;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  relatedReminderId: string | null;
+  relatedAssetId: string | null;
+  relatedEntityId: string | null;
+  readAt: string | null;
+  pushStatus: PushDeliveryStatus;
+  createdAt: string;
+};
+
+export type NotificationPreferences = {
+  remindersEnabled: boolean;
+  recallsEnabled: boolean;
+  contractorSubmitsEnabled: boolean;
+  reminderLeadDays: number;
+  pushEnabled: boolean;
+  inAppEnabled: boolean;
+  updatedAt: string;
+};
+
+export type PublicPushDevice = {
+  id: string;
+  expoPushToken: string;
+  platform: string | null;
+  deviceName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UpdateNotificationPreferencesInput = {
+  remindersEnabled?: boolean;
+  recallsEnabled?: boolean;
+  contractorSubmitsEnabled?: boolean;
+  reminderLeadDays?: number;
+  pushEnabled?: boolean;
+  inAppEnabled?: boolean;
+};
+
+export function notificationKindLabel(kind: NotificationKind): string {
+  if (kind === "reminder_due") return "Reminder";
+  if (kind === "recall_alert") return "Recall";
+  return "Contractor";
+}
+
+export async function fetchNotificationPreferences(
+  accessToken: string,
+): Promise<{ preferences: NotificationPreferences }> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/preferences`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  return parseJson(res);
+}
+
+export async function updateNotificationPreferences(
+  accessToken: string,
+  input: UpdateNotificationPreferencesInput,
+): Promise<{ preferences: NotificationPreferences }> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/preferences`, {
+    method: "PATCH",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(input),
+  });
+  return parseJson(res);
+}
+
+export async function listNotifications(
+  accessToken: string,
+  options?: { unreadOnly?: boolean },
+): Promise<{ notifications: PublicNotification[]; unreadCount: number }> {
+  const params = new URLSearchParams();
+  if (options?.unreadOnly) params.set("unreadOnly", "1");
+  const query = params.toString();
+  const res = await fetch(
+    `${API_BASE_URL}/me/notifications${query ? `?${query}` : ""}`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function markNotificationRead(
+  accessToken: string,
+  notificationId: string,
+): Promise<{ notification: PublicNotification }> {
+  const res = await fetch(
+    `${API_BASE_URL}/me/notifications/${notificationId}/read`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` },
+    },
+  );
+  return parseJson(res);
+}
+
+export async function markAllNotificationsRead(
+  accessToken: string,
+): Promise<{ ok: boolean; updated: number }> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/read-all`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  return parseJson(res);
+}
+
+export async function runDueNotificationCheck(
+  accessToken: string,
+): Promise<{
+  ok: boolean;
+  result: {
+    scanned: number;
+    created: number;
+    skippedExisting: number;
+    skippedPrefs: number;
+  };
+  unreadCount: number;
+}> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/run-due-check`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  return parseJson(res);
+}
+
+export async function registerPushDevice(
+  accessToken: string,
+  input: {
+    expoPushToken: string;
+    platform?: string | null;
+    deviceName?: string | null;
+  },
+): Promise<{ device: PublicPushDevice }> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/devices`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(input),
+  });
   return parseJson(res);
 }
