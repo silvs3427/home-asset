@@ -34,6 +34,8 @@ export default function NewAssetScreen() {
   const [installerVendor, setInstallerVendor] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
+  const [warrantyEndDate, setWarrantyEndDate] = useState("");
+  const [warrantyTerm, setWarrantyTerm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +62,8 @@ export default function NewAssetScreen() {
         installerVendor: installerVendor.trim() || null,
         location: location.trim() || null,
         notes: notes.trim() || null,
+        warrantyEndDate: warrantyEndDate.trim() || null,
+        warrantyTerm: warrantyTerm.trim() || null,
       });
       router.replace(`/assets/${res.asset.id}`);
     } catch (err) {
@@ -155,6 +159,19 @@ export default function NewAssetScreen() {
           onChangeText={setInstallDate}
           placeholder="2022-06-20"
           autoCapitalize="none"
+        />
+        <Field
+          label="Warranty end date (YYYY-MM-DD)"
+          value={warrantyEndDate}
+          onChangeText={setWarrantyEndDate}
+          placeholder="2032-06-20"
+          autoCapitalize="none"
+        />
+        <Field
+          label="Warranty term"
+          value={warrantyTerm}
+          onChangeText={setWarrantyTerm}
+          placeholder="e.g. 10 years, lifetime"
         />
         <Field
           label="Installer / vendor"

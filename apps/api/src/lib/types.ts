@@ -75,7 +75,7 @@ export type AssetCategory =
 
 /**
  * Property-scoped asset. manufacturer/model/serial are first-class for
- * future docs (EPIC 3) and recall matching (EPIC 7).
+ * docs and recall matching (EPIC 7). Warranty end / term are visible on the asset.
  */
 export type AssetRecord = {
   id: string;
@@ -90,6 +90,8 @@ export type AssetRecord = {
   installerVendor: string | null;
   location: string | null;
   notes: string | null;
+  warrantyEndDate: string | null;
+  warrantyTerm: string | null;
   provenance: AssetProvenance;
   createdAt: string;
   updatedAt: string;
@@ -109,7 +111,60 @@ export type PublicAsset = {
   installerVendor: string | null;
   location: string | null;
   notes: string | null;
+  warrantyEndDate: string | null;
+  warrantyTerm: string | null;
   provenance: AssetProvenance;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Document kinds homeowners attach to an asset or home. */
+export type DocumentType =
+  | "manual"
+  | "receipt"
+  | "warranty"
+  | "install_paperwork"
+  | "photo"
+  | "other";
+
+/**
+ * Provenance of a file. Homeowner uploads are "user"; AI-fetched manuals and
+ * contractor packets arrive in later epics — field is ready now.
+ */
+export type DocumentSource = "user" | "ai_fetched" | "contractor";
+
+/**
+ * Property-scoped document. assetId null = home-level paperwork.
+ * Bytes live on disk under storage_key; metadata is in SQLite.
+ */
+export type DocumentRecord = {
+  id: string;
+  propertyId: string;
+  assetId: string | null;
+  title: string;
+  docType: DocumentType;
+  documentDate: string | null;
+  source: DocumentSource;
+  mimeType: string;
+  originalFilename: string;
+  storageKey: string;
+  byteSize: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Public document payload — no storage paths leaked beyond the id. */
+export type PublicDocument = {
+  id: string;
+  propertyId: string;
+  assetId: string | null;
+  title: string;
+  docType: DocumentType;
+  documentDate: string | null;
+  source: DocumentSource;
+  mimeType: string;
+  originalFilename: string;
+  byteSize: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -172,9 +227,28 @@ export function toPublicAsset(asset: AssetRecord): PublicAsset {
     installerVendor: asset.installerVendor,
     location: asset.location,
     notes: asset.notes,
+    warrantyEndDate: asset.warrantyEndDate,
+    warrantyTerm: asset.warrantyTerm,
     provenance: asset.provenance,
     createdAt: asset.createdAt,
     updatedAt: asset.updatedAt,
+  };
+}
+
+export function toPublicDocument(doc: DocumentRecord): PublicDocument {
+  return {
+    id: doc.id,
+    propertyId: doc.propertyId,
+    assetId: doc.assetId,
+    title: doc.title,
+    docType: doc.docType,
+    documentDate: doc.documentDate,
+    source: doc.source,
+    mimeType: doc.mimeType,
+    originalFilename: doc.originalFilename,
+    byteSize: doc.byteSize,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
   };
 }
 
@@ -189,4 +263,19 @@ export const ASSET_CATEGORIES: AssetCategory[] = [
   "kids_gear",
   "vehicle",
   "other",
+];
+
+export const DOCUMENT_TYPES: DocumentType[] = [
+  "manual",
+  "receipt",
+  "warranty",
+  "install_paperwork",
+  "photo",
+  "other",
+];
+
+export const DOCUMENT_SOURCES: DocumentSource[] = [
+  "user",
+  "ai_fetched",
+  "contractor",
 ];

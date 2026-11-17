@@ -30,6 +30,8 @@ const createSchema = z.object({
   installerVendor: optionalText,
   location: z.string().trim().max(200).optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
+  warrantyEndDate: optionalDate,
+  warrantyTerm: z.string().trim().max(120).optional().nullable(),
 });
 
 const updateSchema = createSchema.partial().refine(

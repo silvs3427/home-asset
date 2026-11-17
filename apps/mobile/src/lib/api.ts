@@ -79,6 +79,8 @@ export type PublicAsset = {
   installerVendor: string | null;
   location: string | null;
   notes: string | null;
+  warrantyEndDate: string | null;
+  warrantyTerm: string | null;
   provenance: AssetProvenance;
   createdAt: string;
   updatedAt: string;
@@ -95,9 +97,50 @@ export type CreateAssetInput = {
   installerVendor?: string | null;
   location?: string | null;
   notes?: string | null;
+  warrantyEndDate?: string | null;
+  warrantyTerm?: string | null;
 };
 
 export type UpdateAssetInput = Partial<CreateAssetInput>;
+
+export type DocumentType =
+  | "manual"
+  | "receipt"
+  | "warranty"
+  | "install_paperwork"
+  | "photo"
+  | "other";
+
+export type DocumentSource = "user" | "ai_fetched" | "contractor";
+
+export type PublicDocument = {
+  id: string;
+  propertyId: string;
+  assetId: string | null;
+  title: string;
+  docType: DocumentType;
+  documentDate: string | null;
+  source: DocumentSource;
+  mimeType: string;
+  originalFilename: string;
+  byteSize: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HomePacket = {
+  exportedAt: string;
+  format: string;
+  privacy: {
+    ledgerOwner: string;
+    silentSharing: boolean;
+    note: string;
+  };
+  property: PublicProperty & { formattedAddress: string };
+  assets: PublicAsset[];
+  documents: PublicDocument[];
+  documentDownloadHint: string;
+};
 
 export const ASSET_CATEGORIES: { value: AssetCategory; label: string }[] = [
   { value: "hvac", label: "HVAC" },
@@ -112,8 +155,27 @@ export const ASSET_CATEGORIES: { value: AssetCategory; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+export const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
+  { value: "photo", label: "Photo" },
+  { value: "manual", label: "Manual" },
+  { value: "receipt", label: "Receipt" },
+  { value: "warranty", label: "Warranty" },
+  { value: "install_paperwork", label: "Install paperwork" },
+  { value: "other", label: "Other" },
+];
+
 export function categoryLabel(category: AssetCategory): string {
   return ASSET_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+}
+
+export function documentTypeLabel(docType: DocumentType): string {
+  return DOCUMENT_TYPES.find((d) => d.value === docType)?.label ?? docType;
+}
+
+export function documentSourceLabel(source: DocumentSource): string {
+  if (source === "ai_fetched") return "Fetched by AI";
+  if (source === "contractor") return "From contractor";
+  return "Added by you";
 }
 
 async function parseJson<T>(res: Response): Promise<T> {
@@ -288,5 +350,92 @@ export async function deleteAsset(
       headers: { authorization: `Bearer ${accessToken}` },
     },
   );
+  return parseJson(res);
+}
+
+export async function listDocuments(
+  accessToken: string,
+  propertyId: string,
+  options?: { assetId?: string; propertyOnly?: boolean },
+): Promise<{ documents: PublicDocument[]; propertyId: string }> {
+  const params = new URLSearchParams();
+  if (options?.assetId) params.set("assetId", options.assetId);
+  if (options?.propertyOnly) params.set("scope", "property");
+  const query = params.toString();
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/documents${query ? `?${query}` : ""}`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function uploadDocument(
+  accessToken: string,
+  propertyId: string,
+  input: {
+    uri: string;
+    name: string;
+    mimeType: string;
+    title: string;
+    docType: DocumentType;
+    documentDate?: string | null;
+    assetId?: string | null;
+  },
+): Promise<{ document: PublicDocument }> {
+  const form = new FormData();
+  form.append("file", {
+    uri: input.uri,
+    name: input.name,
+    type: input.mimeType || "application/octet-stream",
+  } as unknown as Blob);
+  form.append("title", input.title);
+  form.append("docType", input.docType);
+  if (input.documentDate?.trim()) {
+    form.append("documentDate", input.documentDate.trim());
+  }
+  if (input.assetId) {
+    form.append("assetId", input.assetId);
+  }
+
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/documents`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` },
+      body: form,
+    },
+  );
+  return parseJson(res);
+}
+
+export async function deleteDocument(
+  accessToken: string,
+  propertyId: string,
+  documentId: string,
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/documents/${documentId}`,
+    {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${accessToken}` },
+    },
+  );
+  return parseJson(res);
+}
+
+export function documentContentUrl(
+  propertyId: string,
+  documentId: string,
+): string {
+  return `${API_BASE_URL}/properties/${propertyId}/documents/${documentId}/content`;
+}
+
+export async function exportHomePacket(
+  accessToken: string,
+  propertyId: string,
+): Promise<{ packet: HomePacket }> {
+  const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/export`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
   return parseJson(res);
 }

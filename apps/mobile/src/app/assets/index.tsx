@@ -121,6 +121,11 @@ export default function AssetsListScreen() {
                 <Text style={styles.rowMeta}>
                   {categoryLabel(asset.category)}
                   {asset.manufacturer ? ` · ${asset.manufacturer}` : ""}
+                  {asset.warrantyEndDate
+                    ? ` · Warranty ends ${asset.warrantyEndDate}`
+                    : asset.warrantyTerm
+                      ? ` · ${asset.warrantyTerm}`
+                      : ""}
                   {asset.location ? ` · ${asset.location}` : ""}
                 </Text>
               </View>

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { getDb } from "../db/client.js";
+import { existsSync, unlinkSync } from "node:fs";
+import { documentStoragePath, getDb } from "../db/client.js";
 import { getPropertyForUser } from "./properties.js";
 import type {
   AssetCategory,
@@ -20,6 +21,8 @@ type AssetRow = {
   installer_vendor: string | null;
   location: string | null;
   notes: string | null;
+  warranty_end_date: string | null;
+  warranty_term: string | null;
   provenance: string;
   created_at: string;
   updated_at: string;
@@ -36,6 +39,8 @@ export type CreateAssetInput = {
   installerVendor?: string | null;
   location?: string | null;
   notes?: string | null;
+  warrantyEndDate?: string | null;
+  warrantyTerm?: string | null;
   provenance?: AssetProvenance;
 };
 
@@ -61,6 +66,8 @@ function rowToAsset(row: AssetRow): AssetRecord {
     installerVendor: row.installer_vendor,
     location: row.location,
     notes: row.notes,
+    warrantyEndDate: row.warranty_end_date,
+    warrantyTerm: row.warranty_term,
     provenance: row.provenance as AssetProvenance,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -68,7 +75,8 @@ function rowToAsset(row: AssetRow): AssetRecord {
 }
 
 const ASSET_SELECT = `SELECT id, property_id, name, category, manufacturer, model, serial,
-       purchase_date, install_date, installer_vendor, location, notes, provenance,
+       purchase_date, install_date, installer_vendor, location, notes,
+       warranty_end_date, warranty_term, provenance,
        created_at, updated_at
 FROM assets`;
 
@@ -138,6 +146,8 @@ export function createAsset(
     installerVendor: optionalText(input.installerVendor),
     location: optionalText(input.location),
     notes: optionalText(input.notes),
+    warrantyEndDate: optionalText(input.warrantyEndDate),
+    warrantyTerm: optionalText(input.warrantyTerm),
     // Homeowner self-capture for this epic; contractor seeds arrive via EPIC 8.
     provenance: input.provenance ?? "homeowner",
     createdAt: now,
@@ -149,8 +159,8 @@ export function createAsset(
       `INSERT INTO assets
         (id, property_id, name, category, manufacturer, model, serial,
          purchase_date, install_date, installer_vendor, location, notes,
-         provenance, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         warranty_end_date, warranty_term, provenance, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       asset.id,
@@ -165,6 +175,8 @@ export function createAsset(
       asset.installerVendor,
       asset.location,
       asset.notes,
+      asset.warrantyEndDate,
+      asset.warrantyTerm,
       asset.provenance,
       asset.createdAt,
       asset.updatedAt,
@@ -212,6 +224,14 @@ export function updateAsset(
         : existing.location,
     notes:
       input.notes !== undefined ? optionalText(input.notes) : existing.notes,
+    warrantyEndDate:
+      input.warrantyEndDate !== undefined
+        ? optionalText(input.warrantyEndDate)
+        : existing.warrantyEndDate,
+    warrantyTerm:
+      input.warrantyTerm !== undefined
+        ? optionalText(input.warrantyTerm)
+        : existing.warrantyTerm,
     provenance: input.provenance ?? existing.provenance,
     updatedAt: new Date().toISOString(),
   };
@@ -221,7 +241,8 @@ export function updateAsset(
       `UPDATE assets SET
          name = ?, category = ?, manufacturer = ?, model = ?, serial = ?,
          purchase_date = ?, install_date = ?, installer_vendor = ?,
-         location = ?, notes = ?, provenance = ?, updated_at = ?
+         location = ?, notes = ?, warranty_end_date = ?, warranty_term = ?,
+         provenance = ?, updated_at = ?
        WHERE id = ? AND property_id = ?`,
     )
     .run(
@@ -235,6 +256,8 @@ export function updateAsset(
       updated.installerVendor,
       updated.location,
       updated.notes,
+      updated.warrantyEndDate,
+      updated.warrantyTerm,
       updated.provenance,
       updated.updatedAt,
       updated.id,
@@ -251,6 +274,24 @@ export function deleteAsset(
 ): void {
   const existing = getAssetForProperty(assetId, propertyId, ownerUserId);
   if (!existing) throw new Error("ASSET_NOT_FOUND");
+
+  // Remove stored files before CASCADE deletes document rows.
+  const fileRows = getDb()
+    .prepare(
+      `SELECT storage_key FROM documents WHERE asset_id = ? AND property_id = ?`,
+    )
+    .all(assetId, propertyId) as Array<{ storage_key: string }>;
+  getDb()
+    .prepare(`DELETE FROM documents WHERE asset_id = ? AND property_id = ?`)
+    .run(assetId, propertyId);
+  for (const row of fileRows) {
+    const path = documentStoragePath(row.storage_key);
+    try {
+      if (existsSync(path)) unlinkSync(path);
+    } catch {
+      // best-effort
+    }
+  }
 
   getDb()
     .prepare(`DELETE FROM assets WHERE id = ? AND property_id = ?`)

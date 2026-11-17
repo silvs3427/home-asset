@@ -1,4 +1,4 @@
-# Deployable API — accounts + property-scoped homes (EPIC 1).
+# Deployable API — accounts + homes + assets + documents (EPIC 3).
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json ./
@@ -11,8 +11,9 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV DATABASE_PATH=/app/data/homeasset.sqlite
+ENV STORAGE_PATH=/app/data/files
 RUN addgroup -S homeasset && adduser -S homeasset -G homeasset \
-  && mkdir -p /app/data && chown -R homeasset:homeasset /app/data
+  && mkdir -p /app/data/files && chown -R homeasset:homeasset /app/data
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

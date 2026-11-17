@@ -90,8 +90,8 @@ export default function HomeShellScreen() {
                   {formatPropertyAddress(activeProperty)}
                 </Text>
                 <Text style={styles.ledgerNote}>
-                  Assets for this home live in the registry below. Documents and
-                  recalls come next — always scoped to this home only.
+                  Assets, warranties, and documents for this home stay here —
+                  always scoped to this home only.
                 </Text>
               </>
             ) : (
@@ -105,16 +105,28 @@ export default function HomeShellScreen() {
             )}
 
             {activeProperty ? (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push("/assets")}
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.primaryLabel}>View assets</Text>
-              </Pressable>
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/assets")}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.primaryLabel}>View assets</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/documents")}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>Home documents</Text>
+                </Pressable>
+              </>
             ) : null}
 
             <Pressable
