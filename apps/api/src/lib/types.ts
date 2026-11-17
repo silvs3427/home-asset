@@ -54,6 +54,66 @@ export type PublicProperty = {
   updatedAt: string;
 };
 
+/**
+ * Who created the asset row. Homeowner self-capture vs accepted contractor seed.
+ * Contractor write path arrives in EPIC 8 — field is ready now.
+ */
+export type AssetProvenance = "homeowner" | "contractor";
+
+/** Categories optimized for warranty / maintenance / safety matching. */
+export type AssetCategory =
+  | "hvac"
+  | "roof"
+  | "appliance"
+  | "generator"
+  | "water_heater"
+  | "plumbing"
+  | "electrical"
+  | "kids_gear"
+  | "vehicle"
+  | "other";
+
+/**
+ * Property-scoped asset. manufacturer/model/serial are first-class for
+ * future docs (EPIC 3) and recall matching (EPIC 7).
+ */
+export type AssetRecord = {
+  id: string;
+  propertyId: string;
+  name: string;
+  category: AssetCategory;
+  manufacturer: string | null;
+  model: string | null;
+  serial: string | null;
+  purchaseDate: string | null;
+  installDate: string | null;
+  installerVendor: string | null;
+  location: string | null;
+  notes: string | null;
+  provenance: AssetProvenance;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Public asset payload — never includes other homes' rows. */
+export type PublicAsset = {
+  id: string;
+  propertyId: string;
+  name: string;
+  category: AssetCategory;
+  manufacturer: string | null;
+  model: string | null;
+  serial: string | null;
+  purchaseDate: string | null;
+  installDate: string | null;
+  installerVendor: string | null;
+  location: string | null;
+  notes: string | null;
+  provenance: AssetProvenance;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type JwtClaims = {
   sub: string;
   email: string;
@@ -97,3 +157,36 @@ export function formatPropertyAddress(property: PublicProperty | PropertyRecord)
     : property.addressLine1;
   return `${street}, ${property.city}, ${property.region} ${property.postalCode}, ${property.country}`;
 }
+
+export function toPublicAsset(asset: AssetRecord): PublicAsset {
+  return {
+    id: asset.id,
+    propertyId: asset.propertyId,
+    name: asset.name,
+    category: asset.category,
+    manufacturer: asset.manufacturer,
+    model: asset.model,
+    serial: asset.serial,
+    purchaseDate: asset.purchaseDate,
+    installDate: asset.installDate,
+    installerVendor: asset.installerVendor,
+    location: asset.location,
+    notes: asset.notes,
+    provenance: asset.provenance,
+    createdAt: asset.createdAt,
+    updatedAt: asset.updatedAt,
+  };
+}
+
+export const ASSET_CATEGORIES: AssetCategory[] = [
+  "hvac",
+  "roof",
+  "appliance",
+  "generator",
+  "water_heater",
+  "plumbing",
+  "electrical",
+  "kids_gear",
+  "vehicle",
+  "other",
+];

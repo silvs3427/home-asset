@@ -52,6 +52,70 @@ export type CreatePropertyInput = {
   country?: string;
 };
 
+export type AssetCategory =
+  | "hvac"
+  | "roof"
+  | "appliance"
+  | "generator"
+  | "water_heater"
+  | "plumbing"
+  | "electrical"
+  | "kids_gear"
+  | "vehicle"
+  | "other";
+
+export type AssetProvenance = "homeowner" | "contractor";
+
+export type PublicAsset = {
+  id: string;
+  propertyId: string;
+  name: string;
+  category: AssetCategory;
+  manufacturer: string | null;
+  model: string | null;
+  serial: string | null;
+  purchaseDate: string | null;
+  installDate: string | null;
+  installerVendor: string | null;
+  location: string | null;
+  notes: string | null;
+  provenance: AssetProvenance;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateAssetInput = {
+  name: string;
+  category: AssetCategory;
+  manufacturer?: string | null;
+  model?: string | null;
+  serial?: string | null;
+  purchaseDate?: string | null;
+  installDate?: string | null;
+  installerVendor?: string | null;
+  location?: string | null;
+  notes?: string | null;
+};
+
+export type UpdateAssetInput = Partial<CreateAssetInput>;
+
+export const ASSET_CATEGORIES: { value: AssetCategory; label: string }[] = [
+  { value: "hvac", label: "HVAC" },
+  { value: "roof", label: "Roof" },
+  { value: "appliance", label: "Appliance" },
+  { value: "generator", label: "Generator" },
+  { value: "water_heater", label: "Water heater" },
+  { value: "plumbing", label: "Plumbing" },
+  { value: "electrical", label: "Electrical" },
+  { value: "kids_gear", label: "Kids' gear" },
+  { value: "vehicle", label: "Vehicle / parts" },
+  { value: "other", label: "Other" },
+];
+
+export function categoryLabel(category: AssetCategory): string {
+  return ASSET_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+}
+
 async function parseJson<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & {
     message?: string;
@@ -154,4 +218,75 @@ export function formatPropertyAddress(property: PublicProperty): string {
     ? `${property.addressLine1}, ${line2}`
     : property.addressLine1;
   return `${street}, ${property.city}, ${property.region} ${property.postalCode}`;
+}
+
+export async function listAssets(
+  accessToken: string,
+  propertyId: string,
+): Promise<{ assets: PublicAsset[]; propertyId: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/assets`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function getAsset(
+  accessToken: string,
+  propertyId: string,
+  assetId: string,
+): Promise<{ asset: PublicAsset }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/assets/${assetId}`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function createAsset(
+  accessToken: string,
+  propertyId: string,
+  input: CreateAssetInput,
+): Promise<{ asset: PublicAsset }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/assets`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function updateAsset(
+  accessToken: string,
+  propertyId: string,
+  assetId: string,
+  input: UpdateAssetInput,
+): Promise<{ asset: PublicAsset }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/assets/${assetId}`,
+    {
+      method: "PATCH",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function deleteAsset(
+  accessToken: string,
+  propertyId: string,
+  assetId: string,
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/assets/${assetId}`,
+    {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${accessToken}` },
+    },
+  );
+  return parseJson(res);
 }

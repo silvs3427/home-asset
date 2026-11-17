@@ -9,6 +9,7 @@ import {
 import { getUserById } from "../lib/users.js";
 import { toPublicProperty, toPublicUser } from "../lib/types.js";
 import { requireAuth, type AuthVariables } from "../middleware/requireAuth.js";
+import { assetRoutes } from "./assets.js";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -105,3 +106,7 @@ propertyRoutes.post("/:id/select", (c) => {
     throw err;
   }
 });
+
+// Nested under property so the URL itself encodes the home boundary.
+// Auth already applied above; asset handlers re-check ownership.
+propertyRoutes.route("/:propertyId/assets", assetRoutes);

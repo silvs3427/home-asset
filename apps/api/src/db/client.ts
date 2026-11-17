@@ -33,10 +33,36 @@ CREATE TABLE IF NOT EXISTS properties (
 
 CREATE INDEX IF NOT EXISTS idx_properties_owner
   ON properties(owner_user_id);
+
+CREATE TABLE IF NOT EXISTS assets (
+  id TEXT PRIMARY KEY NOT NULL,
+  property_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  manufacturer TEXT,
+  model TEXT,
+  serial TEXT,
+  purchase_date TEXT,
+  install_date TEXT,
+  installer_vendor TEXT,
+  location TEXT,
+  notes TEXT,
+  provenance TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_assets_property
+  ON assets(property_id);
+
+-- Hooks for EPIC 7 recalls: manufacturer/model/serial are indexed for matching later.
+CREATE INDEX IF NOT EXISTS idx_assets_recall_keys
+  ON assets(manufacturer, model, serial);
 `;
 
 /**
- * Local SQLite store for accounts + homes.
+ * Local SQLite store for accounts, homes, and assets.
  * All home data is keyed by property id from day one (property-scoped).
  * Path comes from DATABASE_PATH; use :memory: in tests.
  */
