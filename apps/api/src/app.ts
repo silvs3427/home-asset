@@ -5,6 +5,7 @@ import { logger } from "hono/logger";
 import { config } from "./config.js";
 import { getDb } from "./db/client.js";
 import { authRoutes } from "./routes/auth.js";
+import { contractorAiRoutes } from "./routes/ai.js";
 import { healthRoutes } from "./routes/health.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { meRoutes } from "./routes/me.js";
@@ -51,6 +52,7 @@ export function createApp() {
   app.route("/me", meRoutes);
   app.route("/me/notifications", notificationRoutes);
   app.route("/properties", propertyRoutes);
+  app.route("/ai/contractor", contractorAiRoutes);
   app.route("/jobs", jobRoutes);
 
   app.get("/", (c) =>
@@ -58,7 +60,7 @@ export function createApp() {
       name: "HomeAsset API",
       docs: "See repository README for local run instructions.",
       privacy:
-        "Homeowner controls the ledger. Homes, assets, documents, reminders, and notifications are property- or account-scoped. No silent data sharing. Auth required for personal data. No marketing drip.",
+        "Homeowner controls the ledger. Homes, assets, documents, reminders, notifications, and AI drafts are property- or account-scoped. AI never silently writes. Auth required for personal data. No marketing drip.",
     }),
   );
 

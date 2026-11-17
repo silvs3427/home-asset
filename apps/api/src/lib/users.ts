@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { __resetDbForTests, getDb } from "../db/client.js";
+import { __resetAiDraftsForTests } from "./ai/drafts.js";
 import type { AppFace, UserRecord } from "./types.js";
 
 const BCRYPT_ROUNDS = 12;
@@ -150,7 +151,8 @@ export function setActivePropertyId(
   return { ...user, activePropertyId: propertyId };
 }
 
-/** Test helper — reopen a clean in-memory DB. */
+/** Test helper — reopen a clean in-memory DB and clear ephemeral AI drafts. */
 export function __resetUsersForTests(): void {
   __resetDbForTests();
+  __resetAiDraftsForTests();
 }
