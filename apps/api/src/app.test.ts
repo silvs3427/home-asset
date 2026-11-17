@@ -431,4 +431,217 @@ describe("HomeAsset API — asset registry", () => {
     });
     assert.equal(res.status, 400);
   });
+
+  it("stores warranty end date and term on an asset", async () => {
+    const app = createApp();
+    const auth = await signup(app, "warranty@example.com");
+    const home = await createHome(app, auth.accessToken, "Warranty Home");
+    const created = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({
+        name: "Roof",
+        category: "roof",
+        warrantyEndDate: "2040-05-01",
+        warrantyTerm: "20 years",
+      }),
+    });
+    assert.equal(created.status, 201);
+    const body = (await created.json()) as {
+      asset: { warrantyEndDate: string; warrantyTerm: string };
+    };
+    assert.equal(body.asset.warrantyEndDate, "2040-05-01");
+    assert.equal(body.asset.warrantyTerm, "20 years");
+  });
+});
+
+type DocumentBody = {
+  document: {
+    id: string;
+    propertyId: string;
+    assetId: string | null;
+    title: string;
+    docType: string;
+    source: string;
+    mimeType: string;
+    originalFilename: string;
+    byteSize: number;
+  };
+};
+
+describe("HomeAsset API — documents & warranties", () => {
+  it("rejects document list without a token", async () => {
+    const app = createApp();
+    const res = await app.request("/properties/fake/documents");
+    assert.equal(res.status, 401);
+  });
+
+  it("uploads, lists, downloads, and deletes a document on an owned home", async () => {
+    const app = createApp();
+    const auth = await signup(app, "docs@example.com");
+    const home = await createHome(app, auth.accessToken, "Doc Home");
+
+    const assetRes = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({
+        name: "Furnace",
+        category: "hvac",
+        warrantyEndDate: "2030-01-15",
+        warrantyTerm: "10 years",
+      }),
+    });
+    assert.equal(assetRes.status, 201);
+    const asset = ((await assetRes.json()) as AssetBody).asset;
+
+    const form = new FormData();
+    form.append(
+      "file",
+      new File([Buffer.from("warranty-pdf-bytes")], "warranty.pdf", {
+        type: "application/pdf",
+      }),
+    );
+    form.append("title", "Furnace warranty");
+    form.append("docType", "warranty");
+    form.append("documentDate", "2022-06-15");
+    form.append("assetId", asset.id);
+
+    const uploaded = await app.request(`/properties/${home.id}/documents`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+      body: form,
+    });
+    assert.equal(uploaded.status, 201);
+    const uploadedBody = (await uploaded.json()) as DocumentBody;
+    assert.equal(uploadedBody.document.title, "Furnace warranty");
+    assert.equal(uploadedBody.document.assetId, asset.id);
+    assert.equal(uploadedBody.document.source, "user");
+    assert.equal(uploadedBody.document.docType, "warranty");
+    assert.ok(uploadedBody.document.byteSize > 0);
+
+    const list = await app.request(
+      `/properties/${home.id}/documents?assetId=${asset.id}`,
+      { headers: { authorization: `Bearer ${auth.accessToken}` } },
+    );
+    assert.equal(list.status, 200);
+    const listBody = (await list.json()) as { documents: Array<{ id: string }> };
+    assert.equal(listBody.documents.length, 1);
+
+    const content = await app.request(
+      `/properties/${home.id}/documents/${uploadedBody.document.id}/content`,
+      { headers: { authorization: `Bearer ${auth.accessToken}` } },
+    );
+    assert.equal(content.status, 200);
+    assert.equal(content.headers.get("content-type"), "application/pdf");
+    const bytes = Buffer.from(await content.arrayBuffer());
+    assert.equal(bytes.toString("utf8"), "warranty-pdf-bytes");
+
+    const deleted = await app.request(
+      `/properties/${home.id}/documents/${uploadedBody.document.id}`,
+      {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${auth.accessToken}` },
+      },
+    );
+    assert.equal(deleted.status, 200);
+
+    const empty = await app.request(`/properties/${home.id}/documents`, {
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    const emptyBody = (await empty.json()) as { documents: unknown[] };
+    assert.equal(emptyBody.documents.length, 0);
+  });
+
+  it("supports property-level documents and home packet export", async () => {
+    const app = createApp();
+    const auth = await signup(app, "export@example.com");
+    const home = await createHome(app, auth.accessToken, "Export Home");
+
+    const form = new FormData();
+    form.append(
+      "file",
+      new File([Buffer.from("home-photo")], "front.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    form.append("title", "Front of house");
+    form.append("docType", "photo");
+
+    const uploaded = await app.request(`/properties/${home.id}/documents`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+      body: form,
+    });
+    assert.equal(uploaded.status, 201);
+
+    const propertyOnly = await app.request(
+      `/properties/${home.id}/documents?scope=property`,
+      { headers: { authorization: `Bearer ${auth.accessToken}` } },
+    );
+    const propertyBody = (await propertyOnly.json()) as {
+      documents: Array<{ assetId: string | null; title: string }>;
+    };
+    assert.equal(propertyBody.documents.length, 1);
+    assert.equal(propertyBody.documents[0]?.assetId, null);
+
+    const exported = await app.request(`/properties/${home.id}/export`, {
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    assert.equal(exported.status, 200);
+    const exportBody = (await exported.json()) as {
+      packet: {
+        format: string;
+        privacy: { silentSharing: boolean };
+        property: { name: string };
+        documents: unknown[];
+      };
+    };
+    assert.equal(exportBody.packet.format, "homeasset.home_packet.v1");
+    assert.equal(exportBody.packet.privacy.silentSharing, false);
+    assert.equal(exportBody.packet.property.name, "Export Home");
+    assert.equal(exportBody.packet.documents.length, 1);
+  });
+
+  it("never leaks documents across accounts or homes", async () => {
+    const app = createApp();
+    const alice = await signup(app, "alice-docs@example.com");
+    const bob = await signup(app, "bob-docs@example.com");
+    const aliceHome = await createHome(app, alice.accessToken, "Alice Docs");
+    const bobHome = await createHome(app, bob.accessToken, "Bob Docs");
+
+    const form = new FormData();
+    form.append(
+      "file",
+      new File([Buffer.from("secret")], "secret.pdf", {
+        type: "application/pdf",
+      }),
+    );
+    form.append("title", "Private receipt");
+    form.append("docType", "receipt");
+
+    const uploaded = await app.request(`/properties/${aliceHome.id}/documents`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${alice.accessToken}` },
+      body: form,
+    });
+    assert.equal(uploaded.status, 201);
+    const doc = ((await uploaded.json()) as DocumentBody).document;
+
+    const bobList = await app.request(`/properties/${aliceHome.id}/documents`, {
+      headers: { authorization: `Bearer ${bob.accessToken}` },
+    });
+    assert.equal(bobList.status, 404);
+
+    const bobSteal = await app.request(
+      `/properties/${bobHome.id}/documents/${doc.id}/content`,
+      { headers: { authorization: `Bearer ${bob.accessToken}` } },
+    );
+    assert.equal(bobSteal.status, 404);
+  });
 });

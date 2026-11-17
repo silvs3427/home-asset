@@ -13,17 +13,32 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ASSET_CATEGORIES,
+  DOCUMENT_TYPES,
   categoryLabel,
   deleteAsset,
+  deleteDocument,
+  documentSourceLabel,
+  documentTypeLabel,
   getAsset,
+  listDocuments,
   updateAsset,
+  uploadDocument,
   type AssetCategory,
+  type DocumentType,
   type PublicAsset,
+  type PublicDocument,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import {
+  downloadAndShareDocument,
+  pickDocumentFile,
+  pickFromCamera,
+  pickFromLibrary,
+  type PickedUpload,
+} from "@/lib/documents";
 
 /**
- * Asset detail + edit for the current home.
+ * Asset detail + edit + documents for the current home.
  * Loads only via owned propertyId — API enforces the boundary.
  */
 export default function AssetDetailScreen() {
@@ -31,6 +46,7 @@ export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, accessToken, activeProperty } = useAuth();
   const [asset, setAsset] = useState<PublicAsset | null>(null);
+  const [documents, setDocuments] = useState<PublicDocument[]>([]);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -46,6 +62,13 @@ export default function AssetDetailScreen() {
   const [installerVendor, setInstallerVendor] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
+  const [warrantyEndDate, setWarrantyEndDate] = useState("");
+  const [warrantyTerm, setWarrantyTerm] = useState("");
+
+  const [pending, setPending] = useState<PickedUpload | null>(null);
+  const [docTitle, setDocTitle] = useState("");
+  const [docType, setDocType] = useState<DocumentType>("photo");
+  const [docDate, setDocDate] = useState("");
 
   const fillForm = useCallback((next: PublicAsset) => {
     setAsset(next);
@@ -59,7 +82,17 @@ export default function AssetDetailScreen() {
     setInstallerVendor(next.installerVendor ?? "");
     setLocation(next.location ?? "");
     setNotes(next.notes ?? "");
+    setWarrantyEndDate(next.warrantyEndDate ?? "");
+    setWarrantyTerm(next.warrantyTerm ?? "");
   }, []);
+
+  const loadDocuments = useCallback(async () => {
+    if (!accessToken || !activeProperty || !id) return;
+    const res = await listDocuments(accessToken, activeProperty.id, {
+      assetId: id,
+    });
+    setDocuments(res.documents);
+  }, [accessToken, activeProperty, id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +105,10 @@ export default function AssetDetailScreen() {
       setLoading(true);
       try {
         const res = await getAsset(accessToken, activeProperty.id, id);
-        if (!cancelled) fillForm(res.asset);
+        if (!cancelled) {
+          fillForm(res.asset);
+          await loadDocuments();
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Could not load asset.");
@@ -84,7 +120,7 @@ export default function AssetDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, activeProperty, id, fillForm]);
+  }, [accessToken, activeProperty, id, fillForm, loadDocuments]);
 
   if (!user) {
     return <Redirect href="/sign-in" />;
@@ -109,6 +145,8 @@ export default function AssetDetailScreen() {
         installerVendor: installerVendor.trim() || null,
         location: location.trim() || null,
         notes: notes.trim() || null,
+        warrantyEndDate: warrantyEndDate.trim() || null,
+        warrantyTerm: warrantyTerm.trim() || null,
       });
       fillForm(res.asset);
       setEditing(false);
@@ -122,7 +160,7 @@ export default function AssetDetailScreen() {
   function onDelete() {
     Alert.alert(
       "Remove asset?",
-      "This removes it from this home's ledger. Documents and recalls will hang off assets later — nothing else is deleted yet.",
+      "This removes it and its documents from this home's ledger.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -147,6 +185,85 @@ export default function AssetDetailScreen() {
         },
       ],
     );
+  }
+
+  async function beginPick(
+    picker: () => Promise<PickedUpload | null>,
+  ): Promise<void> {
+    setError(null);
+    try {
+      const picked = await picker();
+      if (!picked) return;
+      setPending(picked);
+      setDocTitle(picked.name.replace(/\.[^.]+$/, "") || asset?.name || "Document");
+      setDocType(picked.suggestedType);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open picker.");
+    }
+  }
+
+  async function onUploadDoc(): Promise<void> {
+    if (!accessToken || !activeProperty || !id || !pending) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await uploadDocument(accessToken, activeProperty.id, {
+        uri: pending.uri,
+        name: pending.name,
+        mimeType: pending.mimeType,
+        title: docTitle.trim() || pending.name,
+        docType,
+        documentDate: docDate.trim() || null,
+        assetId: id,
+      });
+      setPending(null);
+      setDocTitle("");
+      setDocDate("");
+      await loadDocuments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not upload.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onShareDoc(doc: PublicDocument): Promise<void> {
+    if (!accessToken || !activeProperty) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await downloadAndShareDocument(accessToken, activeProperty.id, doc);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open document.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onDeleteDoc(doc: PublicDocument): void {
+    Alert.alert("Remove document?", "Deletes this file from the asset.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            if (!accessToken || !activeProperty) return;
+            setBusy(true);
+            try {
+              await deleteDocument(accessToken, activeProperty.id, doc.id);
+              await loadDocuments();
+            } catch (err) {
+              setError(
+                err instanceof Error ? err.message : "Could not remove document.",
+              );
+            } finally {
+              setBusy(false);
+            }
+          })();
+        },
+      },
+    ]);
   }
 
   return (
@@ -200,6 +317,8 @@ export default function AssetDetailScreen() {
               <Fact label="Serial" value={asset.serial} />
               <Fact label="Purchase date" value={asset.purchaseDate} />
               <Fact label="Install date" value={asset.installDate} />
+              <Fact label="Warranty ends" value={asset.warrantyEndDate} />
+              <Fact label="Warranty term" value={asset.warrantyTerm} />
               <Fact label="Installer / vendor" value={asset.installerVendor} />
               <Fact label="Location" value={asset.location} />
               <Fact label="Notes" value={asset.notes} />
@@ -213,9 +332,153 @@ export default function AssetDetailScreen() {
               />
             </View>
 
+            <Text style={styles.sectionHeading}>Documents</Text>
+            <Text style={styles.sectionCopy}>
+              Manuals, receipts, warranties, and photos for this asset. Camera
+              is the fastest path on your phone.
+            </Text>
+
+            <View style={styles.docActions}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  void beginPick(pickFromCamera);
+                }}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.primaryLabel}>Take photo</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  void beginPick(pickFromLibrary);
+                }}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.secondaryLabel}>Photo library</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  void beginPick(pickDocumentFile);
+                }}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.secondaryLabel}>Choose file</Text>
+              </Pressable>
+            </View>
+
+            {pending ? (
+              <View style={styles.uploadBox}>
+                <Text style={styles.factLabel}>Ready to save</Text>
+                <Text style={styles.pendingName}>{pending.name}</Text>
+                <Field label="Title" value={docTitle} onChangeText={setDocTitle} />
+                <Text style={styles.label}>Type</Text>
+                <View style={styles.chips}>
+                  {DOCUMENT_TYPES.map((item) => {
+                    const selected = item.value === docType;
+                    return (
+                      <Pressable
+                        key={item.value}
+                        accessibilityRole="button"
+                        onPress={() => setDocType(item.value)}
+                        style={[styles.chip, selected && styles.chipSelected]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipLabel,
+                            selected && styles.chipLabelSelected,
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Field
+                  label="Document date (YYYY-MM-DD)"
+                  value={docDate}
+                  onChangeText={setDocDate}
+                  autoCapitalize="none"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => {
+                    void onUploadDoc();
+                  }}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    pressed && styles.pressed,
+                    busy && styles.disabled,
+                  ]}
+                >
+                  {busy ? (
+                    <ActivityIndicator color="#F3F6F4" />
+                  ) : (
+                    <Text style={styles.primaryLabel}>Save document</Text>
+                  )}
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setPending(null)}
+                  style={styles.cancelBtn}
+                >
+                  <Text style={styles.cancelLabel}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {documents.length === 0 && !pending ? (
+              <Text style={styles.emptyDocs}>No documents on this asset yet.</Text>
+            ) : null}
+
+            <View style={styles.docList}>
+              {documents.map((doc) => (
+                <View key={doc.id} style={styles.docRow}>
+                  <View style={styles.docRowText}>
+                    <Text style={styles.docName}>{doc.title}</Text>
+                    <Text style={styles.docMeta}>
+                      {documentTypeLabel(doc.docType)} ·{" "}
+                      {documentSourceLabel(doc.source)}
+                      {doc.documentDate ? ` · ${doc.documentDate}` : ""}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    onPress={() => {
+                      void onShareDoc(doc);
+                    }}
+                  >
+                    <Text style={styles.docAction}>View</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    onPress={() => onDeleteDoc(doc)}
+                  >
+                    <Text style={styles.docDanger}>Remove</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+
             <Text style={styles.footnote}>
-              Manufacturer, model, and serial are ready for warranties, manuals,
-              and recall matching later.
+              Files stay on this home only. No silent sharing.
             </Text>
 
             <Pressable
@@ -283,6 +546,18 @@ export default function AssetDetailScreen() {
               autoCapitalize="none"
             />
             <Field
+              label="Warranty end date (YYYY-MM-DD)"
+              value={warrantyEndDate}
+              onChangeText={setWarrantyEndDate}
+              autoCapitalize="none"
+            />
+            <Field
+              label="Warranty term"
+              value={warrantyTerm}
+              onChangeText={setWarrantyTerm}
+              placeholder="e.g. 10 years, lifetime"
+            />
+            <Field
               label="Installer / vendor"
               value={installerVendor}
               onChangeText={setInstallerVendor}
@@ -331,6 +606,7 @@ function Field(props: {
   onChangeText: (v: string) => void;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   multiline?: boolean;
+  placeholder?: string;
 }) {
   return (
     <View style={styles.field}>
@@ -339,6 +615,7 @@ function Field(props: {
         style={[styles.input, props.multiline && styles.inputMultiline]}
         value={props.value}
         onChangeText={props.onChangeText}
+        placeholder={props.placeholder}
         placeholderTextColor="#7A8A82"
         autoCapitalize={props.autoCapitalize}
         multiline={props.multiline}
@@ -431,6 +708,104 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     color: "#14241D",
+  },
+  sectionHeading: {
+    marginTop: 32,
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#14241D",
+  },
+  sectionCopy: {
+    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#3D5349",
+  },
+  docActions: {
+    marginTop: 16,
+    gap: 10,
+  },
+  primaryBtn: {
+    backgroundColor: "#1B3A2F",
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  primaryLabel: {
+    color: "#F3F6F4",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  secondaryBtn: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#1B3A2F",
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  secondaryLabel: {
+    color: "#1B3A2F",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  pressed: {
+    opacity: 0.9,
+  },
+  disabled: {
+    opacity: 0.6,
+  },
+  uploadBox: {
+    marginTop: 16,
+  },
+  pendingName: {
+    marginTop: 4,
+    marginBottom: 4,
+    fontSize: 14,
+    color: "#3D5349",
+  },
+  emptyDocs: {
+    marginTop: 16,
+    fontSize: 14,
+    color: "#5A6E64",
+  },
+  docList: {
+    marginTop: 16,
+    gap: 10,
+  },
+  docRow: {
+    borderWidth: 1,
+    borderColor: "#C5D2CB",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  docRowText: {
+    flex: 1,
+    gap: 2,
+  },
+  docName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#14241D",
+  },
+  docMeta: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#5A6E64",
+  },
+  docAction: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#2F5B4A",
+  },
+  docDanger: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#8B2E2E",
   },
   footnote: {
     marginTop: 28,

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { buildHomePacket } from "../lib/exportPacket.js";
 import {
   createProperty,
   getPropertyForUser,
@@ -10,6 +11,7 @@ import { getUserById } from "../lib/users.js";
 import { toPublicProperty, toPublicUser } from "../lib/types.js";
 import { requireAuth, type AuthVariables } from "../middleware/requireAuth.js";
 import { assetRoutes } from "./assets.js";
+import { documentRoutes } from "./documents.js";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -107,6 +109,23 @@ propertyRoutes.post("/:id/select", (c) => {
   }
 });
 
+propertyRoutes.get("/:id/export", (c) => {
+  const claims = c.get("claims");
+  try {
+    const packet = buildHomePacket(c.req.param("id"), claims.sub);
+    return c.json({ packet });
+  } catch (err) {
+    if (err instanceof Error && err.message === "PROPERTY_NOT_FOUND") {
+      return c.json(
+        { error: "not_found", message: "Home not found." },
+        404,
+      );
+    }
+    throw err;
+  }
+});
+
 // Nested under property so the URL itself encodes the home boundary.
-// Auth already applied above; asset handlers re-check ownership.
+// Auth already applied above; asset/document handlers re-check ownership.
 propertyRoutes.route("/:propertyId/assets", assetRoutes);
+propertyRoutes.route("/:propertyId/documents", documentRoutes);

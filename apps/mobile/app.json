@@ -9,7 +9,15 @@
     "scheme": "homeasset",
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HomeAsset needs photo access to attach manuals, receipts, and warranty paperwork.",
+          "cameraPermission": "HomeAsset needs the camera so you can photograph warranties and install paperwork on site."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
