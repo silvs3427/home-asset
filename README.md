@@ -27,7 +27,7 @@ apps/
 
 - Node.js **22+** (SQLite via `node:sqlite`)
 - npm 10+
-- For phones: [Expo Go](https://expo.dev/go) on a device, or iOS Simulator / Android emulator
+- For phones: **Expo Go matching SDK 58** (see below), or iOS Simulator / Android emulator
 
 ## Run locally
 
@@ -54,15 +54,30 @@ Quick checks:
 curl http://localhost:8787/health
 ```
 
-### 3. Mobile app
+### 3. Mobile app (Expo SDK 58)
 
-In another terminal:
+**Install Expo Go for SDK 58 before scanning the Metro QR.** The QR is an `exp://…` deep link — phone cameras show “no usable data” / do nothing if Expo Go is missing. That is different from a browser download QR.
+
+| | URL |
+| --- | --- |
+| SDK 58 chooser | https://expo.dev/go?sdkVersion=58 |
+| Android page | https://expo.dev/go?sdkVersion=58&platform=android |
+| Android APK (direct) | https://github.com/expo/expo-go-releases/releases/download/Expo-Go-58.0.5/Expo-Go-58.0.5.apk |
+| iOS page | https://expo.dev/go?sdkVersion=58&platform=ios |
+
+More detail: [`apps/mobile/README.md`](./apps/mobile/README.md).
+
+Then start Metro in **Expo Go** mode (default for `dev:mobile`):
 
 ```bash
 npm run dev:mobile
+# same as: npm run start -w @homeasset/mobile
+# or from apps/mobile: npx expo start --go -c
 ```
 
-Then open in Expo Go (scan QR), iOS Simulator, or Android emulator.
+Scan the QR **with Expo Go** (or the iOS Camera app once Expo Go is installed). Press `a` / `i` for Android emulator / iOS Simulator.
+
+If Expo Go says the project is incompatible, you have the wrong SDK client — use the links above, not the generic Play/App Store listing alone.
 
 **Physical device:** the phone cannot reach `localhost` on your computer. Create `apps/mobile/.env`:
 
@@ -70,7 +85,7 @@ Then open in Expo Go (scan QR), iOS Simulator, or Android emulator.
 EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:8787
 ```
 
-Restart Expo after changing that value.
+Restart with `npx expo start --go -c` after changing that value.
 
 ### 4. Smoke accounts through notifications
 
