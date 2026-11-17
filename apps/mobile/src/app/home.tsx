@@ -90,8 +90,8 @@ export default function HomeShellScreen() {
                   {formatPropertyAddress(activeProperty)}
                 </Text>
                 <Text style={styles.ledgerNote}>
-                  Assets, warranties, documents, and reminders for this home stay
-                  here — always scoped to this home only.
+                  Assets, warranties, documents, reminders, and notices for this
+                  home stay here — always scoped to this home only.
                 </Text>
               </>
             ) : (
@@ -135,6 +135,16 @@ export default function HomeShellScreen() {
                   ]}
                 >
                   <Text style={styles.secondaryLabel}>Upcoming reminders</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/notifications")}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>Notifications</Text>
                 </Pressable>
               </>
             ) : null}

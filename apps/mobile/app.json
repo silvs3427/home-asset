@@ -17,6 +17,14 @@
           "photosPermission": "HomeAsset needs photo access to attach manuals, receipts, and warranty paperwork.",
           "cameraPermission": "HomeAsset needs the camera so you can photograph warranties and install paperwork on site."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1B3A2F",
+          "defaultChannel": "homeasset-reminders"
+        }
       ]
     ],
     "experiments": {

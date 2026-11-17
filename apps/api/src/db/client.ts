@@ -123,6 +123,60 @@ CREATE TABLE IF NOT EXISTS reminder_completions (
 
 CREATE INDEX IF NOT EXISTS idx_reminder_completions_reminder
   ON reminder_completions(reminder_id);
+
+-- EPIC 5: per-user notification preferences (what / when). No marketing.
+CREATE TABLE IF NOT EXISTS notification_preferences (
+  user_id TEXT PRIMARY KEY NOT NULL,
+  reminders_enabled INTEGER NOT NULL DEFAULT 1,
+  recalls_enabled INTEGER NOT NULL DEFAULT 1,
+  contractor_submits_enabled INTEGER NOT NULL DEFAULT 1,
+  reminder_lead_days INTEGER NOT NULL DEFAULT 3,
+  push_enabled INTEGER NOT NULL DEFAULT 1,
+  in_app_enabled INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Expo (or equivalent) push tokens for the signed-in account.
+CREATE TABLE IF NOT EXISTS push_devices (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  expo_push_token TEXT NOT NULL UNIQUE,
+  platform TEXT,
+  device_name TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_devices_user
+  ON push_devices(user_id);
+
+-- In-app notification center. Property-scoped when about a home.
+CREATE TABLE IF NOT EXISTS notifications (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  property_id TEXT,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  related_reminder_id TEXT,
+  related_asset_id TEXT,
+  related_entity_id TEXT,
+  dedupe_key TEXT NOT NULL,
+  read_at TEXT,
+  push_status TEXT NOT NULL,
+  push_sent_at TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_user_dedupe
+  ON notifications(user_id, dedupe_key);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+  ON notifications(user_id, created_at DESC);
 `;
 
 type ColumnInfo = { name: string };

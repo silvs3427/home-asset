@@ -607,3 +607,157 @@ export async function listReminderHistory(
   );
   return parseJson(res);
 }
+
+export type NotificationKind =
+  | "reminder_due"
+  | "recall_alert"
+  | "contractor_submit";
+
+export type PushDeliveryStatus =
+  | "pending"
+  | "sent"
+  | "skipped"
+  | "stubbed"
+  | "failed";
+
+export type PublicNotification = {
+  id: string;
+  propertyId: string | null;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  relatedReminderId: string | null;
+  relatedAssetId: string | null;
+  relatedEntityId: string | null;
+  readAt: string | null;
+  pushStatus: PushDeliveryStatus;
+  createdAt: string;
+};
+
+export type NotificationPreferences = {
+  remindersEnabled: boolean;
+  recallsEnabled: boolean;
+  contractorSubmitsEnabled: boolean;
+  reminderLeadDays: number;
+  pushEnabled: boolean;
+  inAppEnabled: boolean;
+  updatedAt: string;
+};
+
+export type PublicPushDevice = {
+  id: string;
+  expoPushToken: string;
+  platform: string | null;
+  deviceName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UpdateNotificationPreferencesInput = {
+  remindersEnabled?: boolean;
+  recallsEnabled?: boolean;
+  contractorSubmitsEnabled?: boolean;
+  reminderLeadDays?: number;
+  pushEnabled?: boolean;
+  inAppEnabled?: boolean;
+};
+
+export function notificationKindLabel(kind: NotificationKind): string {
+  if (kind === "reminder_due") return "Reminder";
+  if (kind === "recall_alert") return "Recall";
+  return "Contractor";
+}
+
+export async function fetchNotificationPreferences(
+  accessToken: string,
+): Promise<{ preferences: NotificationPreferences }> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/preferences`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  return parseJson(res);
+}
+
+export async function updateNotificationPreferences(
+  accessToken: string,
+  input: UpdateNotificationPreferencesInput,
+): Promise<{ preferences: NotificationPreferences }> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/preferences`, {
+    method: "PATCH",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(input),
+  });
+  return parseJson(res);
+}
+
+export async function listNotifications(
+  accessToken: string,
+  options?: { unreadOnly?: boolean },
+): Promise<{ notifications: PublicNotification[]; unreadCount: number }> {
+  const params = new URLSearchParams();
+  if (options?.unreadOnly) params.set("unreadOnly", "1");
+  const query = params.toString();
+  const res = await fetch(
+    `${API_BASE_URL}/me/notifications${query ? `?${query}` : ""}`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function markNotificationRead(
+  accessToken: string,
+  notificationId: string,
+): Promise<{ notification: PublicNotification }> {
+  const res = await fetch(
+    `${API_BASE_URL}/me/notifications/${notificationId}/read`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` },
+    },
+  );
+  return parseJson(res);
+}
+
+export async function markAllNotificationsRead(
+  accessToken: string,
+): Promise<{ ok: boolean; updated: number }> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/read-all`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  return parseJson(res);
+}
+
+export async function runDueNotificationCheck(
+  accessToken: string,
+): Promise<{
+  ok: boolean;
+  result: {
+    scanned: number;
+    created: number;
+    skippedExisting: number;
+    skippedPrefs: number;
+  };
+  unreadCount: number;
+}> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/run-due-check`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  return parseJson(res);
+}
+
+export async function registerPushDevice(
+  accessToken: string,
+  input: {
+    expoPushToken: string;
+    platform?: string | null;
+    deviceName?: string | null;
+  },
+): Promise<{ device: PublicPushDevice }> {
+  const res = await fetch(`${API_BASE_URL}/me/notifications/devices`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(input),
+  });
+  return parseJson(res);
+}

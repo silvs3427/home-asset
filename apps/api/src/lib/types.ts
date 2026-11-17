@@ -288,7 +288,7 @@ export type ReminderStatus = "active" | "completed";
 
 /**
  * Property-scoped maintenance reminder tied to an asset.
- * Push delivery is EPIC 5 — this row is the schedule + due date only.
+ * Due notices are created by the EPIC 5 due-check job / self-serve check.
  */
 export type ReminderRecord = {
   id: string;
@@ -386,3 +386,150 @@ export const REMINDER_RECURRENCES: ReminderRecurrence[] = [
   "quarterly",
   "yearly",
 ];
+
+/**
+ * In-app / push notification kinds.
+ * reminder_due is live in EPIC 5; recall + contractor_submit are hooks for later epics.
+ */
+export type NotificationKind =
+  | "reminder_due"
+  | "recall_alert"
+  | "contractor_submit";
+
+export type PushDeliveryStatus =
+  | "pending"
+  | "sent"
+  | "skipped"
+  | "stubbed"
+  | "failed";
+
+export type NotificationPreferences = {
+  remindersEnabled: boolean;
+  /** Hook for EPIC 7 — preference stored now, alerts arrive later. */
+  recallsEnabled: boolean;
+  /** Hook for EPIC 8 — preference stored now, submit pings arrive later. */
+  contractorSubmitsEnabled: boolean;
+  /** Days before due date to create a reminder notification (0 = due day only). */
+  reminderLeadDays: number;
+  pushEnabled: boolean;
+  inAppEnabled: boolean;
+  updatedAt: string;
+};
+
+export type PublicNotificationPreferences = Omit<
+  NotificationPreferences,
+  "updatedAt"
+> & {
+  updatedAt: string;
+};
+
+export type PushDeviceRecord = {
+  id: string;
+  userId: string;
+  expoPushToken: string;
+  platform: string | null;
+  deviceName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PublicPushDevice = {
+  id: string;
+  expoPushToken: string;
+  platform: string | null;
+  deviceName: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NotificationRecord = {
+  id: string;
+  userId: string;
+  propertyId: string | null;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  relatedReminderId: string | null;
+  relatedAssetId: string | null;
+  relatedEntityId: string | null;
+  dedupeKey: string;
+  readAt: string | null;
+  pushStatus: PushDeliveryStatus;
+  pushSentAt: string | null;
+  createdAt: string;
+};
+
+export type PublicNotification = {
+  id: string;
+  propertyId: string | null;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  relatedReminderId: string | null;
+  relatedAssetId: string | null;
+  relatedEntityId: string | null;
+  readAt: string | null;
+  pushStatus: PushDeliveryStatus;
+  createdAt: string;
+};
+
+export const NOTIFICATION_KINDS: NotificationKind[] = [
+  "reminder_due",
+  "recall_alert",
+  "contractor_submit",
+];
+
+export const DEFAULT_NOTIFICATION_PREFERENCES: Omit<
+  NotificationPreferences,
+  "updatedAt"
+> = {
+  remindersEnabled: true,
+  recallsEnabled: true,
+  contractorSubmitsEnabled: true,
+  reminderLeadDays: 3,
+  pushEnabled: true,
+  inAppEnabled: true,
+};
+
+export function toPublicNotificationPreferences(
+  prefs: NotificationPreferences,
+): PublicNotificationPreferences {
+  return {
+    remindersEnabled: prefs.remindersEnabled,
+    recallsEnabled: prefs.recallsEnabled,
+    contractorSubmitsEnabled: prefs.contractorSubmitsEnabled,
+    reminderLeadDays: prefs.reminderLeadDays,
+    pushEnabled: prefs.pushEnabled,
+    inAppEnabled: prefs.inAppEnabled,
+    updatedAt: prefs.updatedAt,
+  };
+}
+
+export function toPublicPushDevice(device: PushDeviceRecord): PublicPushDevice {
+  return {
+    id: device.id,
+    expoPushToken: device.expoPushToken,
+    platform: device.platform,
+    deviceName: device.deviceName,
+    createdAt: device.createdAt,
+    updatedAt: device.updatedAt,
+  };
+}
+
+export function toPublicNotification(
+  row: NotificationRecord,
+): PublicNotification {
+  return {
+    id: row.id,
+    propertyId: row.propertyId,
+    kind: row.kind,
+    title: row.title,
+    body: row.body,
+    relatedReminderId: row.relatedReminderId,
+    relatedAssetId: row.relatedAssetId,
+    relatedEntityId: row.relatedEntityId,
+    readAt: row.readAt,
+    pushStatus: row.pushStatus,
+    createdAt: row.createdAt,
+  };
+}

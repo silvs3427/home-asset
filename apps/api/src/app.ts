@@ -6,7 +6,9 @@ import { config } from "./config.js";
 import { getDb } from "./db/client.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
+import { jobRoutes } from "./routes/jobs.js";
 import { meRoutes } from "./routes/me.js";
+import { notificationRoutes } from "./routes/notifications.js";
 import { propertyRoutes } from "./routes/properties.js";
 
 export function createApp() {
@@ -29,7 +31,7 @@ export function createApp() {
         return config.corsOrigins.includes(origin) ? origin : null;
       },
       allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization"],
+      allowHeaders: ["Content-Type", "Authorization", "X-Jobs-Secret"],
       maxAge: 600,
       credentials: false,
     }),
@@ -47,14 +49,16 @@ export function createApp() {
   app.route("/health", healthRoutes);
   app.route("/auth", authRoutes);
   app.route("/me", meRoutes);
+  app.route("/me/notifications", notificationRoutes);
   app.route("/properties", propertyRoutes);
+  app.route("/jobs", jobRoutes);
 
   app.get("/", (c) =>
     c.json({
       name: "HomeAsset API",
       docs: "See repository README for local run instructions.",
       privacy:
-        "Homeowner controls the ledger. Homes, assets, documents, and reminders are property-scoped. No silent data sharing. Auth required for personal data.",
+        "Homeowner controls the ledger. Homes, assets, documents, reminders, and notifications are property- or account-scoped. No silent data sharing. Auth required for personal data. No marketing drip.",
     }),
   );
 
