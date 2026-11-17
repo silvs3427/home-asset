@@ -17,11 +17,16 @@ import {
   type NotificationPreferences,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { registerForPushNotifications } from "@/lib/push";
+import {
+  isPushSoftDisabled,
+  pushUnavailableReason,
+  registerForPushNotifications,
+} from "@/lib/push";
 
 /**
  * Simple what/when preferences for reminders (and hooks for later kinds).
  * Push registration is optional — in-app center works without it.
+ * Default export required by Expo Router for this route file.
  */
 export default function NotificationPreferencesScreen() {
   const router = useRouter();
@@ -32,6 +37,7 @@ export default function NotificationPreferencesScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const pushSoftDisabled = isPushSoftDisabled();
 
   const load = useCallback(async () => {
     if (!accessToken) {
@@ -96,10 +102,15 @@ export default function NotificationPreferencesScreen() {
 
   async function onRegisterPush() {
     if (!accessToken) return;
+    if (isPushSoftDisabled()) {
+      setNote(pushUnavailableReason());
+      return;
+    }
     setSaving(true);
     setError(null);
     setNote(null);
     try {
+      // Lazy call path — push.ts itself avoids top-level expo-notifications.
       const result = await registerForPushNotifications(accessToken);
       if (result.ok) {
         setNote("This phone is registered for push (delivery needs API config).");
@@ -219,22 +230,26 @@ export default function NotificationPreferencesScreen() {
               />
               <Pressable
                 accessibilityRole="button"
-                disabled={saving}
+                disabled={saving || pushSoftDisabled}
                 onPress={() => {
                   void onRegisterPush();
                 }}
                 style={({ pressed }) => [
                   styles.secondaryBtn,
-                  pressed && styles.pressed,
+                  (saving || pushSoftDisabled) && styles.secondaryBtnDisabled,
+                  pressed && !pushSoftDisabled && styles.pressed,
                 ]}
               >
                 <Text style={styles.secondaryLabel}>
-                  Register this phone for push
+                  {pushSoftDisabled
+                    ? "Push unavailable in Expo Go"
+                    : "Register this phone for push"}
                 </Text>
               </Pressable>
               <Text style={styles.footnote}>
-                Live push needs an Expo access token on the API. Without it,
-                notices still land in the in-app center and pushes are stubbed.
+                {pushSoftDisabled
+                  ? pushUnavailableReason()
+                  : "Live push needs an Expo access token on the API. Without it, notices still land in the in-app center and pushes are stubbed."}
               </Text>
             </View>
           </>
@@ -380,6 +395,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
+  },
+  secondaryBtnDisabled: {
+    opacity: 0.55,
   },
   secondaryLabel: {
     color: "#1B3A2F",
