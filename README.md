@@ -10,7 +10,7 @@ This repo is at **EPIC 5**: push + in-app notifications for due reminders (hooks
 | --- | --- | --- |
 | Phone apps | Expo (React Native) | One codebase for iPhone and Android |
 | API | TypeScript + Hono | Small, fast Node API that is easy to deploy |
-| Accounts | Email + password → JWT | Normal app login; one login for homeowner + contractor faces |
+| Accounts | Email + password → JWT (local API) | Normal app login; **no Supabase** — users live in local SQLite |
 | Homes + assets + docs + reminders + notices | SQLite + local file store (property-scoped) | Durable local backup; every home’s data is isolated by property id |
 | Push | Expo push (stub without token) | Goes live when `EXPO_ACCESS_TOKEN` is set; in-app center works either way |
 | Token storage (phone) | Expo SecureStore | Keeps the session off plain device storage |
@@ -79,13 +79,19 @@ Scan the QR **with Expo Go** (or the iOS Camera app once Expo Go is installed). 
 
 If Expo Go says the project is incompatible, you have the wrong SDK client — use the links above, not the generic Play/App Store listing alone.
 
-**Physical device:** the phone cannot reach `localhost` on your computer. Create `apps/mobile/.env`:
+**Physical phone (Windows) — signup needs the PC LAN IP, not localhost:**
 
-```bash
-EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:8787
-```
+1. Keep `npm run dev:api` running (listens on all interfaces, port **8787**).
+2. Command Prompt → `ipconfig` → copy **IPv4 Address** under Wi‑Fi / Ethernet.
+3. Create `apps/mobile/.env`:
+   ```
+   EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:8787
+   ```
+   Example: `EXPO_PUBLIC_API_URL=http://192.168.1.42:8787` — never `localhost` on a real phone.
+4. Restart Expo: `npx expo start --go -c` (from `apps/mobile` or via `npm run dev:mobile` after the env file exists).
+5. Same Wi‑Fi; allow Node through Windows Firewall if asked.
 
-Restart with `npx expo start --go -c` after changing that value.
+The sign-in screen shows the API URL it will call and labels **network** vs **sign-in** errors. Details: [`apps/mobile/README.md`](./apps/mobile/README.md) and [`apps/mobile/.env.example`](./apps/mobile/.env.example).
 
 ### 4. Smoke accounts through notifications
 
