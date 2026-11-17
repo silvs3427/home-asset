@@ -54,7 +54,7 @@ export function createApp() {
       name: "HomeAsset API",
       docs: "See repository README for local run instructions.",
       privacy:
-        "Homeowner controls the ledger. Homes, assets, and documents are property-scoped. No silent data sharing. Auth required for personal data.",
+        "Homeowner controls the ledger. Homes, assets, documents, and reminders are property-scoped. No silent data sharing. Auth required for personal data.",
     }),
   );
 

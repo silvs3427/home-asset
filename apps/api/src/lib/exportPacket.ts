@@ -1,11 +1,13 @@
 import { listAssetsForProperty } from "./assets.js";
 import { listDocumentsForProperty } from "./documents.js";
 import { getPropertyForUser } from "./properties.js";
+import { listRemindersForProperty } from "./reminders.js";
 import {
   formatPropertyAddress,
   toPublicAsset,
   toPublicDocument,
   toPublicProperty,
+  toPublicReminder,
 } from "./types.js";
 
 /**
@@ -21,6 +23,9 @@ export function buildHomePacket(propertyId: string, ownerUserId: string) {
   const documents = listDocumentsForProperty(propertyId, ownerUserId).map(
     toPublicDocument,
   );
+  const reminders = listRemindersForProperty(propertyId, ownerUserId, {
+    includeCompleted: true,
+  }).map((r) => toPublicReminder(r, r.assetName));
 
   return {
     exportedAt: new Date().toISOString(),
@@ -36,6 +41,7 @@ export function buildHomePacket(propertyId: string, ownerUserId: string) {
     },
     assets,
     documents,
+    reminders,
     documentDownloadHint:
       "Download each file with GET /properties/:propertyId/documents/:id/content while signed in.",
   };

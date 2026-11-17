@@ -279,3 +279,110 @@ export const DOCUMENT_SOURCES: DocumentSource[] = [
   "ai_fetched",
   "contractor",
 ];
+
+/** Simple recurrence for thin maintenance schedules (EPIC 4). */
+export type ReminderRecurrence = "none" | "monthly" | "quarterly" | "yearly";
+
+/** active = still due / recurring; completed = one-off finished. */
+export type ReminderStatus = "active" | "completed";
+
+/**
+ * Property-scoped maintenance reminder tied to an asset.
+ * Push delivery is EPIC 5 — this row is the schedule + due date only.
+ */
+export type ReminderRecord = {
+  id: string;
+  propertyId: string;
+  assetId: string;
+  title: string;
+  notes: string | null;
+  dueDate: string;
+  recurrence: ReminderRecurrence;
+  status: ReminderStatus;
+  lastCompletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PublicReminder = {
+  id: string;
+  propertyId: string;
+  assetId: string;
+  assetName: string | null;
+  title: string;
+  notes: string | null;
+  dueDate: string;
+  recurrence: ReminderRecurrence;
+  status: ReminderStatus;
+  lastCompletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Light completion history for a reminder. */
+export type ReminderCompletionRecord = {
+  id: string;
+  reminderId: string;
+  propertyId: string;
+  completedAt: string;
+  dueDateAtCompletion: string;
+  note: string | null;
+};
+
+export type PublicReminderCompletion = {
+  id: string;
+  reminderId: string;
+  completedAt: string;
+  dueDateAtCompletion: string;
+  note: string | null;
+};
+
+/** Optional thin starter templates (not a rich library). */
+export type ReminderTemplate = {
+  id: string;
+  category: AssetCategory | "any";
+  title: string;
+  recurrence: ReminderRecurrence;
+  /** Suggested days from today for the first due date. */
+  defaultDueInDays: number;
+  notes: string | null;
+};
+
+export function toPublicReminder(
+  reminder: ReminderRecord,
+  assetName: string | null = null,
+): PublicReminder {
+  return {
+    id: reminder.id,
+    propertyId: reminder.propertyId,
+    assetId: reminder.assetId,
+    assetName,
+    title: reminder.title,
+    notes: reminder.notes,
+    dueDate: reminder.dueDate,
+    recurrence: reminder.recurrence,
+    status: reminder.status,
+    lastCompletedAt: reminder.lastCompletedAt,
+    createdAt: reminder.createdAt,
+    updatedAt: reminder.updatedAt,
+  };
+}
+
+export function toPublicReminderCompletion(
+  row: ReminderCompletionRecord,
+): PublicReminderCompletion {
+  return {
+    id: row.id,
+    reminderId: row.reminderId,
+    completedAt: row.completedAt,
+    dueDateAtCompletion: row.dueDateAtCompletion,
+    note: row.note,
+  };
+}
+
+export const REMINDER_RECURRENCES: ReminderRecurrence[] = [
+  "none",
+  "monthly",
+  "quarterly",
+  "yearly",
+];

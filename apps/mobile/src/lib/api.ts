@@ -128,6 +128,53 @@ export type PublicDocument = {
   updatedAt: string;
 };
 
+export type ReminderRecurrence = "none" | "monthly" | "quarterly" | "yearly";
+export type ReminderStatus = "active" | "completed";
+
+export type PublicReminder = {
+  id: string;
+  propertyId: string;
+  assetId: string;
+  assetName: string | null;
+  title: string;
+  notes: string | null;
+  dueDate: string;
+  recurrence: ReminderRecurrence;
+  status: ReminderStatus;
+  lastCompletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PublicReminderCompletion = {
+  id: string;
+  reminderId: string;
+  completedAt: string;
+  dueDateAtCompletion: string;
+  note: string | null;
+};
+
+export type ReminderTemplate = {
+  id: string;
+  category: AssetCategory | "any";
+  title: string;
+  recurrence: ReminderRecurrence;
+  defaultDueInDays: number;
+  notes: string | null;
+};
+
+export type CreateReminderInput = {
+  assetId: string;
+  title: string;
+  notes?: string | null;
+  dueDate: string;
+  recurrence: ReminderRecurrence;
+};
+
+export type UpdateReminderInput = Partial<
+  Omit<CreateReminderInput, "assetId">
+>;
+
 export type HomePacket = {
   exportedAt: string;
   format: string;
@@ -139,6 +186,7 @@ export type HomePacket = {
   property: PublicProperty & { formattedAddress: string };
   assets: PublicAsset[];
   documents: PublicDocument[];
+  reminders?: PublicReminder[];
   documentDownloadHint: string;
 };
 
@@ -164,6 +212,16 @@ export const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+export const REMINDER_RECURRENCES: {
+  value: ReminderRecurrence;
+  label: string;
+}[] = [
+  { value: "none", label: "One-time" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "yearly", label: "Yearly" },
+];
+
 export function categoryLabel(category: AssetCategory): string {
   return ASSET_CATEGORIES.find((c) => c.value === category)?.label ?? category;
 }
@@ -176,6 +234,25 @@ export function documentSourceLabel(source: DocumentSource): string {
   if (source === "ai_fetched") return "Fetched by AI";
   if (source === "contractor") return "From contractor";
   return "Added by you";
+}
+
+export function recurrenceLabel(recurrence: ReminderRecurrence): string {
+  return (
+    REMINDER_RECURRENCES.find((r) => r.value === recurrence)?.label ??
+    recurrence
+  );
+}
+
+/** Calendar day helpers for suggested due dates (UTC YYYY-MM-DD). */
+export function dueDateFromToday(days: number, now = new Date()): string {
+  const date = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  date.setUTCDate(date.getUTCDate() + days);
+  const yy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
 
 async function parseJson<T>(res: Response): Promise<T> {
@@ -437,5 +514,96 @@ export async function exportHomePacket(
   const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/export`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
+  return parseJson(res);
+}
+
+export async function listReminders(
+  accessToken: string,
+  propertyId: string,
+  options?: { assetId?: string; includeCompleted?: boolean },
+): Promise<{ reminders: PublicReminder[]; propertyId: string }> {
+  const params = new URLSearchParams();
+  if (options?.assetId) params.set("assetId", options.assetId);
+  if (options?.includeCompleted) params.set("includeCompleted", "1");
+  const query = params.toString();
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/reminders${query ? `?${query}` : ""}`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function listReminderTemplates(
+  accessToken: string,
+  propertyId: string,
+  category?: AssetCategory,
+): Promise<{ templates: ReminderTemplate[] }> {
+  const params = new URLSearchParams();
+  if (category) params.set("category", category);
+  const query = params.toString();
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/reminders/templates${query ? `?${query}` : ""}`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function createReminder(
+  accessToken: string,
+  propertyId: string,
+  input: CreateReminderInput,
+): Promise<{ reminder: PublicReminder }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/reminders`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function completeReminder(
+  accessToken: string,
+  propertyId: string,
+  reminderId: string,
+  note?: string | null,
+): Promise<{ reminder: PublicReminder; completion: PublicReminderCompletion }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/reminders/${reminderId}/complete`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ note: note ?? null }),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function deleteReminder(
+  accessToken: string,
+  propertyId: string,
+  reminderId: string,
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/reminders/${reminderId}`,
+    {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${accessToken}` },
+    },
+  );
+  return parseJson(res);
+}
+
+export async function listReminderHistory(
+  accessToken: string,
+  propertyId: string,
+  reminderId: string,
+): Promise<{ history: PublicReminderCompletion[]; reminderId: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/reminders/${reminderId}/history`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
   return parseJson(res);
 }

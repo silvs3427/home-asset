@@ -86,6 +86,43 @@ CREATE INDEX IF NOT EXISTS idx_documents_property
 
 CREATE INDEX IF NOT EXISTS idx_documents_asset
   ON documents(asset_id);
+
+-- EPIC 4: maintenance reminders tied to assets (property-scoped).
+CREATE TABLE IF NOT EXISTS reminders (
+  id TEXT PRIMARY KEY NOT NULL,
+  property_id TEXT NOT NULL,
+  asset_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  notes TEXT,
+  due_date TEXT NOT NULL,
+  recurrence TEXT NOT NULL,
+  status TEXT NOT NULL,
+  last_completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
+  FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_reminders_property_due
+  ON reminders(property_id, due_date);
+
+CREATE INDEX IF NOT EXISTS idx_reminders_asset
+  ON reminders(asset_id);
+
+CREATE TABLE IF NOT EXISTS reminder_completions (
+  id TEXT PRIMARY KEY NOT NULL,
+  reminder_id TEXT NOT NULL,
+  property_id TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  due_date_at_completion TEXT NOT NULL,
+  note TEXT,
+  FOREIGN KEY (reminder_id) REFERENCES reminders(id) ON DELETE CASCADE,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_reminder_completions_reminder
+  ON reminder_completions(reminder_id);
 `;
 
 type ColumnInfo = { name: string };
