@@ -15,18 +15,22 @@ import {
   ASSET_CATEGORIES,
   DOCUMENT_TYPES,
   categoryLabel,
+  completeReminder,
   deleteAsset,
   deleteDocument,
   documentSourceLabel,
   documentTypeLabel,
   getAsset,
   listDocuments,
+  listReminders,
+  recurrenceLabel,
   updateAsset,
   uploadDocument,
   type AssetCategory,
   type DocumentType,
   type PublicAsset,
   type PublicDocument,
+  type PublicReminder,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
@@ -47,6 +51,7 @@ export default function AssetDetailScreen() {
   const { user, accessToken, activeProperty } = useAuth();
   const [asset, setAsset] = useState<PublicAsset | null>(null);
   const [documents, setDocuments] = useState<PublicDocument[]>([]);
+  const [reminders, setReminders] = useState<PublicReminder[]>([]);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -94,6 +99,14 @@ export default function AssetDetailScreen() {
     setDocuments(res.documents);
   }, [accessToken, activeProperty, id]);
 
+  const loadReminders = useCallback(async () => {
+    if (!accessToken || !activeProperty || !id) return;
+    const res = await listReminders(accessToken, activeProperty.id, {
+      assetId: id,
+    });
+    setReminders(res.reminders);
+  }, [accessToken, activeProperty, id]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -107,7 +120,7 @@ export default function AssetDetailScreen() {
         const res = await getAsset(accessToken, activeProperty.id, id);
         if (!cancelled) {
           fillForm(res.asset);
-          await loadDocuments();
+          await Promise.all([loadDocuments(), loadReminders()]);
         }
       } catch (err) {
         if (!cancelled) {
@@ -120,7 +133,7 @@ export default function AssetDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, activeProperty, id, fillForm, loadDocuments]);
+  }, [accessToken, activeProperty, id, fillForm, loadDocuments, loadReminders]);
 
   if (!user) {
     return <Redirect href="/sign-in" />;
@@ -160,7 +173,7 @@ export default function AssetDetailScreen() {
   function onDelete() {
     Alert.alert(
       "Remove asset?",
-      "This removes it and its documents from this home's ledger.",
+      "This removes it, its documents, and its reminders from this home's ledger.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -331,6 +344,74 @@ export default function AssetDetailScreen() {
                 }
               />
             </View>
+
+            <Text style={styles.sectionHeading}>Reminders</Text>
+            <Text style={styles.sectionCopy}>
+              One-time or repeating maintenance for this asset. Mark done when
+              finished; recurring tasks roll to the next due date.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() =>
+                router.push({
+                  pathname: "/reminders/new",
+                  params: { assetId: id },
+                })
+              }
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Add reminder</Text>
+            </Pressable>
+            {reminders.length === 0 ? (
+              <Text style={styles.emptyDocs}>No upcoming reminders.</Text>
+            ) : (
+              <View style={styles.docList}>
+                {reminders.map((reminder) => (
+                  <View key={reminder.id} style={styles.docRow}>
+                    <View style={styles.docRowText}>
+                      <Text style={styles.docName}>{reminder.title}</Text>
+                      <Text style={styles.docMeta}>
+                        Due {reminder.dueDate} ·{" "}
+                        {recurrenceLabel(reminder.recurrence)}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={busy}
+                      onPress={() => {
+                        void (async () => {
+                          if (!accessToken || !activeProperty) return;
+                          setBusy(true);
+                          setError(null);
+                          try {
+                            await completeReminder(
+                              accessToken,
+                              activeProperty.id,
+                              reminder.id,
+                            );
+                            await loadReminders();
+                          } catch (err) {
+                            setError(
+                              err instanceof Error
+                                ? err.message
+                                : "Could not mark done.",
+                            );
+                          } finally {
+                            setBusy(false);
+                          }
+                        })();
+                      }}
+                    >
+                      <Text style={styles.docAction}>Done</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
 
             <Text style={styles.sectionHeading}>Documents</Text>
             <Text style={styles.sectionCopy}>

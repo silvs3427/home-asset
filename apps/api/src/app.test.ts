@@ -600,12 +600,14 @@ describe("HomeAsset API — documents & warranties", () => {
         privacy: { silentSharing: boolean };
         property: { name: string };
         documents: unknown[];
+        reminders: unknown[];
       };
     };
     assert.equal(exportBody.packet.format, "homeasset.home_packet.v1");
     assert.equal(exportBody.packet.privacy.silentSharing, false);
     assert.equal(exportBody.packet.property.name, "Export Home");
     assert.equal(exportBody.packet.documents.length, 1);
+    assert.ok(Array.isArray(exportBody.packet.reminders));
   });
 
   it("never leaks documents across accounts or homes", async () => {
@@ -643,5 +645,209 @@ describe("HomeAsset API — documents & warranties", () => {
       { headers: { authorization: `Bearer ${bob.accessToken}` } },
     );
     assert.equal(bobSteal.status, 404);
+  });
+});
+
+type ReminderBody = {
+  reminder: {
+    id: string;
+    propertyId: string;
+    assetId: string;
+    assetName: string | null;
+    title: string;
+    dueDate: string;
+    recurrence: string;
+    status: string;
+    lastCompletedAt: string | null;
+  };
+};
+
+describe("HomeAsset API — maintenance reminders", () => {
+  it("rejects reminder list without a token", async () => {
+    const app = createApp();
+    const res = await app.request("/properties/fake/reminders");
+    assert.equal(res.status, 401);
+  });
+
+  it("creates one-off and recurring reminders, marks complete, and keeps history", async () => {
+    const app = createApp();
+    const auth = await signup(app, "reminders@example.com");
+    const home = await createHome(app, auth.accessToken, "Reminder Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const assetRes = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: "Furnace", category: "hvac" }),
+    });
+    assert.equal(assetRes.status, 201);
+    const asset = ((await assetRes.json()) as AssetBody).asset;
+
+    const oneOff = await app.request(`/properties/${home.id}/reminders`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        assetId: asset.id,
+        title: "One-time inspection",
+        dueDate: "2026-12-01",
+        recurrence: "none",
+      }),
+    });
+    assert.equal(oneOff.status, 201);
+    const oneOffBody = (await oneOff.json()) as ReminderBody;
+    assert.equal(oneOffBody.reminder.status, "active");
+    assert.equal(oneOffBody.reminder.assetName, "Furnace");
+
+    const recurring = await app.request(`/properties/${home.id}/reminders`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        assetId: asset.id,
+        title: "Replace air filter",
+        dueDate: "2026-03-15",
+        recurrence: "quarterly",
+        notes: "16x25x1",
+      }),
+    });
+    assert.equal(recurring.status, 201);
+    const recurringBody = (await recurring.json()) as ReminderBody;
+
+    const list = await app.request(`/properties/${home.id}/reminders`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(list.status, 200);
+    const listBody = (await list.json()) as {
+      reminders: Array<{ id: string; title: string }>;
+    };
+    assert.equal(listBody.reminders.length, 2);
+    assert.equal(listBody.reminders[0]?.title, "Replace air filter");
+
+    const doneOneOff = await app.request(
+      `/properties/${home.id}/reminders/${oneOffBody.reminder.id}/complete`,
+      { method: "POST", headers, body: JSON.stringify({ note: "Done" }) },
+    );
+    assert.equal(doneOneOff.status, 200);
+    const doneOneOffBody = (await doneOneOff.json()) as ReminderBody & {
+      completion: { note: string | null };
+    };
+    assert.equal(doneOneOffBody.reminder.status, "completed");
+    assert.equal(doneOneOffBody.completion.note, "Done");
+
+    const doneRecurring = await app.request(
+      `/properties/${home.id}/reminders/${recurringBody.reminder.id}/complete`,
+      { method: "POST", headers, body: JSON.stringify({}) },
+    );
+    assert.equal(doneRecurring.status, 200);
+    const doneRecurringBody = (await doneRecurring.json()) as ReminderBody;
+    assert.equal(doneRecurringBody.reminder.status, "active");
+    assert.equal(doneRecurringBody.reminder.dueDate, "2026-06-15");
+    assert.ok(doneRecurringBody.reminder.lastCompletedAt);
+
+    const upcoming = await app.request(`/properties/${home.id}/reminders`, {
+      headers: { authorization: headers.authorization },
+    });
+    const upcomingBody = (await upcoming.json()) as {
+      reminders: Array<{ id: string }>;
+    };
+    assert.equal(upcomingBody.reminders.length, 1);
+    assert.equal(upcomingBody.reminders[0]?.id, recurringBody.reminder.id);
+
+    const history = await app.request(
+      `/properties/${home.id}/reminders/${recurringBody.reminder.id}/history`,
+      { headers: { authorization: headers.authorization } },
+    );
+    assert.equal(history.status, 200);
+    const historyBody = (await history.json()) as {
+      history: Array<{ dueDateAtCompletion: string }>;
+    };
+    assert.equal(historyBody.history.length, 1);
+    assert.equal(historyBody.history[0]?.dueDateAtCompletion, "2026-03-15");
+
+    const templates = await app.request(
+      `/properties/${home.id}/reminders/templates?category=hvac`,
+      { headers: { authorization: headers.authorization } },
+    );
+    assert.equal(templates.status, 200);
+    const templatesBody = (await templates.json()) as {
+      templates: Array<{ id: string; category: string }>;
+    };
+    assert.ok(templatesBody.templates.some((t) => t.id === "hvac-filter"));
+    assert.ok(templatesBody.templates.every((t) => t.category === "hvac" || t.category === "any"));
+  });
+
+  it("never leaks reminders across accounts or homes", async () => {
+    const app = createApp();
+    const alice = await signup(app, "alice-reminders@example.com");
+    const bob = await signup(app, "bob-reminders@example.com");
+    const aliceHome = await createHome(app, alice.accessToken, "Alice Rem");
+    const bobHome = await createHome(app, bob.accessToken, "Bob Rem");
+    const aliceCabin = await createHome(app, alice.accessToken, "Alice Cabin");
+
+    const aliceHeaders = {
+      "content-type": "application/json",
+      authorization: `Bearer ${alice.accessToken}`,
+    };
+    const assetRes = await app.request(`/properties/${aliceHome.id}/assets`, {
+      method: "POST",
+      headers: aliceHeaders,
+      body: JSON.stringify({ name: "Generator", category: "generator" }),
+    });
+    const asset = ((await assetRes.json()) as AssetBody).asset;
+
+    const created = await app.request(`/properties/${aliceHome.id}/reminders`, {
+      method: "POST",
+      headers: aliceHeaders,
+      body: JSON.stringify({
+        assetId: asset.id,
+        title: "Test run",
+        dueDate: "2026-04-01",
+        recurrence: "monthly",
+      }),
+    });
+    assert.equal(created.status, 201);
+    const reminder = ((await created.json()) as ReminderBody).reminder;
+
+    const bobList = await app.request(`/properties/${aliceHome.id}/reminders`, {
+      headers: { authorization: `Bearer ${bob.accessToken}` },
+    });
+    assert.equal(bobList.status, 404);
+
+    const bobSteal = await app.request(
+      `/properties/${bobHome.id}/reminders/${reminder.id}`,
+      { headers: { authorization: `Bearer ${bob.accessToken}` } },
+    );
+    assert.equal(bobSteal.status, 404);
+
+    const cabinList = await app.request(
+      `/properties/${aliceCabin.id}/reminders`,
+      { headers: { authorization: `Bearer ${alice.accessToken}` } },
+    );
+    assert.equal(cabinList.status, 200);
+    const cabinBody = (await cabinList.json()) as { reminders: unknown[] };
+    assert.equal(cabinBody.reminders.length, 0);
+
+    const wrongHome = await app.request(
+      `/properties/${aliceCabin.id}/reminders/${reminder.id}`,
+      { headers: { authorization: `Bearer ${alice.accessToken}` } },
+    );
+    assert.equal(wrongHome.status, 404);
+  });
+
+  it("rejects invalid reminder payloads", async () => {
+    const app = createApp();
+    const auth = await signup(app, "bad-reminder@example.com");
+    const home = await createHome(app, auth.accessToken, "Bad Reminder");
+    const res = await app.request(`/properties/${home.id}/reminders`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({ title: "Missing asset and due date" }),
+    });
+    assert.equal(res.status, 400);
   });
 });

@@ -293,6 +293,19 @@ export function deleteAsset(
     }
   }
 
+  // Completions cascade from reminders; remove reminder rows before the asset.
+  getDb()
+    .prepare(
+      `DELETE FROM reminder_completions
+       WHERE reminder_id IN (
+         SELECT id FROM reminders WHERE asset_id = ? AND property_id = ?
+       )`,
+    )
+    .run(assetId, propertyId);
+  getDb()
+    .prepare(`DELETE FROM reminders WHERE asset_id = ? AND property_id = ?`)
+    .run(assetId, propertyId);
+
   getDb()
     .prepare(`DELETE FROM assets WHERE id = ? AND property_id = ?`)
     .run(assetId, propertyId);
