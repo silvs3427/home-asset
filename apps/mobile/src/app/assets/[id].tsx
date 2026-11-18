@@ -345,6 +345,23 @@ export default function AssetDetailScreen() {
               />
             </View>
 
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() =>
+                router.push({
+                  pathname: "/ai/howto",
+                  params: { assetId: id },
+                })
+              }
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Ask how-to (AI)</Text>
+            </Pressable>
+
             <Text style={styles.sectionHeading}>Reminders</Text>
             <Text style={styles.sectionCopy}>
               One-time or repeating maintenance for this asset. Mark done when

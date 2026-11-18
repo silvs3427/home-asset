@@ -813,3 +813,168 @@ export async function registerPushDevice(
   });
   return parseJson(res);
 }
+
+/** EPIC 6 — AI assist (draft → confirm; how-to grounded in docs). */
+
+export type SuggestedManualDraft = {
+  id: string;
+  title: string;
+  sourceUrl: string;
+  preview: string;
+  selectedByDefault: boolean;
+};
+
+export type AiScanDraft = {
+  draftId: string;
+  mode: "mock" | "live";
+  identificationLabel: string;
+  confidence: number;
+  catalogProductId: string;
+  suggestedAsset: {
+    name: string;
+    category: AssetCategory;
+    manufacturer: string | null;
+    model: string | null;
+    serial: string | null;
+    notes: string | null;
+  };
+  manuals: SuggestedManualDraft[];
+  expiresAt: string;
+  privacy: {
+    writes: false;
+    confirmRequired: true;
+    note: string;
+  };
+};
+
+export type AiHowToCitation = {
+  kind: "document" | "asset" | "catalog";
+  id: string;
+  title: string;
+};
+
+export type AiHowToResponse = {
+  mode: "mock" | "live";
+  answer: string;
+  grounded: boolean;
+  citations: AiHowToCitation[];
+  privacy: { writes: false; note: string };
+};
+
+export type ContractorFormatResponse = {
+  mode: "mock" | "live";
+  draft: {
+    summary: string;
+    workPerformed: string;
+    assetsSuggested: Array<{
+      name: string;
+      category: string;
+      manufacturer: string | null;
+      model: string | null;
+      notes: string | null;
+    }>;
+    materials: string[];
+    followUps: string[];
+  };
+  privacy: {
+    writes: false;
+    confirmRequired: true;
+    note: string;
+  };
+};
+
+export async function aiScanProduct(
+  accessToken: string,
+  propertyId: string,
+  input: { hint?: string | null; filename?: string | null },
+): Promise<{ draft: AiScanDraft; aiMode: "mock" | "live" }> {
+  const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/ai/scan`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(input),
+  });
+  return parseJson(res);
+}
+
+export async function aiConfirmScan(
+  accessToken: string,
+  propertyId: string,
+  input: {
+    draftId: string;
+    selectedManualIds: string[];
+    assetId?: string | null;
+    createAsset?: boolean;
+    assetOverrides?: {
+      name?: string;
+      category?: AssetCategory;
+      manufacturer?: string | null;
+      model?: string | null;
+      serial?: string | null;
+      notes?: string | null;
+    };
+  },
+): Promise<{
+  asset: PublicAsset;
+  documents: PublicDocument[];
+  storedManualCount: number;
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/ai/confirm-scan`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function aiAskHowto(
+  accessToken: string,
+  propertyId: string,
+  input: { question: string; assetId?: string | null },
+): Promise<AiHowToResponse> {
+  const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/ai/howto`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(input),
+  });
+  return parseJson(res);
+}
+
+export async function aiContractorFormat(
+  accessToken: string,
+  input: {
+    inputText: string;
+    inputKind?: "typed" | "voice" | "upload";
+  },
+): Promise<ContractorFormatResponse> {
+  const res = await fetch(`${API_BASE_URL}/ai/contractor/format`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(input),
+  });
+  return parseJson(res);
+}
+
+export async function aiContractorStatus(accessToken: string): Promise<{
+  aiMode: "mock" | "live";
+  capabilities: {
+    formatTyped: boolean;
+    formatVoiceTranscript: boolean;
+    formatUploadText: boolean;
+    submitToLedger: boolean;
+    note: string;
+  };
+  privacy: {
+    writes: boolean;
+    confirmRequired: boolean;
+    homeownerApproveRequired: boolean;
+  };
+}> {
+  const res = await fetch(`${API_BASE_URL}/ai/contractor/status`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  return parseJson(res);
+}

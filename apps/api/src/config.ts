@@ -64,4 +64,20 @@ export const config = {
    * (logged + marked stubbed) so the path can go live with config only.
    */
   expoAccessToken: process.env.EXPO_ACCESS_TOKEN?.trim() || "",
+  /**
+   * Optional OpenAI-compatible API key for live AI assist.
+   * Without it (or with AI_FORCE_MOCK=1), the local catalog mock is used so CI
+   * and local runs work without secrets.
+   */
+  aiApiKey:
+    process.env.AI_API_KEY?.trim() ||
+    process.env.OPENAI_API_KEY?.trim() ||
+    "",
+  aiBaseUrl: (
+    process.env.AI_BASE_URL?.trim() || "https://api.openai.com/v1"
+  ).replace(/\/$/, ""),
+  aiModel: process.env.AI_MODEL?.trim() || "gpt-4o-mini",
+  aiForceMock:
+    process.env.AI_FORCE_MOCK === "1" ||
+    process.env.AI_FORCE_MOCK === "true",
 };

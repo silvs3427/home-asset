@@ -1106,3 +1106,275 @@ describe("HomeAsset API — notifications", () => {
     assert.equal(dueBody.unreadCount, 0);
   });
 });
+
+describe("HomeAsset API — AI assist (EPIC 6)", () => {
+  it("rejects AI scan / howto without a token", async () => {
+    const app = createApp();
+    const fakeId = "00000000-0000-4000-8000-000000000001";
+    assert.equal(
+      (
+        await app.request(`/properties/${fakeId}/ai/scan`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ hint: "generator" }),
+        })
+      ).status,
+      401,
+    );
+    assert.equal(
+      (
+        await app.request(`/properties/${fakeId}/ai/howto`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ question: "How do I start it?" }),
+        })
+      ).status,
+      401,
+    );
+    assert.equal(
+      (
+        await app.request("/ai/contractor/format", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ inputText: "Installed HVAC", inputKind: "typed" }),
+        })
+      ).status,
+      401,
+    );
+  });
+
+  it("scans to a draft without writing assets, then confirms manuals", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "ai-scan@example.com");
+    const home = await createHome(app, auth.accessToken, "AI Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const before = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(
+      ((await before.json()) as { assets: unknown[] }).assets.length,
+      0,
+    );
+
+    const scan = await app.request(`/properties/${home.id}/ai/scan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ hint: "Generac GP6500 portable generator" }),
+    });
+    assert.equal(scan.status, 200);
+    const scanBody = (await scan.json()) as {
+      draft: {
+        draftId: string;
+        privacy: { writes: boolean; confirmRequired: boolean };
+        suggestedAsset: { name: string; category: string };
+        manuals: Array<{ id: string; selectedByDefault: boolean }>;
+      };
+      aiMode: string;
+    };
+    assert.equal(scanBody.aiMode, "mock");
+    assert.equal(scanBody.draft.privacy.writes, false);
+    assert.equal(scanBody.draft.privacy.confirmRequired, true);
+    assert.match(scanBody.draft.suggestedAsset.name, /Generac/i);
+    assert.ok(scanBody.draft.manuals.length >= 1);
+
+    const mid = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(
+      ((await mid.json()) as { assets: unknown[] }).assets.length,
+      0,
+    );
+
+    const selectedIds = scanBody.draft.manuals
+      .filter((m) => m.selectedByDefault)
+      .map((m) => m.id);
+    const confirm = await app.request(`/properties/${home.id}/ai/confirm-scan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        draftId: scanBody.draft.draftId,
+        selectedManualIds: selectedIds,
+      }),
+    });
+    assert.equal(confirm.status, 200);
+    const confirmBody = (await confirm.json()) as {
+      asset: { id: string; name: string; manufacturer: string | null };
+      documents: Array<{ source: string; docType: string }>;
+      storedManualCount: number;
+      privacy: { confirmedByUser: boolean };
+    };
+    assert.equal(confirmBody.privacy.confirmedByUser, true);
+    assert.ok(confirmBody.storedManualCount >= 1);
+    assert.equal(confirmBody.documents[0]?.source, "ai_fetched");
+    assert.equal(confirmBody.documents[0]?.docType, "manual");
+    assert.equal(confirmBody.asset.manufacturer, "Generac");
+
+    const reuse = await app.request(`/properties/${home.id}/ai/confirm-scan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        draftId: scanBody.draft.draftId,
+        selectedManualIds: selectedIds,
+      }),
+    });
+    assert.equal(reuse.status, 404);
+  });
+
+  it("answers how-to grounded in stored manuals and refuses ungrounded open advice", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "ai-howto@example.com");
+    const home = await createHome(app, auth.accessToken, "HowTo Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const scan = await app.request(`/properties/${home.id}/ai/scan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ hint: "generator oil start" }),
+    });
+    const scanBody = (await scan.json()) as {
+      draft: { draftId: string; manuals: Array<{ id: string }> };
+    };
+    const confirm = await app.request(`/properties/${home.id}/ai/confirm-scan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        draftId: scanBody.draft.draftId,
+        selectedManualIds: scanBody.draft.manuals.map((m) => m.id),
+      }),
+    });
+    const assetId = ((await confirm.json()) as { asset: { id: string } }).asset
+      .id;
+
+    const howto = await app.request(`/properties/${home.id}/ai/howto`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        question: "How do I start the generator safely outdoors?",
+        assetId,
+      }),
+    });
+    assert.equal(howto.status, 200);
+    const howtoBody = (await howto.json()) as {
+      grounded: boolean;
+      answer: string;
+      citations: Array<{ kind: string }>;
+      privacy: { writes: boolean };
+    };
+    assert.equal(howtoBody.grounded, true);
+    assert.equal(howtoBody.privacy.writes, false);
+    assert.match(howtoBody.answer, /outdoor|oil|choke|fuel/i);
+    assert.ok(howtoBody.citations.length >= 1);
+
+    const emptyHome = await createHome(app, auth.accessToken, "Empty AI Home");
+    await app.request(`/properties/${emptyHome.id}/select`, {
+      method: "POST",
+      headers: { authorization: headers.authorization },
+    });
+    const ungrounded = await app.request(`/properties/${emptyHome.id}/ai/howto`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        question: "What stock should I buy tomorrow?",
+      }),
+    });
+    assert.equal(ungrounded.status, 200);
+    const ungroundedBody = (await ungrounded.json()) as {
+      grounded: boolean;
+      answer: string;
+    };
+    assert.equal(ungroundedBody.grounded, false);
+    assert.match(ungroundedBody.answer, /don.?t have enough|manuals/i);
+  });
+
+  it("formats contractor notes as a draft without writing the ledger", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "pro-ai@example.com", "contractor");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const status = await app.request("/ai/contractor/status", {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(status.status, 200);
+    const statusBody = (await status.json()) as {
+      privacy: { writes: boolean; homeownerApproveRequired: boolean };
+      capabilities: { submitToLedger: boolean };
+    };
+    assert.equal(statusBody.privacy.writes, false);
+    assert.equal(statusBody.privacy.homeownerApproveRequired, true);
+    assert.equal(statusBody.capabilities.submitToLedger, false);
+
+    const formatted = await app.request("/ai/contractor/format", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        inputKind: "typed",
+        inputText:
+          "Replaced Carrier Infinity filter and checked outdoor coil. Left old filter in garage.",
+      }),
+    });
+    assert.equal(formatted.status, 200);
+    const body = (await formatted.json()) as {
+      draft: { summary: string; assetsSuggested: unknown[] };
+      privacy: { writes: boolean; confirmRequired: boolean };
+    };
+    assert.equal(body.privacy.writes, false);
+    assert.equal(body.privacy.confirmRequired, true);
+    assert.ok(body.draft.summary.length > 0);
+    assert.ok(body.draft.assetsSuggested.length >= 1);
+  });
+
+  it("never lets another account confirm or query AI for your home", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const alice = await signup(app, "alice-ai@example.com");
+    const bob = await signup(app, "bob-ai@example.com");
+    const aliceHome = await createHome(app, alice.accessToken, "Alice AI");
+
+    const scan = await app.request(`/properties/${aliceHome.id}/ai/scan`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${alice.accessToken}`,
+      },
+      body: JSON.stringify({ hint: "water heater rheem" }),
+    });
+    const draftId = ((await scan.json()) as { draft: { draftId: string } })
+      .draft.draftId;
+
+    const bobConfirm = await app.request(
+      `/properties/${aliceHome.id}/ai/confirm-scan`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${bob.accessToken}`,
+        },
+        body: JSON.stringify({ draftId, selectedManualIds: [] }),
+      },
+    );
+    assert.equal(bobConfirm.status, 404);
+
+    const bobHowto = await app.request(`/properties/${aliceHome.id}/ai/howto`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${bob.accessToken}`,
+      },
+      body: JSON.stringify({ question: "How do I flush the tank?" }),
+    });
+    assert.equal(bobHowto.status, 404);
+  });
+});

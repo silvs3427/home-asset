@@ -2,7 +2,7 @@
 
 Phone-first home memory for homeowners (iPhone + Android), with a path for contractors to submit work into the homeowner’s ledger. **Homeowners own the record.** Privacy and approve-before-official are product requirements from day one.
 
-This repo is at **EPIC 5**: push + in-app notifications for due reminders (hooks ready for recalls and contractor submissions), on top of thin maintenance reminders (EPIC 4), documents/warranties (EPIC 3), the property-scoped asset registry (EPIC 2), and accounts / thin multi-home (EPIC 1). Recalls, AI, and contractor submit come later.
+This repo is at **EPIC 6**: AI assist — scan a product → find/store manuals (after confirm) → grounded how-to Q&A, plus contractor note-format hooks. Built on notifications (EPIC 5), reminders (EPIC 4), documents (EPIC 3), assets (EPIC 2), and accounts / thin multi-home (EPIC 1). Recalls and full contractor submit → homeowner approve come next.
 
 ## Stack
 
@@ -13,6 +13,7 @@ This repo is at **EPIC 5**: push + in-app notifications for due reminders (hooks
 | Accounts | Email + password → JWT (local API) | Normal app login; **no Supabase** — users live in local SQLite |
 | Homes + assets + docs + reminders + notices | SQLite + local file store (property-scoped) | Durable local backup; every home’s data is isolated by property id |
 | Push | Expo push (stub without token) | Goes live when `EXPO_ACCESS_TOKEN` is set; in-app center works either way |
+| AI assist | Env key + local mock catalog | Live when `AI_API_KEY` / `OPENAI_API_KEY` is set; mock otherwise (CI-safe) |
 | Token storage (phone) | Expo SecureStore | Keeps the session off plain device storage |
 
 ## Repo layout
@@ -20,7 +21,7 @@ This repo is at **EPIC 5**: push + in-app notifications for due reminders (hooks
 ```text
 apps/
   mobile/   # Expo app (iPhone + Android)
-  api/      # Backend API (auth + properties + assets + documents + reminders + notifications)
+  api/      # Backend API (auth + properties + assets + documents + reminders + notifications + AI)
 ```
 
 ## Prerequisites
@@ -46,7 +47,7 @@ cp apps/api/.env.example apps/api/.env
 npm run dev:api
 ```
 
-API listens on [http://localhost:8787](http://localhost:8787). Accounts, homes, assets, document metadata, reminders, and notifications persist under `apps/api/data/` (gitignored). Uploaded files land in `apps/api/data/files/`.
+API listens on [http://localhost:8787](http://localhost:8787). Accounts, homes, assets, document metadata, reminders, and notifications persist under `apps/api/data/` (gitignored). Uploaded files land in `apps/api/data/files/`. AI defaults to a local mock catalog unless you set `AI_API_KEY` (or `OPENAI_API_KEY`).
 
 Quick checks:
 
@@ -93,17 +94,16 @@ If Expo Go says the project is incompatible, you have the wrong SDK client — u
 
 The sign-in screen shows the API URL it will call and labels **network** vs **sign-in** errors. Details: [`apps/mobile/README.md`](./apps/mobile/README.md) and [`apps/mobile/.env.example`](./apps/mobile/.env.example).
 
-### 4. Smoke accounts through notifications
+### 4. Smoke accounts through AI assist
 
 1. Create an account (choose **homeowner** or **contractor**).
 2. On the homeowner face, tap **Add home**, enter name + address, save.
-3. Tap **View assets** → **Add asset**, include warranty end date / term, save.
-4. Open the asset → **Take photo** (or photo library / file) → save the document → **View** to download/share.
-5. On the asset (or from home → **Upcoming reminders**), add a reminder due today or soon.
-6. From home, open **Notifications** → **Check due reminders** — a notice should appear. Open **Prefs** to set lead days / channels; optionally **Register this phone for push**.
-7. From home, open **Home documents** for paperwork not tied to one asset; optionally **Export home packet**.
-8. Add a second home, switch, and confirm assets/docs/reminders stay empty there.
-9. Sign out / sign in again — session and data should still be there.
+3. Tap **Scan product (AI)** → hint `Generac GP6500` (or take a photo) → review suggested manuals → **Confirm & save**.
+4. Open the asset → **Ask how-to (AI)** → ask how to start it safely outdoors; check sources.
+5. From home, also try **View assets**, documents, reminders, and **Notifications** as before.
+6. Switch to **contractor face** → **Format notes (AI)** → paste job notes → confirm draft wording (nothing is written to a home ledger yet).
+7. Add a second home, switch, and confirm assets/docs stay empty there.
+8. Sign out / sign in again — session and data should still be there.
 
 ### 5. Scheduler (optional)
 
@@ -136,6 +136,9 @@ Required production env:
 - `DATABASE_PATH` — optional (default `/app/data/homeasset.sqlite` in the image)
 - `STORAGE_PATH` — optional (default `./data/files`; set to `/app/data/files` in containers)
 - `EXPO_ACCESS_TOKEN` — optional; enables live Expo push
+- `AI_API_KEY` or `OPENAI_API_KEY` — optional; enables live AI (mock catalog otherwise)
+- `AI_BASE_URL` / `AI_MODEL` — optional OpenAI-compatible endpoint overrides
+- `AI_FORCE_MOCK=1` — force mock even if a key is present
 - `PORT` — optional (default `8787`)
 - `NODE_ENV=production`
 
@@ -154,9 +157,10 @@ docker run --rm -p 8787:8787 \
 
 ## Privacy & security
 
-- Auth required before any personal, home, asset, document, reminder, or notification endpoint
+- Auth required before any personal, home, asset, document, reminder, notification, or AI endpoint
 - Homes, assets, documents, and reminders are **property-scoped**: list/get/update/delete only succeed for homes you own
 - Notifications are **account-scoped** and never leak across users; reminder notices include the home id when relevant
+- **AI never silently writes** — scan returns a draft; manuals/assets are saved only on explicit confirm; how-to and contractor format are draft/read-only
 - Preferences default to product notices only — **no marketing drip**, SMS out of scope
 - Passwords hashed (bcrypt); JWT access tokens are short-lived
 - No analytics or silent third-party sharing wired in
@@ -167,4 +171,4 @@ docker run --rm -p 8787:8787 \
 
 ## What’s next
 
-EPIC 6–8: AI assist, recalls (using notification hooks), and contractor submit → homeowner approve (using submit notification hooks).
+EPIC 7–8: recalls (using notification hooks), and contractor submit → homeowner approve (using submit notification hooks + AI format drafts).

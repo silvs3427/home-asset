@@ -146,6 +146,26 @@ export default function HomeShellScreen() {
                 >
                   <Text style={styles.secondaryLabel}>Notifications</Text>
                 </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/ai/scan")}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>Scan product (AI)</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/ai/howto")}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>Ask how-to (AI)</Text>
+                </Pressable>
               </>
             ) : null}
 
@@ -208,9 +228,21 @@ export default function HomeShellScreen() {
           <>
             <Text style={styles.title}>Contractor face</Text>
             <Text style={styles.copy}>
-              CRM-lite submit tools come later. Your homes stay on the homeowner
-              face — switch back anytime on this same login.
+              Format typed, voice, or upload notes with AI before you confirm.
+              Full submit into a homeowner ledger (with their approval) comes in
+              the contractor handoff epic. Homes stay on the homeowner face —
+              switch back anytime on this same login.
             </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/ai/contractor-format")}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.primaryLabel}>Format notes (AI)</Text>
+            </Pressable>
           </>
         )}
 
