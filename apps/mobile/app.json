@@ -25,7 +25,7 @@
       "package": "com.homeasset.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#1B3A2F",
+        "backgroundColor": "#E8F0EC",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
