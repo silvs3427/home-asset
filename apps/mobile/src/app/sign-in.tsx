@@ -13,13 +13,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth";
 import { ApiError, type AppFace } from "@/lib/api";
-import { API_BASE_URL } from "@/lib/config";
+import { API_BASE_URL, SUPABASE_CONFIGURED } from "@/lib/config";
 
 /**
  * Everyday email + password sign-in (D13).
- * Talks to the HomeAsset API. When Supabase is configured on the API,
- * Auth uses Supabase email/password; otherwise local SQLite bcrypt.
- * Sign-up asks homeowner or contractor on the same login path.
+ * With Supabase URL + anon key: phone uses Supabase Auth directly (LightLift-style;
+ * no LAN API). Without Supabase: local Hono + SQLite demo path.
  */
 export default function SignInScreen() {
   const { user, signIn, signUp } = useAuth();
@@ -134,7 +133,9 @@ export default function SignInScreen() {
             <View style={styles.errorBox}>
               <Text style={styles.errorKind}>
                 {errorKind === "network"
-                  ? "Network — phone cannot reach the API"
+                  ? SUPABASE_CONFIGURED
+                    ? "Network — phone cannot reach Supabase"
+                    : "Network — phone cannot reach the API"
                   : errorKind === "auth"
                     ? "Sign-in rejected"
                     : "Could not continue"}
@@ -183,10 +184,9 @@ export default function SignInScreen() {
         </View>
 
         <Text style={styles.apiHint}>
-          Local SQLite API (no Supabase). Target: {API_BASE_URL}
-          {"\n"}
-          Physical phone? Set EXPO_PUBLIC_API_URL to your PC&apos;s LAN IP in
-          apps/mobile/.env, then restart Expo with npx expo start --go -c.
+          {SUPABASE_CONFIGURED
+            ? "Cloud account (Supabase). No laptop API or Wi‑Fi IP needed for sign-up / sign-in. For testing, Confirm email should be OFF in the Supabase Auth settings."
+            : `Local SQLite API (no Supabase). Target: ${API_BASE_URL}\nPhysical phone without Supabase? Set EXPO_PUBLIC_API_URL to your PC's LAN IP in apps/mobile/.env, then restart Expo with npx expo start --go -c. Or add Supabase URL + anon key for cloud-only login.`}
         </Text>
 
         <Text style={styles.privacyNote}>

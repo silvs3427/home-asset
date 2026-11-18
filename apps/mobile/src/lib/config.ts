@@ -2,11 +2,15 @@ import Constants from "expo-constants";
 import { isSupabaseConfiguredOnDevice } from "./supabase";
 
 /**
- * API base URL for the phone app.
- * - Simulator / Expo Go on same machine: http://localhost:8787
- * - Physical device: set EXPO_PUBLIC_API_URL to your machine's LAN IP
- *   (e.g. http://192.168.1.10:8787) in apps/mobile/.env
- * - Installable EAS builds: set EXPO_PUBLIC_API_URL to your hosted API
+ * API base URL for the optional Hono backend (CI, local SQLite demo, AI jobs).
+ *
+ * When EXPO_PUBLIC_SUPABASE_URL + anon key are set, the phone talks to Supabase
+ * Auth / Postgres / Storage directly — no laptop API or LAN IP is required for
+ * signup, login, homes, assets, docs, reminders, or notices.
+ *
+ * Set EXPO_PUBLIC_API_URL only for:
+ * - Local SQLite demo without Supabase
+ * - Optional hosted API (AI assist, due-check cron)
  */
 const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
 

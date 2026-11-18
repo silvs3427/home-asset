@@ -33,9 +33,9 @@ Copy `apps/mobile/.env.example` to `apps/mobile/.env` (never commit a real `.env
 - `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (local Expo)
 - `SUPABASE_URL` / `SUPABASE_ANON_KEY` (Cursor/Cloud secrets; `EXPO_PUBLIC_` is reserved in bind-app-secrets)
 
-Also set the API the phone talks to:
+With those two set, the phone uses **Supabase Auth + Postgres (+ Storage) directly** — no laptop API and **no `EXPO_PUBLIC_API_URL` / LAN IP** for signup, login, homes, and the core ledger.
 
-- `EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:8787` on a physical phone (not `localhost`)
+`EXPO_PUBLIC_API_URL` is optional: only for the local SQLite demo without Supabase, or a hosted API for AI / cron jobs.
 
 **Windows:** name the file exactly `.env` (not `.env.txt`). After changes, restart with `npx expo start -c` (or `npm run start:dev-client` for an installable build).
 

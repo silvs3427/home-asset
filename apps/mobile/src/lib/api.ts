@@ -1,6 +1,11 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, SUPABASE_CONFIGURED } from "./config";
 
 export type AppFace = "homeowner" | "contractor";
+
+/** When Supabase URL+anon are set, phone uses cloud directly (no LAN API). */
+function useCloud(): boolean {
+  return SUPABASE_CONFIGURED;
+}
 
 export type PublicUser = {
   id: string;
@@ -333,6 +338,11 @@ export async function signup(input: {
   password: string;
   startingFace?: AppFace;
 }): Promise<AuthResponse> {
+  if (useCloud()) {
+    // Lazy require avoids a circular import with cloud.ts
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudSignup(input);
+  }
   return requestJson<AuthResponse>("/auth/signup", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -344,6 +354,10 @@ export async function login(input: {
   email: string;
   password: string;
 }): Promise<AuthResponse> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudLogin(input);
+  }
   return requestJson<AuthResponse>("/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -352,6 +366,10 @@ export async function login(input: {
 }
 
 export async function fetchMe(accessToken: string): Promise<MeResponse> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudFetchMe(accessToken);
+  }
   return requestJson<MeResponse>("/me", {
     headers: { authorization: `Bearer ${accessToken}` },
   });
@@ -362,6 +380,14 @@ export async function switchFace(
   face: AppFace,
   enableIfMissing = true,
 ): Promise<AuthResponse> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudSwitchFace(
+      accessToken,
+      face,
+      enableIfMissing,
+    );
+  }
   const res = await fetch(`${API_BASE_URL}/me/face`, {
     method: "POST",
     headers: authHeaders(accessToken),
@@ -374,6 +400,14 @@ export async function listProperties(accessToken: string): Promise<{
   properties: PublicProperty[];
   activePropertyId: string | null;
 }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const me = await require("./cloud").cloudFetchMe(accessToken);
+    return {
+      properties: me.properties,
+      activePropertyId: me.user.activePropertyId,
+    };
+  }
   const res = await fetch(`${API_BASE_URL}/properties`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
@@ -384,6 +418,10 @@ export async function createProperty(
   accessToken: string,
   input: CreatePropertyInput,
 ): Promise<{ property: PublicProperty; user?: PublicUser }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudCreateProperty(accessToken, input);
+  }
   const res = await fetch(`${API_BASE_URL}/properties`, {
     method: "POST",
     headers: authHeaders(accessToken),
@@ -396,6 +434,10 @@ export async function selectProperty(
   accessToken: string,
   propertyId: string,
 ): Promise<{ property: PublicProperty; user?: PublicUser }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudSelectProperty(accessToken, propertyId);
+  }
   const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/select`, {
     method: "POST",
     headers: { authorization: `Bearer ${accessToken}` },
@@ -415,6 +457,10 @@ export async function listAssets(
   accessToken: string,
   propertyId: string,
 ): Promise<{ assets: PublicAsset[]; propertyId: string }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudListAssets(accessToken, propertyId);
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/assets`,
     { headers: { authorization: `Bearer ${accessToken}` } },
@@ -427,6 +473,10 @@ export async function getAsset(
   propertyId: string,
   assetId: string,
 ): Promise<{ asset: PublicAsset }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudGetAsset(accessToken, propertyId, assetId);
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/assets/${assetId}`,
     { headers: { authorization: `Bearer ${accessToken}` } },
@@ -439,6 +489,10 @@ export async function createAsset(
   propertyId: string,
   input: CreateAssetInput,
 ): Promise<{ asset: PublicAsset }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudCreateAsset(accessToken, propertyId, input);
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/assets`,
     {
@@ -456,6 +510,15 @@ export async function updateAsset(
   assetId: string,
   input: UpdateAssetInput,
 ): Promise<{ asset: PublicAsset }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudUpdateAsset(
+      accessToken,
+      propertyId,
+      assetId,
+      input,
+    );
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/assets/${assetId}`,
     {
@@ -472,6 +535,14 @@ export async function deleteAsset(
   propertyId: string,
   assetId: string,
 ): Promise<{ ok: boolean }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudDeleteAsset(
+      accessToken,
+      propertyId,
+      assetId,
+    );
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/assets/${assetId}`,
     {
@@ -487,6 +558,14 @@ export async function listDocuments(
   propertyId: string,
   options?: { assetId?: string; propertyOnly?: boolean },
 ): Promise<{ documents: PublicDocument[]; propertyId: string }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudListDocuments(
+      accessToken,
+      propertyId,
+      options,
+    );
+  }
   const params = new URLSearchParams();
   if (options?.assetId) params.set("assetId", options.assetId);
   if (options?.propertyOnly) params.set("scope", "property");
@@ -511,6 +590,14 @@ export async function uploadDocument(
     assetId?: string | null;
   },
 ): Promise<{ document: PublicDocument }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudUploadDocument(
+      accessToken,
+      propertyId,
+      input,
+    );
+  }
   const form = new FormData();
   form.append("file", {
     uri: input.uri,
@@ -542,6 +629,14 @@ export async function deleteDocument(
   propertyId: string,
   documentId: string,
 ): Promise<{ ok: boolean }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudDeleteDocument(
+      accessToken,
+      propertyId,
+      documentId,
+    );
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/documents/${documentId}`,
     {
@@ -559,6 +654,26 @@ export function documentContentUrl(
   return `${API_BASE_URL}/properties/${propertyId}/documents/${documentId}/content`;
 }
 
+/** Resolve a downloadable URL (signed Storage URL when on Supabase cloud). */
+export async function resolveDocumentDownloadUrl(
+  accessToken: string,
+  propertyId: string,
+  documentId: string,
+): Promise<{ url: string; authHeader?: string }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const url = await require("./cloud").cloudDocumentDownloadUrl(
+      propertyId,
+      documentId,
+    );
+    return { url };
+  }
+  return {
+    url: documentContentUrl(propertyId, documentId),
+    authHeader: `Bearer ${accessToken}`,
+  };
+}
+
 export async function exportHomePacket(
   accessToken: string,
   propertyId: string,
@@ -574,6 +689,14 @@ export async function listReminders(
   propertyId: string,
   options?: { assetId?: string; includeCompleted?: boolean },
 ): Promise<{ reminders: PublicReminder[]; propertyId: string }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudListReminders(
+      accessToken,
+      propertyId,
+      options,
+    );
+  }
   const params = new URLSearchParams();
   if (options?.assetId) params.set("assetId", options.assetId);
   if (options?.includeCompleted) params.set("includeCompleted", "1");
@@ -590,6 +713,14 @@ export async function listReminderTemplates(
   propertyId: string,
   category?: AssetCategory,
 ): Promise<{ templates: ReminderTemplate[] }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudListReminderTemplates(
+      accessToken,
+      propertyId,
+      category,
+    );
+  }
   const params = new URLSearchParams();
   if (category) params.set("category", category);
   const query = params.toString();
@@ -605,6 +736,14 @@ export async function createReminder(
   propertyId: string,
   input: CreateReminderInput,
 ): Promise<{ reminder: PublicReminder }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudCreateReminder(
+      accessToken,
+      propertyId,
+      input,
+    );
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/reminders`,
     {
@@ -621,7 +760,16 @@ export async function completeReminder(
   propertyId: string,
   reminderId: string,
   note?: string | null,
-): Promise<{ reminder: PublicReminder; completion: PublicReminderCompletion }> {
+): Promise<{ reminder: PublicReminder; completion?: PublicReminderCompletion }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudCompleteReminder(
+      accessToken,
+      propertyId,
+      reminderId,
+      note,
+    );
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/reminders/${reminderId}/complete`,
     {
@@ -638,6 +786,14 @@ export async function deleteReminder(
   propertyId: string,
   reminderId: string,
 ): Promise<{ ok: boolean }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudDeleteReminder(
+      accessToken,
+      propertyId,
+      reminderId,
+    );
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/reminders/${reminderId}`,
     {
@@ -653,6 +809,15 @@ export async function listReminderHistory(
   propertyId: string,
   reminderId: string,
 ): Promise<{ history: PublicReminderCompletion[]; reminderId: string }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const res = await require("./cloud").cloudReminderHistory(
+      accessToken,
+      propertyId,
+      reminderId,
+    );
+    return { history: res.completions, reminderId };
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/reminders/${reminderId}/history`,
     { headers: { authorization: `Bearer ${accessToken}` } },
@@ -723,6 +888,18 @@ export function notificationKindLabel(kind: NotificationKind): string {
 export async function fetchNotificationPreferences(
   accessToken: string,
 ): Promise<{ preferences: NotificationPreferences }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const res = await require("./cloud").cloudGetNotificationPreferences(
+      accessToken,
+    );
+    return {
+      preferences: {
+        ...res.preferences,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+  }
   const res = await fetch(`${API_BASE_URL}/me/notifications/preferences`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
@@ -733,6 +910,19 @@ export async function updateNotificationPreferences(
   accessToken: string,
   input: UpdateNotificationPreferencesInput,
 ): Promise<{ preferences: NotificationPreferences }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const res = await require("./cloud").cloudUpdateNotificationPreferences(
+      accessToken,
+      input,
+    );
+    return {
+      preferences: {
+        ...res.preferences,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+  }
   const res = await fetch(`${API_BASE_URL}/me/notifications/preferences`, {
     method: "PATCH",
     headers: authHeaders(accessToken),
@@ -745,6 +935,43 @@ export async function listNotifications(
   accessToken: string,
   options?: { unreadOnly?: boolean },
 ): Promise<{ notifications: PublicNotification[]; unreadCount: number }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const res = await require("./cloud").cloudListNotifications(
+      accessToken,
+      options,
+    );
+    const notifications: PublicNotification[] = res.notifications.map(
+      (n: {
+        id: string;
+        propertyId: string | null;
+        kind: string;
+        title: string;
+        body: string;
+        relatedReminderId: string | null;
+        relatedAssetId: string | null;
+        relatedEntityId: string | null;
+        readAt: string | null;
+        createdAt: string;
+      }) => ({
+        id: n.id,
+        propertyId: n.propertyId,
+        kind: n.kind as NotificationKind,
+        title: n.title,
+        body: n.body,
+        relatedReminderId: n.relatedReminderId,
+        relatedAssetId: n.relatedAssetId,
+        relatedEntityId: n.relatedEntityId,
+        readAt: n.readAt,
+        pushStatus: "stubbed",
+        createdAt: n.createdAt,
+      }),
+    );
+    return {
+      notifications,
+      unreadCount: notifications.filter((n) => !n.readAt).length,
+    };
+  }
   const params = new URLSearchParams();
   if (options?.unreadOnly) params.set("unreadOnly", "1");
   const query = params.toString();
@@ -758,7 +985,15 @@ export async function listNotifications(
 export async function markNotificationRead(
   accessToken: string,
   notificationId: string,
-): Promise<{ notification: PublicNotification }> {
+): Promise<{ notification?: PublicNotification; ok?: boolean }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    await require("./cloud").cloudMarkNotificationRead(
+      accessToken,
+      notificationId,
+    );
+    return { ok: true };
+  }
   const res = await fetch(
     `${API_BASE_URL}/me/notifications/${notificationId}/read`,
     {
@@ -771,7 +1006,11 @@ export async function markNotificationRead(
 
 export async function markAllNotificationsRead(
   accessToken: string,
-): Promise<{ ok: boolean; updated: number }> {
+): Promise<{ ok: boolean; updated?: number }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudMarkAllNotificationsRead(accessToken);
+  }
   const res = await fetch(`${API_BASE_URL}/me/notifications/read-all`, {
     method: "POST",
     headers: { authorization: `Bearer ${accessToken}` },
@@ -791,6 +1030,20 @@ export async function runDueNotificationCheck(
   };
   unreadCount: number;
 }> {
+  if (useCloud()) {
+    // Due-check job stays on the Hono API / cron; cloud-only phone skips.
+    const listed = await listNotifications(accessToken);
+    return {
+      ok: true,
+      result: {
+        scanned: 0,
+        created: 0,
+        skippedExisting: 0,
+        skippedPrefs: 0,
+      },
+      unreadCount: listed.unreadCount,
+    };
+  }
   const res = await fetch(`${API_BASE_URL}/me/notifications/run-due-check`, {
     method: "POST",
     headers: { authorization: `Bearer ${accessToken}` },
@@ -805,7 +1058,12 @@ export async function registerPushDevice(
     platform?: string | null;
     deviceName?: string | null;
   },
-): Promise<{ device: PublicPushDevice }> {
+): Promise<{ device?: PublicPushDevice; ok?: boolean }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    await require("./cloud").cloudRegisterPushDevice(accessToken, input);
+    return { ok: true };
+  }
   const res = await fetch(`${API_BASE_URL}/me/notifications/devices`, {
     method: "POST",
     headers: authHeaders(accessToken),
@@ -883,11 +1141,21 @@ export type ContractorFormatResponse = {
   };
 };
 
+function requireHostedApiForAi(): void {
+  if (useCloud() && !process.env.EXPO_PUBLIC_API_URL?.trim()) {
+    throw new ApiError(
+      "AI assist still needs a hosted HomeAsset API (set EXPO_PUBLIC_API_URL). Signup, homes, assets, docs, and reminders already work on Supabase alone.",
+      "network",
+    );
+  }
+}
+
 export async function aiScanProduct(
   accessToken: string,
   propertyId: string,
   input: { hint?: string | null; filename?: string | null },
 ): Promise<{ draft: AiScanDraft; aiMode: "mock" | "live" }> {
+  requireHostedApiForAi();
   const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/ai/scan`, {
     method: "POST",
     headers: authHeaders(accessToken),
@@ -919,6 +1187,7 @@ export async function aiConfirmScan(
   storedManualCount: number;
   privacy: { writes: boolean; confirmedByUser: boolean; note: string };
 }> {
+  requireHostedApiForAi();
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/ai/confirm-scan`,
     {
@@ -935,6 +1204,7 @@ export async function aiAskHowto(
   propertyId: string,
   input: { question: string; assetId?: string | null },
 ): Promise<AiHowToResponse> {
+  requireHostedApiForAi();
   const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/ai/howto`, {
     method: "POST",
     headers: authHeaders(accessToken),
@@ -950,6 +1220,7 @@ export async function aiContractorFormat(
     inputKind?: "typed" | "voice" | "upload";
   },
 ): Promise<ContractorFormatResponse> {
+  requireHostedApiForAi();
   const res = await fetch(`${API_BASE_URL}/ai/contractor/format`, {
     method: "POST",
     headers: authHeaders(accessToken),
@@ -973,6 +1244,7 @@ export async function aiContractorStatus(accessToken: string): Promise<{
     homeownerApproveRequired: boolean;
   };
 }> {
+  requireHostedApiForAi();
   const res = await fetch(`${API_BASE_URL}/ai/contractor/status`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
