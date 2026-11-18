@@ -39,3 +39,6 @@ jobs:
         env:
           JWT_SECRET: ci-test-jwt-secret-not-for-production
           NODE_ENV: test
+          AUTH_BACKEND: local
+          DATA_BACKEND: sqlite
+          STORAGE_BACKEND: local

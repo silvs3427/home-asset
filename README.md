@@ -2,7 +2,7 @@
 
 Phone-first home memory for homeowners (iPhone + Android), with a path for contractors to submit work into the homeowner’s ledger. **Homeowners own the record.** Privacy and approve-before-official are product requirements from day one.
 
-This repo is at **EPIC 6**: AI assist — scan a product → find/store manuals (after confirm) → grounded how-to Q&A, plus contractor note-format hooks. Built on notifications (EPIC 5), reminders (EPIC 4), documents (EPIC 3), assets (EPIC 2), and accounts / thin multi-home (EPIC 1). Recalls and full contractor submit → homeowner approve come next.
+This repo includes **Supabase + installable EAS builds** (LightLift-style `app.json` / `app.config.js` / `eas.json`) on top of **EPIC 6** AI assist, notifications, reminders, documents, assets, and accounts. Local SQLite demo stays the CI default until you add Supabase secrets. Recalls and full contractor submit → homeowner approve come next.
 
 ## Stack
 
@@ -10,8 +10,9 @@ This repo is at **EPIC 6**: AI assist — scan a product → find/store manuals 
 | --- | --- | --- |
 | Phone apps | Expo (React Native) | One codebase for iPhone and Android |
 | API | TypeScript + Hono | Small, fast Node API that is easy to deploy |
-| Accounts | Email + password → JWT (local API) | Normal app login; **no Supabase** — users live in local SQLite |
-| Homes + assets + docs + reminders + notices | SQLite + local file store (property-scoped) | Durable local backup; every home’s data is isolated by property id |
+| Accounts | Email + password → JWT (local API) or **Supabase Auth** when configured | Normal app login; SQLite default for CI/demo; Supabase when env set |
+| Homes + assets + docs + reminders + notices | SQLite (+ optional Supabase Postgres/Storage) | Durable local backup by default; cloud schema + RLS in `supabase/` |
+| Phone install | EAS preview **APK** (LightLift layout) | Not Expo Go — real native modules |
 | Push | Expo push (stub without token) | Goes live when `EXPO_ACCESS_TOKEN` is set; in-app center works either way |
 | AI assist | Env key + local mock catalog | Live when `AI_API_KEY` / `OPENAI_API_KEY` is set; mock otherwise (CI-safe) |
 | Token storage (phone) | Expo SecureStore | Keeps the session off plain device storage |
@@ -20,15 +21,16 @@ This repo is at **EPIC 6**: AI assist — scan a product → find/store manuals 
 
 ```text
 apps/
-  mobile/   # Expo app (iPhone + Android)
+  mobile/   # Expo app — app.json + app.config.js + eas.json (LightLift layout)
   api/      # Backend API (auth + properties + assets + documents + reminders + notifications + AI)
+supabase/   # SQL migrations + founder setup README (Auth / Postgres / Storage / RLS)
 ```
 
 ## Prerequisites
 
 - Node.js **22+** (SQLite via `node:sqlite`)
 - npm 10+
-- For phones: **Expo Go matching SDK 58** (see below), or iOS Simulator / Android emulator
+- For phones: **EAS preview APK** (recommended), or Expo Go SDK 58 as a temporary fallback / Simulator
 
 ## Run locally
 
@@ -115,6 +117,30 @@ curl -X POST http://localhost:8787/jobs/due-reminders
 
 In production set `JOBS_SECRET` and send it as `X-Jobs-Secret` (or `Authorization: Bearer …`). Set `EXPO_ACCESS_TOKEN` to deliver live Expo pushes; without it, pushes are stubbed and the in-app center still fills.
 
+## Supabase (optional)
+
+Local demo needs **no** Supabase. When you want cloud accounts + file storage:
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Run the SQL in [`supabase/README.md`](./supabase/README.md) (SQL Editor → paste → Run)
+3. Copy URL + anon key into `apps/api/.env` and `apps/mobile/.env` (see `.env.example` files)
+4. Service-role key stays on the **API only** (never the phone app)
+
+`AUTH_BACKEND=auto` uses Supabase Auth when URL+anon are set; `DATA_BACKEND=sqlite` stays the CI-safe default until you flip it after the schema is applied.
+
+## Android install (EAS) — primary phone path
+
+Same layout as LightLift (`apps/mobile/app.json` + `app.config.js` + `eas.json`):
+
+```bash
+cd apps/mobile
+npx eas-cli@latest login
+npx eas-cli@latest init
+npx eas-cli@latest build -p android --profile preview
+```
+
+Download/install the APK from the Expo build page (**Install**). Expo Go tunnel is temporary testing only — not the production install path. Details: [`apps/mobile/README.md`](./apps/mobile/README.md).
+
 ## Tests & CI
 
 ```bash
@@ -162,7 +188,7 @@ docker run --rm -p 8787:8787 \
 - Notifications are **account-scoped** and never leak across users; reminder notices include the home id when relevant
 - **AI never silently writes** — scan returns a draft; manuals/assets are saved only on explicit confirm; how-to and contractor format are draft/read-only
 - Preferences default to product notices only — **no marketing drip**, SMS out of scope
-- Passwords hashed (bcrypt); JWT access tokens are short-lived
+- Passwords hashed (bcrypt) locally, or held by Supabase Auth when configured; API JWTs are short-lived
 - No analytics or silent third-party sharing wired in
 - Home packet export is owner-only and does not share anything by itself
 - Secure HTTP headers on the API; CORS locked down in production via `CORS_ORIGINS`
@@ -171,4 +197,4 @@ docker run --rm -p 8787:8787 \
 
 ## What’s next
 
-EPIC 7–8: recalls (using notification hooks), and contractor submit → homeowner approve (using submit notification hooks + AI format drafts).
+Founder: create Supabase project + EAS login to produce the downloadable APK. Next product EPICs: recalls (7) and contractor submit → homeowner approve (8).

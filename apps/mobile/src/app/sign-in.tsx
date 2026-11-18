@@ -17,7 +17,8 @@ import { API_BASE_URL } from "@/lib/config";
 
 /**
  * Everyday email + password sign-in (D13).
- * Talks to the local HomeAsset SQLite API — no Supabase.
+ * Talks to the HomeAsset API. When Supabase is configured on the API,
+ * Auth uses Supabase email/password; otherwise local SQLite bcrypt.
  * Sign-up asks homeowner or contractor on the same login path.
  */
 export default function SignInScreen() {

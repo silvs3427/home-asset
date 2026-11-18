@@ -170,7 +170,7 @@ documentRoutes.post("/", async (c) => {
 
   try {
     const bytes = Buffer.from(await file.arrayBuffer());
-    const document = createDocument(propertyId, claims.sub, {
+    const document = await createDocument(propertyId, claims.sub, {
       title: meta.data.title,
       docType: meta.data.docType as (typeof DOCUMENT_TYPES)[number],
       documentDate: meta.data.documentDate ?? null,
@@ -207,7 +207,7 @@ documentRoutes.get("/:documentId", (c) => {
   }
 });
 
-documentRoutes.get("/:documentId/content", (c) => {
+documentRoutes.get("/:documentId/content", async (c) => {
   const claims = c.get("claims");
   const propertyId = c.req.param("propertyId");
   const documentId = c.req.param("documentId");
@@ -222,7 +222,7 @@ documentRoutes.get("/:documentId/content", (c) => {
         404,
       );
     }
-    const bytes = readDocumentBytes(document);
+    const bytes = await readDocumentBytes(document);
     const disposition = `attachment; filename="${document.originalFilename.replace(/"/g, "")}"`;
     return new Response(bytes, {
       status: 200,
@@ -271,7 +271,7 @@ documentRoutes.patch("/:documentId", async (c) => {
   }
 });
 
-documentRoutes.delete("/:documentId", (c) => {
+documentRoutes.delete("/:documentId", async (c) => {
   const claims = c.get("claims");
   const propertyId = c.req.param("propertyId");
   const documentId = c.req.param("documentId");
@@ -279,7 +279,7 @@ documentRoutes.delete("/:documentId", (c) => {
     return c.json({ error: "not_found", message: "Document not found." }, 404);
   }
   try {
-    deleteDocument(documentId, propertyId, claims.sub);
+    await deleteDocument(documentId, propertyId, claims.sub);
     return c.json({ ok: true });
   } catch (err) {
     return mapDocError(err, c);

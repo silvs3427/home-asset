@@ -13,7 +13,10 @@ const credentialsSchema = z.object({
 
 /**
  * Everyday email + password sign-up / sign-in (normal app login).
- * Users persist in SQLite; no silent third-party sharing of credentials.
+ * Default: local SQLite + bcrypt (CI / demo).
+ * When SUPABASE_URL + SUPABASE_ANON_KEY are set: Supabase Auth, with a local
+ * mirror so the rest of the API keeps working. No silent third-party sharing
+ * beyond the configured Auth provider.
  */
 export const authRoutes = new Hono();
 

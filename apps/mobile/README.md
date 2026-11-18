@@ -1,51 +1,50 @@
 # HomeAsset mobile (Expo SDK 58)
 
-## Install Expo Go for SDK 58 first
+Layout matches **LightLift**: `app.json` (static) + `app.config.js` (env mapping) + `eas.json` (installable builds). Prefer an **EAS APK**, not Expo Go, for real phone installs.
 
-The Metro QR encodes an `exp://…` deep link. Phone cameras **do nothing** with that URL unless Expo Go is already installed. Store builds can lag behind SDK 58 — install the matching client before scanning.
+## Installable Android APK (primary)
 
-| Platform | Install page | Direct build |
-| --- | --- | --- |
-| Chooser | [expo.dev/go?sdkVersion=58](https://expo.dev/go?sdkVersion=58) | — |
-| Android | [expo.dev/go?sdkVersion=58&platform=android](https://expo.dev/go?sdkVersion=58&platform=android) | [Expo-Go-58.0.5.apk](https://github.com/expo/expo-go-releases/releases/download/Expo-Go-58.0.5/Expo-Go-58.0.5.apk) |
-| iOS | [expo.dev/go?sdkVersion=58&platform=ios](https://expo.dev/go?sdkVersion=58&platform=ios) | App Store / Simulator (or `eas go` for a physical TestFlight build when the store lags) |
+Expo Go is missing native modules this app needs (push / `ExpoApplication` can crash). Build a real APK:
 
-Mismatch help: [Expo Go version mismatch](https://docs.expo.dev/troubleshooting/expo-go-version-mismatch/).
+```bash
+cd apps/mobile
+npx eas-cli@latest login
+npx eas-cli@latest init          # writes extra.eas.projectId — do not invent a UUID
+npx eas-cli@latest build -p android --profile preview
+```
 
-## Start (recommended)
+When the build finishes, open the link Expo prints (or [expo.dev](https://expo.dev) → your project → Builds) → **Install** / download the **APK**.
 
-From the **repo root** (workspaces):
+Then talk to Metro with the installed app:
+
+```bash
+npx expo start --dev-client
+# or from repo root after install: npm run start:dev-client -w @homeasset/mobile
+```
+
+**iOS:** `npx eas-cli@latest build -p ios --profile preview` (Apple Developer account for device installs). Simulator: `development` profile.
+
+## Temporary Expo Go (fallback only)
+
+If you only need a quick UI peek and accept soft-disabled push:
+
+| Platform | Install page |
+| --- | --- |
+| Chooser | [expo.dev/go?sdkVersion=58](https://expo.dev/go?sdkVersion=58) |
+| Android APK | [Expo-Go-58.0.5.apk](https://github.com/expo/expo-go-releases/releases/download/Expo-Go-58.0.5/Expo-Go-58.0.5.apk) |
 
 ```bash
 npm run dev:mobile
+# or: npx expo start --go -c
 ```
 
-Or from this folder (clears cache; forces Expo Go QR, not a development-build `exp+` link):
+**Windows LAN/QR fails:** same LightLift fix — `npx expo login` then `npx expo start --tunnel`, or phone hotspot.
 
-```bash
-npx expo start --go -c
-```
+## Phone → API + optional Supabase
 
-Then open the project **inside Expo Go** (scan the QR, or press `a` / `i` for emulator/simulator).
+| Env | Purpose |
+| --- | --- |
+| `EXPO_PUBLIC_API_URL` | API on your PC/LAN (required on a physical phone) |
+| `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Optional; Cloud secrets `SUPABASE_URL` / `SUPABASE_ANON_KEY` also work via `app.config.js` |
 
-## Phone → API (signup / sign-in)
-
-There is **no Supabase**. Accounts live in the local **SQLite** API (`npm run dev:api` on your PC).
-
-**Env var:** `EXPO_PUBLIC_API_URL`
-
-### Windows (physical phone)
-
-1. Start the API in one terminal from the repo root: `npm run dev:api` (must stay running).
-2. Open **Command Prompt** and run: `ipconfig`
-3. Under **Wireless LAN adapter Wi-Fi** (or Ethernet), copy **IPv4 Address** (e.g. `192.168.1.42`).
-4. Create `apps/mobile/.env` with exactly:
-   ```
-   EXPO_PUBLIC_API_URL=http://192.168.1.42:8787
-   ```
-   (use your IPv4; do **not** use `localhost` or `127.0.0.1` on a phone)
-5. Restart Expo from `apps/mobile`: `npx expo start --go -c`
-6. Phone and PC on the same Wi‑Fi. If Windows Firewall prompts for Node.js, allow it.
-7. Open the app → create account. The sign-in screen shows the API target URL; a network error means the phone still cannot reach that address.
-
-Same-machine simulator: omit `EXPO_PUBLIC_API_URL` (defaults to `http://localhost:8787`).
+See [`.env.example`](./.env.example) and [`../../supabase/README.md`](../../supabase/README.md).

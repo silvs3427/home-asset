@@ -59,7 +59,7 @@ propertyRoutes.post("/", async (c) => {
   }
 
   try {
-    const property = createProperty(claims.sub, parsed.data);
+    const property = await createProperty(claims.sub, parsed.data);
     const user = getUserById(claims.sub);
     return c.json(
       {
@@ -91,10 +91,10 @@ propertyRoutes.get("/:id", (c) => {
   return c.json({ property: toPublicProperty(property) });
 });
 
-propertyRoutes.post("/:id/select", (c) => {
+propertyRoutes.post("/:id/select", async (c) => {
   const claims = c.get("claims");
   try {
-    const property = selectPropertyForUser(claims.sub, c.req.param("id"));
+    const property = await selectPropertyForUser(claims.sub, c.req.param("id"));
     const user = getUserById(claims.sub);
     return c.json({
       property: toPublicProperty(property),
