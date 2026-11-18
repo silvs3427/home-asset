@@ -3,9 +3,9 @@ import { z } from "zod";
 import { issueAccessToken } from "../lib/auth.js";
 import { getPropertyForUser, listPropertiesForUser } from "../lib/properties.js";
 import {
-  enableFace,
+  enableFaceAsync,
   getUserById,
-  setActiveFace,
+  setActiveFaceAsync,
 } from "../lib/users.js";
 import {
   toPublicProperty,
@@ -76,9 +76,9 @@ meRoutes.post("/face", async (c) => {
   const face = parsed.data.face as AppFace;
   try {
     if (parsed.data.enableIfMissing) {
-      enableFace(claims.sub, face);
+      await enableFaceAsync(claims.sub, face);
     }
-    const user = setActiveFace(claims.sub, face);
+    const user = await setActiveFaceAsync(claims.sub, face);
     const accessToken = await issueAccessToken(user);
     return c.json({
       accessToken,

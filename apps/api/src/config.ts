@@ -31,6 +31,21 @@ function resolveStoragePath(): string {
   return "./data/files";
 }
 
+function resolveBackend(
+  name: "AUTH_BACKEND" | "DATA_BACKEND" | "STORAGE_BACKEND",
+  allowed: readonly string[],
+  fallback: string,
+): string {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) return fallback;
+  if (!allowed.includes(raw)) {
+    throw new Error(
+      `${name} must be one of ${allowed.join("|")} (got ${JSON.stringify(raw)})`,
+    );
+  }
+  return raw;
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 8787),
   nodeEnv: process.env.NODE_ENV ?? "development",
@@ -80,4 +95,48 @@ export const config = {
   aiForceMock:
     process.env.AI_FORCE_MOCK === "1" ||
     process.env.AI_FORCE_MOCK === "true",
+
+  /**
+   * Supabase project URL (Dashboard → Project Settings → API).
+   * Leave empty for local SQLite demo / CI.
+   */
+  supabaseUrl: process.env.SUPABASE_URL?.trim() || "",
+  /** Publishable / anon key — safe for mobile + server Auth calls. */
+  supabaseAnonKey:
+    process.env.SUPABASE_ANON_KEY?.trim() ||
+    process.env.SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    "",
+  /**
+   * Service-role key — server only. Needed for DATA_BACKEND=supabase and
+   * for STORAGE_BACKEND=supabase admin uploads. Never put this in the phone app.
+   */
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "",
+
+  /**
+   * Auth store: `auto` (Supabase when URL+anon set), `supabase`, or `local`.
+   * Default `auto` keeps CI on local JWT+SQLite when secrets are absent.
+   */
+  authBackend: resolveBackend(
+    "AUTH_BACKEND",
+    ["auto", "local", "supabase"],
+    "auto",
+  ) as "auto" | "local" | "supabase",
+  /**
+   * Structured ledger: `sqlite` (default, CI-safe) or `supabase` (needs
+   * service role + schema migration applied).
+   */
+  dataBackend: resolveBackend(
+    "DATA_BACKEND",
+    ["sqlite", "supabase"],
+    "sqlite",
+  ) as "sqlite" | "supabase",
+  /**
+   * File bytes: `auto` (Supabase Storage when service role set), `local`, or
+   * `supabase`.
+   */
+  storageBackend: resolveBackend(
+    "STORAGE_BACKEND",
+    ["auto", "local", "supabase"],
+    "auto",
+  ) as "auto" | "local" | "supabase",
 };

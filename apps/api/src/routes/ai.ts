@@ -228,19 +228,21 @@ aiRoutes.post("/confirm-scan", async (c) => {
 
     const selected = new Set(parsed.data.selectedManualIds);
     const manualsToStore = draft.manuals.filter((m) => selected.has(m.id));
-    const documents = manualsToStore.map((manual) => {
-      const bytes = Buffer.from(manual.content, "utf8");
-      return createDocument(propertyId, claims.sub, {
-        title: manual.title,
-        docType: "manual",
-        documentDate: null,
-        source: "ai_fetched",
-        assetId: asset.id,
-        mimeType: "text/plain",
-        originalFilename: `${manual.id}.txt`,
-        bytes,
-      });
-    });
+    const documents = await Promise.all(
+      manualsToStore.map((manual) => {
+        const bytes = Buffer.from(manual.content, "utf8");
+        return createDocument(propertyId, claims.sub, {
+          title: manual.title,
+          docType: "manual",
+          documentDate: null,
+          source: "ai_fetched",
+          assetId: asset.id,
+          mimeType: "text/plain",
+          originalFilename: `${manual.id}.txt`,
+          bytes,
+        });
+      }),
+    );
 
     return c.json({
       asset: toPublicAsset(asset),

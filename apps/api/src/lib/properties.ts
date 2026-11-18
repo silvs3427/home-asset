@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "../db/client.js";
-import { getUserById, setActivePropertyId } from "./users.js";
+import { getUserById, setActivePropertyIdAsync } from "./users.js";
 import type { PropertyRecord } from "./types.js";
 
 type PropertyRow = {
@@ -75,10 +75,10 @@ export function getPropertyForUser(
   return row ? rowToProperty(row) : undefined;
 }
 
-export function createProperty(
+export async function createProperty(
   ownerUserId: string,
   input: CreatePropertyInput,
-): PropertyRecord {
+): Promise<PropertyRecord> {
   const owner = getUserById(ownerUserId);
   if (!owner) throw new Error("USER_NOT_FOUND");
 
@@ -120,18 +120,18 @@ export function createProperty(
 
   // First home becomes the active selection automatically.
   if (!owner.activePropertyId) {
-    setActivePropertyId(ownerUserId, property.id);
+    await setActivePropertyIdAsync(ownerUserId, property.id);
   }
 
   return property;
 }
 
-export function selectPropertyForUser(
+export async function selectPropertyForUser(
   ownerUserId: string,
   propertyId: string,
-): PropertyRecord {
+): Promise<PropertyRecord> {
   const property = getPropertyForUser(propertyId, ownerUserId);
   if (!property) throw new Error("PROPERTY_NOT_FOUND");
-  setActivePropertyId(ownerUserId, property.id);
+  await setActivePropertyIdAsync(ownerUserId, property.id);
   return property;
 }

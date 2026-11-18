@@ -4,6 +4,12 @@ import { dirname } from "node:path";
 import { config } from "../config.js";
 import { documentStoragePath, getDb } from "../db/client.js";
 import { assertPropertyOwnedByUser, getAssetForProperty } from "./assets.js";
+import { isSupabaseStorageEnabled } from "./supabase/client.js";
+import {
+  downloadDocumentObject,
+  removeDocumentObject,
+  uploadDocumentObject,
+} from "./supabase/storage.js";
 import type {
   DocumentRecord,
   DocumentSource,
@@ -129,11 +135,11 @@ export function getDocumentForProperty(
   return row ? rowToDocument(row) : undefined;
 }
 
-export function createDocument(
+export async function createDocument(
   propertyId: string,
   ownerUserId: string,
   input: CreateDocumentInput,
-): DocumentRecord {
+): Promise<DocumentRecord> {
   assertPropertyOwnedByUser(propertyId, ownerUserId);
 
   if (input.bytes.byteLength === 0) {
@@ -150,11 +156,20 @@ export function createDocument(
   }
 
   const id = randomUUID();
+  const useSupabase = isSupabaseStorageEnabled();
   // Always forward-slash relative key; absolute path uses platform join.
-  const storageKey = `${propertyId}/${id}`;
-  const absolutePath = documentStoragePath(storageKey);
-  mkdirSync(dirname(absolutePath), { recursive: true });
-  writeFileSync(absolutePath, input.bytes);
+  // Supabase keys include the filename so Storage folder policies stay clear.
+  const storageKey = useSupabase
+    ? `${propertyId}/${id}/${sanitizeFilename(input.originalFilename)}`
+    : `${propertyId}/${id}`;
+
+  if (useSupabase) {
+    await uploadDocumentObject(storageKey, input.bytes, input.mimeType.trim() || "application/octet-stream");
+  } else {
+    const absolutePath = documentStoragePath(storageKey);
+    mkdirSync(dirname(absolutePath), { recursive: true });
+    writeFileSync(absolutePath, input.bytes);
+  }
 
   const now = new Date().toISOString();
   const doc: DocumentRecord = {
@@ -197,7 +212,11 @@ export function createDocument(
         doc.updatedAt,
       );
   } catch (err) {
-    removeStorageFile(storageKey);
+    if (useSupabase) {
+      await removeDocumentObject(storageKey);
+    } else {
+      removeStorageFile(storageKey);
+    }
     throw err;
   }
 
@@ -254,22 +273,29 @@ export function updateDocument(
   return updated;
 }
 
-export function deleteDocument(
+export async function deleteDocument(
   documentId: string,
   propertyId: string,
   ownerUserId: string,
-): void {
+): Promise<void> {
   const existing = getDocumentForProperty(documentId, propertyId, ownerUserId);
   if (!existing) throw new Error("DOCUMENT_NOT_FOUND");
 
   getDb()
     .prepare(`DELETE FROM documents WHERE id = ? AND property_id = ?`)
     .run(documentId, propertyId);
-  removeStorageFile(existing.storageKey);
+  if (isSupabaseStorageEnabled()) {
+    await removeDocumentObject(existing.storageKey);
+  } else {
+    removeStorageFile(existing.storageKey);
+  }
 }
 
 /** Read file bytes for download — ownership already checked via getDocumentForProperty. */
-export function readDocumentBytes(doc: DocumentRecord): Buffer {
+export async function readDocumentBytes(doc: DocumentRecord): Promise<Buffer> {
+  if (isSupabaseStorageEnabled()) {
+    return downloadDocumentObject(doc.storageKey);
+  }
   const path = documentStoragePath(doc.storageKey);
   if (!existsSync(path)) {
     throw new Error("FILE_MISSING");

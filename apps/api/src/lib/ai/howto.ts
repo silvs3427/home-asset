@@ -114,7 +114,7 @@ export async function answerHowTo(input: {
     );
 
     for (const doc of docs) {
-      const text = readDocAsText(doc);
+      const text = await readDocAsText(doc);
       if (!text) continue;
       const relevant = extractRelevantSnippets(text, question);
       if (relevant.length === 0) continue;
@@ -185,9 +185,9 @@ export async function answerHowTo(input: {
   };
 }
 
-function readDocAsText(doc: DocumentRecord): string | null {
+async function readDocAsText(doc: DocumentRecord): Promise<string | null> {
   try {
-    const bytes = readDocumentBytes(doc);
+    const bytes = await readDocumentBytes(doc);
     if (
       doc.mimeType.startsWith("text/") ||
       doc.mimeType === "application/json" ||
