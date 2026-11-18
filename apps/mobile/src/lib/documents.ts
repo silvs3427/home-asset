@@ -3,7 +3,7 @@ import { File, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
 import {
-  documentContentUrl,
+  resolveDocumentDownloadUrl,
   type DocumentType,
   type PublicDocument,
 } from "./api";
@@ -86,21 +86,24 @@ export async function pickDocumentFile(): Promise<PickedUpload | null> {
   };
 }
 
-/** Download with auth, then open the system share sheet (view / save / send). */
+/** Download with auth (or signed Supabase URL), then open the share sheet. */
 export async function downloadAndShareDocument(
   accessToken: string,
   propertyId: string,
   doc: PublicDocument,
 ): Promise<void> {
   const destination = new File(Paths.cache, doc.originalFilename);
-  await File.downloadFileAsync(
-    documentContentUrl(propertyId, doc.id),
-    destination,
-    {
-      headers: { authorization: `Bearer ${accessToken}` },
-      idempotent: true,
-    },
+  const resolved = await resolveDocumentDownloadUrl(
+    accessToken,
+    propertyId,
+    doc.id,
   );
+  await File.downloadFileAsync(resolved.url, destination, {
+    headers: resolved.authHeader
+      ? { authorization: resolved.authHeader }
+      : undefined,
+    idempotent: true,
+  });
 
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {

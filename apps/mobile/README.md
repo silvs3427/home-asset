@@ -40,11 +40,14 @@ npm run dev:mobile
 
 **Windows LAN/QR fails:** same LightLift fix — `npx expo login` then `npx expo start --tunnel`, or phone hotspot.
 
-## Phone → API + optional Supabase
+## Phone → Supabase (preferred) + optional API
 
 | Env | Purpose |
 | --- | --- |
-| `EXPO_PUBLIC_API_URL` | API on your PC/LAN (required on a physical phone) |
-| `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Optional; Cloud secrets `SUPABASE_URL` / `SUPABASE_ANON_KEY` also work via `app.config.js` |
+| `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` | **Preferred.** Cloud signup/login + core ledger; no LAN IP |
+| `SUPABASE_URL` / `SUPABASE_ANON_KEY` | Same values via Cursor/Cloud secrets (`app.config.js` maps them) |
+| `EXPO_PUBLIC_API_URL` | Optional — local SQLite demo without Supabase, or hosted AI/jobs |
+
+Dev/test: turn **Confirm email OFF** in Supabase Auth so sign-up returns a session immediately.
 
 See [`.env.example`](./.env.example) and [`../../supabase/README.md`](../../supabase/README.md).

@@ -82,19 +82,14 @@ Scan the QR **with Expo Go** (or the iOS Camera app once Expo Go is installed). 
 
 If Expo Go says the project is incompatible, you have the wrong SDK client — use the links above, not the generic Play/App Store listing alone.
 
-**Physical phone (Windows) — signup needs the PC LAN IP, not localhost:**
+**Physical phone — preferred: Supabase only (no laptop API / LAN IP):**
 
-1. Keep `npm run dev:api` running (listens on all interfaces, port **8787**).
-2. Command Prompt → `ipconfig` → copy **IPv4 Address** under Wi‑Fi / Ethernet.
-3. Create `apps/mobile/.env`:
-   ```
-   EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:8787
-   ```
-   Example: `EXPO_PUBLIC_API_URL=http://192.168.1.42:8787` — never `localhost` on a real phone.
-4. Restart Expo: `npx expo start --go -c` (from `apps/mobile` or via `npm run dev:mobile` after the env file exists).
-5. Same Wi‑Fi; allow Node through Windows Firewall if asked.
+1. Create `apps/mobile/.env` with `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY` (see `.env.example`).
+2. In Supabase (dev/test): Authentication → Providers → Email → **Confirm email OFF**.
+3. Restart Expo: `npx expo start --go -c` or `--dev-client` after an installable build.
+4. Sign up / sign in on the phone — cloud Auth + ledger; no `EXPO_PUBLIC_API_URL` needed.
 
-The sign-in screen shows the API URL it will call and labels **network** vs **sign-in** errors. Details: [`apps/mobile/README.md`](./apps/mobile/README.md) and [`apps/mobile/.env.example`](./apps/mobile/.env.example).
+**Fallback (local SQLite demo without Supabase):** keep `npm run dev:api` running, set `EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:8787` (never `localhost` on a real phone), same Wi‑Fi. Details: [`apps/mobile/README.md`](./apps/mobile/README.md).
 
 ### 4. Smoke accounts through AI assist
 
@@ -117,16 +112,16 @@ curl -X POST http://localhost:8787/jobs/due-reminders
 
 In production set `JOBS_SECRET` and send it as `X-Jobs-Secret` (or `Authorization: Bearer …`). Set `EXPO_ACCESS_TOKEN` to deliver live Expo pushes; without it, pushes are stubbed and the in-app center still fills.
 
-## Supabase (optional)
+## Supabase (preferred phone path)
 
-Local demo needs **no** Supabase. When you want cloud accounts + file storage:
+Local demo needs **no** Supabase. When you want cloud accounts + file storage on the phone:
 
 1. Create a project at [supabase.com](https://supabase.com)
 2. Run the SQL in [`supabase/README.md`](./supabase/README.md) (SQL Editor → paste → Run)
-3. Copy URL + anon key into `apps/api/.env` and `apps/mobile/.env` (see `.env.example` files)
-4. Service-role key stays on the **API only** (never the phone app)
+3. Copy URL + anon key into **`apps/mobile/.env` only** for signup/login/ledger (see `.env.example`)
+4. Optional: same URL/anon (+ service-role) on `apps/api/.env` for CI, server jobs, or AI — never put the service-role key in the phone app
 
-`AUTH_BACKEND=auto` uses Supabase Auth when URL+anon are set; `DATA_BACKEND=sqlite` stays the CI-safe default until you flip it after the schema is applied.
+With mobile Supabase env set, the phone talks to Auth/Postgres/Storage directly (LightLift-style). `AUTH_BACKEND=auto` on the API still uses Supabase when configured; `DATA_BACKEND=sqlite` stays the CI-safe default.
 
 ## Android install (EAS) — primary phone path
 

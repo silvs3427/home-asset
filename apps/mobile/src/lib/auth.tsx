@@ -20,6 +20,7 @@ import {
   type PublicProperty,
   type PublicUser,
 } from "./api";
+import { SUPABASE_CONFIGURED } from "./config";
 
 const TOKEN_KEY = "homeasset.accessToken";
 
@@ -75,6 +76,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
+        if (SUPABASE_CONFIGURED) {
+          // LightLift-style: restore from Supabase AsyncStorage session.
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { cloudGetSession } = require("./cloud") as typeof import("./cloud");
+          const session = await cloudGetSession();
+          if (!session?.access_token) return;
+          const me = await fetchMe(session.access_token);
+          if (cancelled) return;
+          await saveToken(session.access_token);
+          applyMe(session.access_token, me);
+          return;
+        }
+
         const stored = await SecureStore.getItemAsync(TOKEN_KEY);
         if (!stored) return;
         const me = await fetchMe(stored);
@@ -113,7 +127,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (email: string, password: string, startingFace: AppFace = "homeowner") => {
+    async (
+      email: string,
+      password: string,
+      startingFace: AppFace = "homeowner",
+    ) => {
       const res = await apiSignup({ email, password, startingFace });
       await applySession(res.accessToken, res.user);
     },
@@ -121,6 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    if (SUPABASE_CONFIGURED) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { cloudSignOut } = require("./cloud") as typeof import("./cloud");
+        await cloudSignOut();
+      } catch {
+        // Still clear local state if cloud sign-out fails.
+      }
+    }
     await saveToken(null);
     setAccessToken(null);
     setUser(null);
