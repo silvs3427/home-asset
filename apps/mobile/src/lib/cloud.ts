@@ -191,12 +191,31 @@ function reminderFromRow(
   };
 }
 
+/** PostgREST / Auth errors are often plain `{ message }` objects, not Error. */
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (typeof err === "string" && err.trim()) return err.trim();
+  if (err && typeof err === "object" && "message" in err) {
+    const raw = (err as { message?: unknown }).message;
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+  }
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  return fallback;
+}
+
 function mapCloudError(err: unknown, fallback: string): never {
-  const message =
-    err instanceof Error && err.message.trim()
-      ? err.message
-      : fallback;
+  const message = extractErrorMessage(err, fallback);
   const lower = message.toLowerCase();
+  if (
+    lower.includes("schema cache") ||
+    lower.includes("could not find the table") ||
+    (lower.includes("relation") && lower.includes("does not exist")) ||
+    (lower.includes("profiles") && lower.includes("does not exist"))
+  ) {
+    throw new ApiError(
+      "HomeAsset tables are missing in this Supabase project. In the SQL Editor, run supabase/migrations/20261118000000_init_schema.sql, then 20261120120000_profile_bootstrap.sql.",
+      "server",
+    );
+  }
   if (
     lower.includes("invalid login") ||
     lower.includes("invalid credentials") ||
@@ -240,7 +259,9 @@ async function requireSession(): Promise<Session> {
   return data.session;
 }
 
-async function fetchProfile(userId: string): Promise<ProfileRow | null> {
+async function queryProfile(
+  userId: string,
+): Promise<{ row: ProfileRow | null; error: unknown | null }> {
   const supabase = requireSupabaseClient();
   const { data, error } = await supabase
     .from("profiles")
@@ -249,23 +270,109 @@ async function fetchProfile(userId: string): Promise<ProfileRow | null> {
     )
     .eq("id", userId)
     .maybeSingle();
-  if (error) mapCloudError(error, "Could not load profile.");
-  return (data as ProfileRow | null) ?? null;
+  if (error) return { row: null, error };
+  return { row: (data as ProfileRow | null) ?? null, error: null };
 }
 
-async function waitForProfile(
+async function fetchProfile(userId: string): Promise<ProfileRow | null> {
+  const { row, error } = await queryProfile(userId);
+  if (error) mapCloudError(error, "Could not load profile.");
+  return row;
+}
+
+/**
+ * After Auth signup/sign-in, wait briefly for the SQL trigger, then ensure a
+ * profiles row via RPC (or direct upsert). Matches the API ensureProfile path
+ * so the phone does not depend on a laptop service-role key.
+ */
+async function ensureProfile(
   userId: string,
-  attempts = 8,
+  email: string,
+  startingFace: AppFace,
 ): Promise<ProfileRow> {
-  for (let i = 0; i < attempts; i++) {
-    const row = await fetchProfile(userId);
+  let lastSelectError: unknown | null = null;
+  for (let i = 0; i < 6; i++) {
+    const { row, error } = await queryProfile(userId);
     if (row) return row;
-    await new Promise((r) => setTimeout(r, 200));
+    if (error) {
+      lastSelectError = error;
+      const msg = extractErrorMessage(error, "").toLowerCase();
+      if (
+        msg.includes("schema cache") ||
+        msg.includes("could not find the table") ||
+        (msg.includes("relation") && msg.includes("does not exist"))
+      ) {
+        mapCloudError(error, "Could not load profile.");
+      }
+    }
+    await new Promise((r) => setTimeout(r, 150));
   }
-  throw new ApiError(
-    "Profile was not created after signup. Confirm the SQL migration ran (profiles trigger) in Supabase.",
-    "server",
+
+  const supabase = requireSupabaseClient();
+  const normalizedEmail = email.trim().toLowerCase();
+  const faces: AppFace[] = [startingFace];
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    "ensure_own_profile",
+    {
+      p_email: normalizedEmail,
+      p_starting_face: startingFace,
+    },
   );
+  if (!rpcError && rpcData) {
+    const row = (
+      Array.isArray(rpcData) ? rpcData[0] : rpcData
+    ) as ProfileRow | null;
+    if (row?.id) return row;
+  }
+
+  const { error: upsertError } = await supabase.from("profiles").upsert(
+    {
+      id: userId,
+      email: normalizedEmail,
+      faces_json: faces,
+      active_face: startingFace,
+      active_property_id: null,
+    },
+    { onConflict: "id" },
+  );
+  if (upsertError) {
+    if (lastSelectError) {
+      // Prefer the original load failure when bootstrap also cannot run.
+      mapCloudError(lastSelectError, "Could not load profile.");
+    }
+    const hint =
+      rpcError != null
+        ? ` (${extractErrorMessage(rpcError, "ensure_own_profile unavailable")}; ${extractErrorMessage(upsertError, "upsert failed")})`
+        : ` (${extractErrorMessage(upsertError, "upsert failed")})`;
+    throw new ApiError(
+      `Could not create profile after signup.${hint} In Supabase SQL Editor, run supabase/migrations/20261120120000_profile_bootstrap.sql (and the init schema if tables are missing).`,
+      "server",
+    );
+  }
+
+  await supabase.from("notification_preferences").upsert(
+    { user_id: userId },
+    { onConflict: "user_id" },
+  );
+
+  const created = await fetchProfile(userId);
+  if (!created) {
+    throw new ApiError(
+      "Profile was not created after signup. Confirm the SQL migrations ran in Supabase (init schema + profile bootstrap).",
+      "server",
+    );
+  }
+  return created;
+}
+
+function startingFaceFromSession(
+  session: Session,
+  fallback: AppFace = "homeowner",
+): AppFace {
+  const meta = session.user.user_metadata?.starting_face;
+  if (meta === "homeowner" || meta === "contractor") return meta;
+  return fallback;
 }
 
 async function listOwnedProperties(
@@ -281,10 +388,15 @@ async function listOwnedProperties(
   return ((data as PropertyRow[]) ?? []).map(propertyFromRow);
 }
 
-async function meFromUserId(userId: string): Promise<MeResponse> {
-  const profile = await waitForProfile(userId);
+async function meFromSession(
+  session: Session,
+  startingFace?: AppFace,
+): Promise<MeResponse> {
+  const email = session.user.email ?? "";
+  const face = startingFace ?? startingFaceFromSession(session);
+  const profile = await ensureProfile(session.user.id, email, face);
   const user = profileToUser(profile);
-  const properties = await listOwnedProperties(userId);
+  const properties = await listOwnedProperties(session.user.id);
   const activeProperty =
     properties.find((p) => p.id === user.activePropertyId) ?? null;
   return {
@@ -352,7 +464,12 @@ export async function cloudSignup(input: {
         401,
       );
     }
-    const me = await meFromUserId(data.user.id);
+    // Persist session before profile RLS reads (avoid race after signUp).
+    await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+    const me = await meFromSession(data.session, startingFace);
     return authResponse(data.session, me.user);
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -373,7 +490,11 @@ export async function cloudLogin(input: {
     if (error || !data.session || !data.user) {
       mapCloudError(error ?? new Error("invalid credentials"), "Sign-in failed.");
     }
-    const me = await meFromUserId(data.user!.id);
+    await supabase.auth.setSession({
+      access_token: data.session!.access_token,
+      refresh_token: data.session!.refresh_token,
+    });
+    const me = await meFromSession(data.session!);
     return authResponse(data.session!, me.user);
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -384,7 +505,7 @@ export async function cloudLogin(input: {
 export async function cloudFetchMe(_accessToken?: string): Promise<MeResponse> {
   try {
     const session = await requireSession();
-    return await meFromUserId(session.user.id);
+    return await meFromSession(session);
   } catch (err) {
     if (err instanceof ApiError) throw err;
     mapCloudError(err, "Could not load account.");
@@ -398,7 +519,11 @@ export async function cloudSwitchFace(
 ): Promise<AuthResponse> {
   try {
     const session = await requireSession();
-    const profile = await waitForProfile(session.user.id);
+    const profile = await ensureProfile(
+      session.user.id,
+      session.user.email ?? "",
+      startingFaceFromSession(session),
+    );
     let faces = facesFrom(profile.faces_json);
     if (!faces.includes(face)) {
       if (!enableIfMissing) {
@@ -416,7 +541,7 @@ export async function cloudSwitchFace(
       .update({ faces_json: faces, active_face: face })
       .eq("id", session.user.id);
     if (error) mapCloudError(error, "Could not switch face.");
-    const me = await meFromUserId(session.user.id);
+    const me = await meFromSession(session);
     return authResponse(session, me.user);
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -450,14 +575,18 @@ export async function cloudCreateProperty(
       .single();
     if (error) mapCloudError(error, "Could not add home.");
     const property = propertyFromRow(data as PropertyRow);
-    const profile = await waitForProfile(session.user.id);
+    const profile = await ensureProfile(
+      session.user.id,
+      session.user.email ?? "",
+      startingFaceFromSession(session),
+    );
     if (!profile.active_property_id) {
       await supabase
         .from("profiles")
         .update({ active_property_id: property.id })
         .eq("id", session.user.id);
     }
-    const me = await meFromUserId(session.user.id);
+    const me = await meFromSession(session);
     return { property, user: me.user };
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -487,7 +616,7 @@ export async function cloudSelectProperty(
       .update({ active_property_id: propertyId })
       .eq("id", session.user.id);
     if (updateError) mapCloudError(updateError, "Could not switch homes.");
-    const me = await meFromUserId(session.user.id);
+    const me = await meFromSession(session);
     return { property: propertyFromRow(data as PropertyRow), user: me.user };
   } catch (err) {
     if (err instanceof ApiError) throw err;
