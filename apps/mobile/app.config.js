@@ -7,6 +7,10 @@
  * extra.eas.projectId into app.json — keep it. Do not invent a UUID.
  *
  * EAS Update: updates.url is https://u.expo.dev/<projectId> when projectId is set.
+ *
+ * Never default EXPO_PUBLIC_API_URL / apiBaseUrl to localhost here — that gets
+ * baked into preview APKs and makes phones try the laptop. Local Metro can
+ * fall back to localhost only in config.ts when __DEV__ and not standalone.
  */
 const appJson = require("./app.json");
 
@@ -17,8 +21,8 @@ module.exports = () => {
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     "";
-  const apiBaseUrl =
-    process.env.EXPO_PUBLIC_API_URL || "http://localhost:8787";
+  // Explicit only — never invent localhost for EAS preview/production.
+  const apiBaseUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim();
 
   if (supabaseUrl) {
     process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
@@ -48,7 +52,8 @@ module.exports = () => {
     updates,
     extra: {
       ...existingExtra,
-      apiBaseUrl,
+      // Omit empty apiBaseUrl so standalone builds do not inherit localhost.
+      ...(apiBaseUrl ? { apiBaseUrl } : {}),
       supabaseUrl,
       supabaseAnonKey,
       eas: {

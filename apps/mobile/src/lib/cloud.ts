@@ -1739,3 +1739,67 @@ export async function cloudRunRecallCheck(
     mapCloudError(err, "Could not check recalls.");
   }
 }
+
+/**
+ * Upload a plain-text / binary document from in-memory bytes (AI confirm path).
+ * Source defaults to ai_fetched — homeowner already confirmed in the UI.
+ */
+export async function cloudCreateDocumentFromBytes(
+  propertyId: string,
+  input: {
+    title: string;
+    docType: DocumentType;
+    documentDate?: string | null;
+    assetId?: string | null;
+    source?: "user" | "ai_fetched" | "contractor";
+    mimeType: string;
+    originalFilename: string;
+    bytes: Uint8Array;
+  },
+): Promise<{ document: PublicDocument }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const documentId = crypto.randomUUID();
+    const safeName =
+      input.originalFilename.replace(/[^\w.\-()+ ]+/g, "_") || "file.txt";
+    const storageKey = `${propertyId}/${documentId}/${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("documents")
+      .upload(storageKey, input.bytes, {
+        contentType: input.mimeType || "text/plain",
+        upsert: false,
+      });
+    if (uploadError) mapCloudError(uploadError, "Could not upload file.");
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("documents")
+      .insert({
+        id: documentId,
+        property_id: propertyId,
+        asset_id: input.assetId || null,
+        title: input.title.trim(),
+        doc_type: input.docType,
+        document_date: input.documentDate?.trim() || null,
+        source: input.source ?? "ai_fetched",
+        mime_type: input.mimeType || "text/plain",
+        original_filename: safeName,
+        storage_key: storageKey,
+        byte_size: input.bytes.byteLength,
+        created_at: now,
+        updated_at: now,
+      })
+      .select("*")
+      .single();
+    if (error) {
+      await supabase.storage.from("documents").remove([storageKey]);
+      mapCloudError(error, "Could not save document.");
+    }
+    return { document: documentFromRow(data as DocumentRow) };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not save document.");
+  }
+}
