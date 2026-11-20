@@ -97,6 +97,17 @@ export const config = {
     process.env.AI_FORCE_MOCK === "true",
 
   /**
+   * Recall catalog source for EPIC 7.
+   * `fixture` (default, CI-safe) or `live` (SaferProducts.gov with fixture fallback).
+   */
+  recallSource: ((): "fixture" | "live" => {
+    const raw = process.env.RECALL_SOURCE?.trim().toLowerCase();
+    return raw === "live" ? "live" : "fixture";
+  })(),
+  /** Timeout for live SaferProducts fetch before falling back to fixtures. */
+  recallLiveTimeoutMs: Number(process.env.RECALL_LIVE_TIMEOUT_MS ?? 8000),
+
+  /**
    * Supabase project URL (Dashboard → Project Settings → API).
    * Leave empty for local SQLite demo / CI.
    */

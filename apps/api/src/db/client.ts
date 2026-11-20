@@ -177,6 +177,53 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_user_dedupe
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_created
   ON notifications(user_id, created_at DESC);
+
+-- EPIC 7: free public recall catalog + per-asset alerts (ack/dismiss history).
+CREATE TABLE IF NOT EXISTS recall_notices (
+  id TEXT PRIMARY KEY NOT NULL,
+  external_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  hazard TEXT,
+  manufacturer TEXT NOT NULL,
+  model TEXT NOT NULL,
+  serial_pattern TEXT,
+  product_type TEXT,
+  recall_date TEXT,
+  source_url TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_recall_notices_source_external
+  ON recall_notices(source, external_id);
+
+CREATE INDEX IF NOT EXISTS idx_recall_notices_keys
+  ON recall_notices(manufacturer, model);
+
+CREATE TABLE IF NOT EXISTS asset_recall_alerts (
+  id TEXT PRIMARY KEY NOT NULL,
+  property_id TEXT NOT NULL,
+  asset_id TEXT NOT NULL,
+  recall_notice_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  matched_on TEXT NOT NULL,
+  notified_at TEXT,
+  acknowledged_at TEXT,
+  dismissed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
+  FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+  FOREIGN KEY (recall_notice_id) REFERENCES recall_notices(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_recall_alerts_unique
+  ON asset_recall_alerts(asset_id, recall_notice_id);
+
+CREATE INDEX IF NOT EXISTS idx_asset_recall_alerts_property
+  ON asset_recall_alerts(property_id, status);
 `;
 
 type ColumnInfo = { name: string };

@@ -1597,3 +1597,259 @@ describe("HomeAsset API — email + permit intake (D18)", () => {
     assert.equal(bobSuggest.status, 404);
   });
 });
+
+describe("HomeAsset API — recalls (EPIC 7)", () => {
+  it("rejects recall routes without a token", async () => {
+    const app = createApp();
+    const fakeId = "00000000-0000-4000-8000-000000000001";
+    assert.equal(
+      (await app.request(`/properties/${fakeId}/recalls`)).status,
+      401,
+    );
+    assert.equal(
+      (
+        await app.request("/me/notifications/run-recall-check", {
+          method: "POST",
+        })
+      ).status,
+      401,
+    );
+  });
+
+  it("matches fixture recalls, notifies, and supports ack/dismiss history", async () => {
+    const app = createApp();
+    const auth = await signup(app, "recalls@example.com");
+    const home = await createHome(app, auth.accessToken, "Recall Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const assetRes = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "Portable generator",
+        category: "generator",
+        manufacturer: "Generac",
+        model: "GP6500",
+        serial: "G-1001",
+      }),
+    });
+    assert.equal(assetRes.status, 201);
+    const asset = ((await assetRes.json()) as AssetBody).asset;
+
+    const kidsRes = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "High chair",
+        category: "kids_gear",
+        manufacturer: "Evenflo",
+        model: "Big Kid High Chair",
+      }),
+    });
+    assert.equal(kidsRes.status, 201);
+
+    const check = await app.request("/me/notifications/run-recall-check", {
+      method: "POST",
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(check.status, 200);
+    const checkBody = (await check.json()) as {
+      result: {
+        mode: string;
+        matchesFound: number;
+        alertsCreated: number;
+        notificationsCreated: number;
+      };
+      unreadCount: number;
+    };
+    assert.equal(checkBody.result.mode, "fixture");
+    assert.ok(checkBody.result.matchesFound >= 2);
+    assert.ok(checkBody.result.alertsCreated >= 2);
+    assert.ok(checkBody.result.notificationsCreated >= 1);
+    assert.ok(checkBody.unreadCount >= 1);
+
+    const list = await app.request(
+      `/properties/${home.id}/recalls?status=open`,
+      { headers: { authorization: headers.authorization } },
+    );
+    assert.equal(list.status, 200);
+    const listBody = (await list.json()) as {
+      alerts: Array<{
+        id: string;
+        assetId: string;
+        status: string;
+        recall: { title: string; manufacturer: string };
+      }>;
+    };
+    assert.ok(listBody.alerts.length >= 2);
+
+    const assetAlerts = await app.request(
+      `/properties/${home.id}/recalls?assetId=${asset.id}&status=all`,
+      { headers: { authorization: headers.authorization } },
+    );
+    const assetBody = (await assetAlerts.json()) as {
+      alerts: Array<{ id: string; assetId: string; status: string }>;
+    };
+    assert.ok(assetBody.alerts.every((a) => a.assetId === asset.id));
+    assert.ok(assetBody.alerts.length >= 1);
+    const alertId = assetBody.alerts[0]!.id;
+
+    const notices = await app.request("/me/notifications", {
+      headers: { authorization: headers.authorization },
+    });
+    const noticeBody = (await notices.json()) as NotificationListBody;
+    assert.ok(
+      noticeBody.notifications.some((n) => n.kind === "recall_alert"),
+    );
+
+    // Idempotent second run.
+    const check2 = await app.request("/me/notifications/run-recall-check", {
+      method: "POST",
+      headers: { authorization: headers.authorization },
+    });
+    const check2Body = (await check2.json()) as {
+      result: { alertsCreated: number; alertsExisting: number };
+    };
+    assert.equal(check2Body.result.alertsCreated, 0);
+    assert.ok(check2Body.result.alertsExisting >= 2);
+
+    const ack = await app.request(
+      `/properties/${home.id}/recalls/${alertId}/acknowledge`,
+      { method: "POST", headers: { authorization: headers.authorization } },
+    );
+    assert.equal(ack.status, 200);
+    const ackBody = (await ack.json()) as {
+      alert: { status: string; acknowledgedAt: string | null };
+    };
+    assert.equal(ackBody.alert.status, "acknowledged");
+    assert.ok(ackBody.alert.acknowledgedAt);
+
+    const dismiss = await app.request(
+      `/properties/${home.id}/recalls/${alertId}/dismiss`,
+      { method: "POST", headers: { authorization: headers.authorization } },
+    );
+    assert.equal(dismiss.status, 200);
+    const dismissBody = (await dismiss.json()) as {
+      alert: { status: string; dismissedAt: string | null };
+    };
+    assert.equal(dismissBody.alert.status, "dismissed");
+    assert.ok(dismissBody.alert.dismissedAt);
+
+    const history = await app.request(
+      `/properties/${home.id}/recalls?assetId=${asset.id}&status=all`,
+      { headers: { authorization: headers.authorization } },
+    );
+    const historyBody = (await history.json()) as {
+      alerts: Array<{ id: string; status: string }>;
+    };
+    assert.ok(
+      historyBody.alerts.some(
+        (a) => a.id === alertId && a.status === "dismissed",
+      ),
+    );
+
+    const job = await app.request("/jobs/recalls", { method: "POST" });
+    assert.equal(job.status, 200);
+    const jobBody = (await job.json()) as {
+      ok: boolean;
+      job: string;
+      privacy: { marketing: boolean };
+    };
+    assert.equal(jobBody.ok, true);
+    assert.equal(jobBody.job, "recalls");
+    assert.equal(jobBody.privacy.marketing, false);
+
+    const propertyCheck = await app.request(
+      `/properties/${home.id}/recalls/run-check`,
+      { method: "POST", headers: { authorization: headers.authorization } },
+    );
+    assert.equal(propertyCheck.status, 200);
+  });
+
+  it("never leaks recall alerts across accounts and respects prefs", async () => {
+    const app = createApp();
+    const alice = await signup(app, "alice-recall@example.com");
+    const bob = await signup(app, "bob-recall@example.com");
+    const aliceHome = await createHome(app, alice.accessToken, "Alice R");
+    const aliceHeaders = {
+      "content-type": "application/json",
+      authorization: `Bearer ${alice.accessToken}`,
+    };
+
+    await app.request(`/properties/${aliceHome.id}/assets`, {
+      method: "POST",
+      headers: aliceHeaders,
+      body: JSON.stringify({
+        name: "Washer",
+        category: "appliance",
+        manufacturer: "Whirlpool",
+        model: "WFW72HEDW",
+      }),
+    });
+    await app.request("/me/notifications/run-recall-check", {
+      method: "POST",
+      headers: { authorization: aliceHeaders.authorization },
+    });
+
+    const aliceList = await app.request(
+      `/properties/${aliceHome.id}/recalls`,
+      { headers: { authorization: `Bearer ${alice.accessToken}` } },
+    );
+    const aliceBody = (await aliceList.json()) as {
+      alerts: Array<{ id: string }>;
+    };
+    assert.ok(aliceBody.alerts.length >= 1);
+    const alertId = aliceBody.alerts[0]!.id;
+
+    const bobList = await app.request(`/properties/${aliceHome.id}/recalls`, {
+      headers: { authorization: `Bearer ${bob.accessToken}` },
+    });
+    assert.equal(bobList.status, 404);
+
+    const bobAck = await app.request(
+      `/properties/${aliceHome.id}/recalls/${alertId}/acknowledge`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${bob.accessToken}` },
+      },
+    );
+    assert.equal(bobAck.status, 404);
+
+    // Prefs off → match may create alert row but skip notification.
+    const quiet = await signup(app, "quiet-recall@example.com");
+    const quietHome = await createHome(app, quiet.accessToken, "Quiet R");
+    const quietHeaders = {
+      "content-type": "application/json",
+      authorization: `Bearer ${quiet.accessToken}`,
+    };
+    await app.request("/me/notifications/preferences", {
+      method: "PATCH",
+      headers: quietHeaders,
+      body: JSON.stringify({ recallsEnabled: false }),
+    });
+    await app.request(`/properties/${quietHome.id}/assets`, {
+      method: "POST",
+      headers: quietHeaders,
+      body: JSON.stringify({
+        name: "Tire",
+        category: "vehicle",
+        manufacturer: "Firestone",
+        model: "Wilderness AT",
+      }),
+    });
+    const quietCheck = await app.request("/me/notifications/run-recall-check", {
+      method: "POST",
+      headers: { authorization: quietHeaders.authorization },
+    });
+    const quietBody = (await quietCheck.json()) as {
+      result: { alertsCreated: number; notificationsCreated: number };
+      unreadCount: number;
+    };
+    assert.ok(quietBody.result.alertsCreated >= 1);
+    assert.equal(quietBody.result.notificationsCreated, 0);
+    assert.equal(quietBody.unreadCount, 0);
+  });
+});

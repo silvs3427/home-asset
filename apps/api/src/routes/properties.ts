@@ -13,6 +13,7 @@ import { requireAuth, type AuthVariables } from "../middleware/requireAuth.js";
 import { aiRoutes } from "./ai.js";
 import { assetRoutes } from "./assets.js";
 import { documentRoutes } from "./documents.js";
+import { recallRoutes } from "./recalls.js";
 import { reminderRoutes } from "./reminders.js";
 
 const createSchema = z.object({
@@ -128,8 +129,9 @@ propertyRoutes.get("/:id/export", (c) => {
 });
 
 // Nested under property so the URL itself encodes the home boundary.
-// Auth already applied above; asset/document/reminder/AI handlers re-check ownership.
+// Auth already applied above; asset/document/reminder/recall/AI handlers re-check ownership.
 propertyRoutes.route("/:propertyId/assets", assetRoutes);
 propertyRoutes.route("/:propertyId/documents", documentRoutes);
 propertyRoutes.route("/:propertyId/reminders", reminderRoutes);
+propertyRoutes.route("/:propertyId/recalls", recallRoutes);
 propertyRoutes.route("/:propertyId/ai", aiRoutes);

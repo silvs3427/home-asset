@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { config } from "../config.js";
 import { runDueReminderCheck } from "../lib/notifications.js";
+import { runRecallMatchCheck } from "../lib/recalls.js";
 
 /**
  * Cron / scheduler entry points. Protected by JOBS_SECRET in production.
@@ -50,6 +51,24 @@ jobRoutes.post("/due-reminders", async (c) => {
     privacy: {
       marketing: false,
       note: "Creates reminder-due notifications only for homeowners who opted in.",
+    },
+  });
+});
+
+jobRoutes.post("/recalls", async (c) => {
+  const auth = authorizeJob(c);
+  if (!auth.ok) {
+    return c.json({ error: "unauthorized", message: auth.message }, auth.status);
+  }
+
+  const result = await runRecallMatchCheck();
+  return c.json({
+    ok: true,
+    job: "recalls",
+    result,
+    privacy: {
+      marketing: false,
+      note: "Matches free public safety/recall lists to owned assets; notifies opted-in homeowners only.",
     },
   });
 });

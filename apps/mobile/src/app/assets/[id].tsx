@@ -14,21 +14,27 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ASSET_CATEGORIES,
   DOCUMENT_TYPES,
+  acknowledgeRecallAlert,
   categoryLabel,
   completeReminder,
   deleteAsset,
   deleteDocument,
+  dismissRecallAlert,
   documentSourceLabel,
   documentTypeLabel,
   getAsset,
   listDocuments,
+  listRecallAlerts,
   listReminders,
+  recallAlertStatusLabel,
   recurrenceLabel,
+  runPropertyRecallCheck,
   updateAsset,
   uploadDocument,
   type AssetCategory,
   type DocumentType,
   type PublicAsset,
+  type PublicAssetRecallAlert,
   type PublicDocument,
   type PublicReminder,
 } from "@/lib/api";
@@ -52,6 +58,9 @@ export default function AssetDetailScreen() {
   const [asset, setAsset] = useState<PublicAsset | null>(null);
   const [documents, setDocuments] = useState<PublicDocument[]>([]);
   const [reminders, setReminders] = useState<PublicReminder[]>([]);
+  const [recallAlerts, setRecallAlerts] = useState<PublicAssetRecallAlert[]>(
+    [],
+  );
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -107,6 +116,15 @@ export default function AssetDetailScreen() {
     setReminders(res.reminders);
   }, [accessToken, activeProperty, id]);
 
+  const loadRecalls = useCallback(async () => {
+    if (!accessToken || !activeProperty || !id) return;
+    const res = await listRecallAlerts(accessToken, activeProperty.id, {
+      assetId: id,
+      status: "all",
+    });
+    setRecallAlerts(res.alerts);
+  }, [accessToken, activeProperty, id]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -120,7 +138,11 @@ export default function AssetDetailScreen() {
         const res = await getAsset(accessToken, activeProperty.id, id);
         if (!cancelled) {
           fillForm(res.asset);
-          await Promise.all([loadDocuments(), loadReminders()]);
+          await Promise.all([
+            loadDocuments(),
+            loadReminders(),
+            loadRecalls(),
+          ]);
         }
       } catch (err) {
         if (!cancelled) {
@@ -133,7 +155,15 @@ export default function AssetDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, activeProperty, id, fillForm, loadDocuments, loadReminders]);
+  }, [
+    accessToken,
+    activeProperty,
+    id,
+    fillForm,
+    loadDocuments,
+    loadReminders,
+    loadRecalls,
+  ]);
 
   if (!user) {
     return <Redirect href="/sign-in" />;
@@ -361,6 +391,130 @@ export default function AssetDetailScreen() {
             >
               <Text style={styles.secondaryLabel}>Ask how-to (AI)</Text>
             </Pressable>
+
+            <Text style={styles.sectionHeading}>Safety recalls</Text>
+            <Text style={styles.sectionCopy}>
+              Matched from free public safety lists using manufacturer, model,
+              and serial when available. Acknowledge or dismiss — history stays
+              on this asset.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => {
+                void (async () => {
+                  if (!accessToken || !activeProperty) return;
+                  setBusy(true);
+                  setError(null);
+                  try {
+                    await runPropertyRecallCheck(
+                      accessToken,
+                      activeProperty.id,
+                    );
+                    await loadRecalls();
+                  } catch (err) {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : "Could not check recalls.",
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
+              }}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Check recalls for this home</Text>
+            </Pressable>
+            {recallAlerts.length === 0 ? (
+              <Text style={styles.emptyDocs}>
+                No recall matches yet. Add manufacturer/model, then check.
+              </Text>
+            ) : (
+              <View style={styles.docList}>
+                {recallAlerts.map((alert) => (
+                  <View key={alert.id} style={styles.docRow}>
+                    <View style={styles.docRowText}>
+                      <Text style={styles.docName}>{alert.recall.title}</Text>
+                      <Text style={styles.docMeta}>
+                        {recallAlertStatusLabel(alert.status)}
+                        {alert.recall.hazard ? ` · ${alert.recall.hazard}` : ""}
+                        {alert.recall.recallDate
+                          ? ` · ${alert.recall.recallDate}`
+                          : ""}
+                      </Text>
+                      <Text style={styles.docMeta}>{alert.recall.summary}</Text>
+                    </View>
+                    {alert.status === "open" ? (
+                      <View style={styles.recallActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={busy}
+                          onPress={() => {
+                            void (async () => {
+                              if (!accessToken || !activeProperty) return;
+                              setBusy(true);
+                              setError(null);
+                              try {
+                                await acknowledgeRecallAlert(
+                                  accessToken,
+                                  activeProperty.id,
+                                  alert.id,
+                                );
+                                await loadRecalls();
+                              } catch (err) {
+                                setError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Could not acknowledge.",
+                                );
+                              } finally {
+                                setBusy(false);
+                              }
+                            })();
+                          }}
+                        >
+                          <Text style={styles.docAction}>Ack</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={busy}
+                          onPress={() => {
+                            void (async () => {
+                              if (!accessToken || !activeProperty) return;
+                              setBusy(true);
+                              setError(null);
+                              try {
+                                await dismissRecallAlert(
+                                  accessToken,
+                                  activeProperty.id,
+                                  alert.id,
+                                );
+                                await loadRecalls();
+                              } catch (err) {
+                                setError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "Could not dismiss.",
+                                );
+                              } finally {
+                                setBusy(false);
+                              }
+                            })();
+                          }}
+                        >
+                          <Text style={styles.docAction}>Dismiss</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            )}
 
             <Text style={styles.sectionHeading}>Reminders</Text>
             <Text style={styles.sectionCopy}>
@@ -899,6 +1053,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#2F5B4A",
+  },
+  recallActions: {
+    gap: 10,
+    alignItems: "flex-end",
   },
   docDanger: {
     fontSize: 13,
