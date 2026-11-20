@@ -2,7 +2,7 @@
 
 Phone-first home memory for homeowners (iPhone + Android), with a path for contractors to submit work into the homeowner’s ledger. **Homeowners own the record.** Privacy and approve-before-official are product requirements from day one.
 
-This repo includes **Supabase + installable EAS builds** (LightLift-style `app.json` / `app.config.js` / `eas.json`) on top of **EPIC 6** AI assist, notifications, reminders, documents, assets, and accounts. Local SQLite demo stays the CI default until you add Supabase secrets. Recalls and full contractor submit → homeowner approve come next.
+This repo includes **Supabase + installable EAS builds** (LightLift-style `app.json` / `app.config.js` / `eas.json`) on top of **EPIC 6** AI assist, **D18** email/permit intake (approve-before-official), notifications, reminders, documents, assets, and accounts. Local SQLite demo stays the CI default until you add Supabase secrets. Recalls and full contractor submit → homeowner approve come next.
 
 ## Stack
 
@@ -97,10 +97,12 @@ If Expo Go says the project is incompatible, you have the wrong SDK client — u
 2. On the homeowner face, tap **Add home**, enter name + address, save.
 3. Tap **Scan product (AI)** → hint `Generac GP6500` (or take a photo) → review suggested manuals → **Confirm & save**.
 4. Open the asset → **Ask how-to (AI)** → ask how to start it safely outdoors; check sources.
-5. From home, also try **View assets**, documents, reminders, and **Notifications** as before.
-6. Switch to **contractor face** → **Format notes (AI)** → paste job notes → confirm draft wording (nothing is written to a home ledger yet).
-7. Add a second home, switch, and confirm assets/docs stay empty there.
-8. Sign out / sign in again — session and data should still be there.
+5. Tap **Paste contractor email** → paste a sample contractor message → draft → **Approve & save** (nothing is official until approve).
+6. Tap **Suggest from permits** → review stub hints for the address → select → **Approve selected**.
+7. From home, also try **View assets**, documents, reminders, and **Notifications** as before.
+8. Switch to **contractor face** → **Format notes (AI)** → paste job notes → confirm draft wording (nothing is written to a home ledger yet).
+9. Add a second home, switch, and confirm assets/docs stay empty there.
+10. Sign out / sign in again — session and data should still be there.
 
 ### 5. Scheduler (optional)
 

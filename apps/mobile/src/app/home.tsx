@@ -166,6 +166,30 @@ export default function HomeShellScreen() {
                 >
                   <Text style={styles.secondaryLabel}>Ask how-to (AI)</Text>
                 </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/ai/email-intake")}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>
+                    Paste contractor email
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/ai/permit-suggestions")}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>
+                    Suggest from permits
+                  </Text>
+                </Pressable>
               </>
             ) : null}
 

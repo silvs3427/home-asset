@@ -60,7 +60,7 @@ export function createApp() {
       name: "HomeAsset API",
       docs: "See repository README for local run instructions.",
       privacy:
-        "Homeowner controls the ledger. Homes, assets, documents, reminders, notifications, and AI drafts are property- or account-scoped. AI never silently writes. Auth required for personal data. No marketing drip.",
+        "Homeowner controls the ledger. Homes, assets, documents, reminders, notifications, AI drafts, email intake, and permit suggestions are property- or account-scoped. AI / public hints never silently write. Auth required for personal data. No marketing drip.",
     }),
   );
 

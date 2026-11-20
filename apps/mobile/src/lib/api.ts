@@ -1250,3 +1250,139 @@ export async function aiContractorStatus(accessToken: string): Promise<{
   });
   return parseJson(res);
 }
+
+export type EmailIntakeDraft = {
+  draftId: string;
+  mode: "mock" | "live";
+  summary: string;
+  workPerformed: string;
+  contractorName: string | null;
+  workDate: string | null;
+  assetsSuggested: Array<{
+    name: string;
+    category: AssetCategory;
+    manufacturer: string | null;
+    model: string | null;
+    serial: string | null;
+    notes: string | null;
+  }>;
+  expiresAt: string;
+  privacy: {
+    writes: false;
+    confirmRequired: true;
+    note: string;
+  };
+};
+
+export type PermitSuggestDraft = {
+  draftId: string;
+  mode: "stub" | "live";
+  addressQuery: string;
+  sourceNote: string;
+  permits: Array<{
+    id: string;
+    title: string;
+    status: string;
+    filedOrClosedOn: string | null;
+    description: string;
+    sourceLabel: string;
+    sourceUrl: string | null;
+    suggestedAsset: {
+      name: string;
+      category: AssetCategory;
+      manufacturer: string | null;
+      model: string | null;
+      serial: string | null;
+      notes: string | null;
+    };
+    selectedByDefault: boolean;
+  }>;
+  expiresAt: string;
+  privacy: {
+    writes: false;
+    confirmRequired: true;
+    note: string;
+  };
+};
+
+export async function aiEmailIntake(
+  accessToken: string,
+  propertyId: string,
+  input: { emailText: string },
+): Promise<{ draft: EmailIntakeDraft; aiMode: "mock" | "live" }> {
+  requireHostedApiForAi();
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/ai/email-intake`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function aiConfirmEmailIntake(
+  accessToken: string,
+  propertyId: string,
+  input: {
+    draftId: string;
+    selectedAssetIndexes: number[];
+    storeSummaryDocument?: boolean;
+  },
+): Promise<{
+  assets: PublicAsset[];
+  summaryDocument: PublicDocument | null;
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  requireHostedApiForAi();
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/ai/confirm-email-intake`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function aiSuggestPermits(
+  accessToken: string,
+  propertyId: string,
+): Promise<{ draft: PermitSuggestDraft; sourceMode: "stub" | "live" }> {
+  requireHostedApiForAi();
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/ai/permits/suggest`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({}),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function aiConfirmPermits(
+  accessToken: string,
+  propertyId: string,
+  input: {
+    draftId: string;
+    selectedPermitIds: string[];
+  },
+): Promise<{
+  assets: PublicAsset[];
+  sourceMode: "stub" | "live";
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  requireHostedApiForAi();
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/ai/permits/confirm`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(res);
+}
