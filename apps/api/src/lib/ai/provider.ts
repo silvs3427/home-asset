@@ -5,6 +5,7 @@ import {
   type CatalogProduct,
 } from "./catalog.js";
 import type { SuggestedAssetDraft, SuggestedManualDraft } from "./drafts.js";
+import { ASSET_CATEGORIES, type AssetCategory } from "../types.js";
 
 export type AiMode = "mock" | "live";
 
@@ -38,6 +39,30 @@ export type ContractorFormatResult = {
     note: string;
   };
 };
+
+export type EmailIntakeFormatResult = {
+  mode: AiMode;
+  summary: string;
+  workPerformed: string;
+  contractorName: string | null;
+  workDate: string | null;
+  assetsSuggested: SuggestedAssetDraft[];
+  privacy: {
+    writes: false;
+    confirmRequired: true;
+    note: string;
+  };
+};
+
+function coerceCategory(value: unknown): AssetCategory {
+  if (
+    typeof value === "string" &&
+    (ASSET_CATEGORIES as string[]).includes(value)
+  ) {
+    return value as AssetCategory;
+  }
+  return "other";
+}
 
 export function resolveAiMode(): AiMode {
   if (config.aiForceMock) return "mock";
@@ -255,5 +280,182 @@ export async function formatContractorInput(input: {
       confirmRequired: true,
       note: "Draft only. Contractor must confirm before submit; homeowner must approve before official.",
     },
+  };
+}
+
+function extractLikelyDate(text: string): string | null {
+  const iso = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+  if (iso?.[1]) return iso[1];
+  const us = text.match(
+    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+20\d{2})\b/i,
+  );
+  if (us?.[1]) return us[1];
+  return null;
+}
+
+function extractContractorName(text: string): string | null {
+  const from = text.match(/^From:\s*(.+)$/im);
+  if (from?.[1]) {
+    const cleaned = from[1]
+      .replace(/<[^>]+>/g, "")
+      .replace(/["']/g, "")
+      .trim();
+    if (cleaned.length > 0 && cleaned.length <= 120) return cleaned;
+  }
+  const company = text.match(
+    /\b((?:[A-Z][A-Za-z0-9&.'-]+(?:\s+[A-Z][A-Za-z0-9&.'-]+){0,3})\s+(?:HVAC|Plumbing|Roofing|Electric|Electrical|Heating|Cooling|Services|LLC|Inc)\.?)\b/,
+  );
+  return company?.[1]?.trim() ?? null;
+}
+
+/**
+ * Turn a pasted / forwarded contractor email into a confirmable ledger draft.
+ * Never writes — homeowner must approve before assets or notes become official.
+ */
+export async function formatEmailIntake(input: {
+  emailText: string;
+}): Promise<EmailIntakeFormatResult> {
+  const mode = resolveAiMode();
+  const text = input.emailText.trim();
+  const privacy = {
+    writes: false as const,
+    confirmRequired: true as const,
+    note: "Draft only from the email you pasted. Nothing is official until you approve.",
+  };
+
+  if (mode === "live" && config.aiApiKey) {
+    try {
+      const res = await fetch(`${config.aiBaseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${config.aiApiKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: config.aiModel,
+          temperature: 0,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You turn a homeowner's forwarded contractor email into JSON only with keys: " +
+                "summary (short), workPerformed, contractorName (string|null), workDate (string|null), " +
+                "assetsSuggested (array of {name,category,manufacturer,model,notes}). " +
+                "category must be one of: hvac,roof,appliance,generator,water_heater,plumbing,electrical,kids_gear,vehicle,other. " +
+                "Do not invent serial numbers. Keep facts grounded in the email.",
+            },
+            { role: "user", content: text },
+          ],
+        }),
+      });
+      if (res.ok) {
+        const body = (await res.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        const content = body.choices?.[0]?.message?.content ?? "";
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]) as {
+            summary?: string;
+            workPerformed?: string;
+            contractorName?: string | null;
+            workDate?: string | null;
+            assetsSuggested?: Array<{
+              name?: string;
+              category?: string;
+              manufacturer?: string | null;
+              model?: string | null;
+              notes?: string | null;
+            }>;
+          };
+          const assetsSuggested: SuggestedAssetDraft[] = Array.isArray(
+            parsed.assetsSuggested,
+          )
+            ? parsed.assetsSuggested
+                .filter((a) => a && typeof a.name === "string" && a.name.trim())
+                .slice(0, 8)
+                .map((a) => ({
+                  name: String(a.name).trim().slice(0, 120),
+                  category: coerceCategory(a.category),
+                  manufacturer:
+                    a.manufacturer != null
+                      ? String(a.manufacturer).trim().slice(0, 120) || null
+                      : null,
+                  model:
+                    a.model != null
+                      ? String(a.model).trim().slice(0, 120) || null
+                      : null,
+                  serial: null,
+                  notes:
+                    a.notes != null
+                      ? String(a.notes).trim().slice(0, 2000) || null
+                      : "Drafted from emailed contractor notes. Approve before saving.",
+                }))
+            : [];
+          return {
+            mode: "live",
+            summary: String(parsed.summary ?? text.slice(0, 160)).slice(0, 400),
+            workPerformed: String(parsed.workPerformed ?? text).slice(0, 4000),
+            contractorName:
+              parsed.contractorName != null
+                ? String(parsed.contractorName).trim().slice(0, 120) || null
+                : null,
+            workDate:
+              parsed.workDate != null
+                ? String(parsed.workDate).trim().slice(0, 40) || null
+                : null,
+            assetsSuggested,
+            privacy,
+          };
+        }
+      }
+    } catch {
+      // fall through to mock
+    }
+  }
+
+  const product = matchCatalogProducts(text)[0]!;
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const subject = text.match(/^Subject:\s*(.+)$/im)?.[1]?.trim();
+  const contractorName = extractContractorName(text);
+  const workDate = extractLikelyDate(text);
+
+  return {
+    mode: "mock",
+    summary:
+      subject?.slice(0, 160) ||
+      lines.find((l) => !/^from:|^to:|^sent:|^date:|^subject:/i.test(l))?.slice(
+        0,
+        160,
+      ) ||
+      `Contractor work notes for ${product.name}`,
+    workPerformed:
+      lines
+        .filter((l) => !/^from:|^to:|^sent:|^date:|^subject:/i.test(l))
+        .join("\n")
+        .slice(0, 4000) || text.slice(0, 4000),
+    contractorName,
+    workDate,
+    assetsSuggested: [
+      {
+        name: product.name,
+        category: product.category,
+        manufacturer: product.manufacturer,
+        model: product.model,
+        serial: null,
+        notes: [
+          "Drafted from pasted contractor email (mock AI).",
+          contractorName ? `Contractor: ${contractorName}.` : null,
+          workDate ? `Date hint: ${workDate}.` : null,
+          "Approve before saving to your ledger.",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      },
+    ],
+    privacy,
   };
 }

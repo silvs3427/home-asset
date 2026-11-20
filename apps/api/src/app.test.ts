@@ -1378,3 +1378,222 @@ describe("HomeAsset API — AI assist (EPIC 6)", () => {
     assert.equal(bobHowto.status, 404);
   });
 });
+
+describe("HomeAsset API — email + permit intake (D18)", () => {
+  it("rejects email intake and permit suggest without a token", async () => {
+    const app = createApp();
+    const fakeId = "00000000-0000-4000-8000-000000000001";
+    assert.equal(
+      (
+        await app.request(`/properties/${fakeId}/ai/email-intake`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            emailText:
+              "From: Acme HVAC\nSubject: Install complete\nInstalled Carrier Infinity unit today.",
+          }),
+        })
+      ).status,
+      401,
+    );
+    assert.equal(
+      (
+        await app.request(`/properties/${fakeId}/ai/permits/suggest`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: "{}",
+        })
+      ).status,
+      401,
+    );
+  });
+
+  it("drafts email intake without writing, then confirms selected assets", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "email-intake@example.com");
+    const home = await createHome(app, auth.accessToken, "Email Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const before = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(
+      ((await before.json()) as { assets: unknown[] }).assets.length,
+      0,
+    );
+
+    const intake = await app.request(
+      `/properties/${home.id}/ai/email-intake`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          emailText: [
+            "From: Acme HVAC LLC <jobs@acme.example>",
+            "Subject: Carrier Infinity install complete — 2024-05-10",
+            "",
+            "Hi — we finished installing your Carrier Infinity outdoor unit and new filter.",
+            "Serial left on the unit sticker. Call us if the thermostat needs pairing.",
+          ].join("\n"),
+        }),
+      },
+    );
+    assert.equal(intake.status, 200);
+    const intakeBody = (await intake.json()) as {
+      draft: {
+        draftId: string;
+        privacy: { writes: boolean; confirmRequired: boolean };
+        summary: string;
+        assetsSuggested: Array<{ name: string; category: string }>;
+      };
+      aiMode: string;
+    };
+    assert.equal(intakeBody.aiMode, "mock");
+    assert.equal(intakeBody.draft.privacy.writes, false);
+    assert.equal(intakeBody.draft.privacy.confirmRequired, true);
+    assert.ok(intakeBody.draft.summary.length > 0);
+    assert.ok(intakeBody.draft.assetsSuggested.length >= 1);
+
+    const mid = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(
+      ((await mid.json()) as { assets: unknown[] }).assets.length,
+      0,
+    );
+
+    const confirm = await app.request(
+      `/properties/${home.id}/ai/confirm-email-intake`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          draftId: intakeBody.draft.draftId,
+          selectedAssetIndexes: [0],
+          storeSummaryDocument: true,
+        }),
+      },
+    );
+    assert.equal(confirm.status, 200);
+    const confirmBody = (await confirm.json()) as {
+      assets: Array<{ id: string; name: string; provenance: string }>;
+      summaryDocument: { source: string; docType: string } | null;
+      privacy: { confirmedByUser: boolean };
+    };
+    assert.equal(confirmBody.privacy.confirmedByUser, true);
+    assert.equal(confirmBody.assets.length, 1);
+    assert.equal(confirmBody.assets[0]?.provenance, "homeowner");
+    assert.equal(confirmBody.summaryDocument?.source, "ai_fetched");
+    assert.equal(confirmBody.summaryDocument?.docType, "install_paperwork");
+
+    const reuse = await app.request(
+      `/properties/${home.id}/ai/confirm-email-intake`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          draftId: intakeBody.draft.draftId,
+          selectedAssetIndexes: [0],
+        }),
+      },
+    );
+    assert.equal(reuse.status, 404);
+  });
+
+  it("suggests permits as drafts then confirms only selected ones", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "permit-intake@example.com");
+    const home = await createHome(app, auth.accessToken, "Oak Permit Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const suggest = await app.request(
+      `/properties/${home.id}/ai/permits/suggest`,
+      {
+        method: "POST",
+        headers,
+        body: "{}",
+      },
+    );
+    assert.equal(suggest.status, 200);
+    const suggestBody = (await suggest.json()) as {
+      sourceMode: string;
+      draft: {
+        draftId: string;
+        mode: string;
+        sourceNote: string;
+        privacy: { writes: boolean; confirmRequired: boolean };
+        permits: Array<{
+          id: string;
+          selectedByDefault: boolean;
+          suggestedAsset: { name: string };
+        }>;
+      };
+    };
+    assert.equal(suggestBody.sourceMode, "stub");
+    assert.equal(suggestBody.draft.mode, "stub");
+    assert.equal(suggestBody.draft.privacy.writes, false);
+    assert.equal(suggestBody.draft.privacy.confirmRequired, true);
+    assert.match(suggestBody.draft.sourceNote, /stub/i);
+    assert.ok(suggestBody.draft.permits.length >= 1);
+
+    const mid = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(
+      ((await mid.json()) as { assets: unknown[] }).assets.length,
+      0,
+    );
+
+    const firstId = suggestBody.draft.permits[0]!.id;
+    const confirm = await app.request(
+      `/properties/${home.id}/ai/permits/confirm`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          draftId: suggestBody.draft.draftId,
+          selectedPermitIds: [firstId],
+        }),
+      },
+    );
+    assert.equal(confirm.status, 200);
+    const confirmBody = (await confirm.json()) as {
+      assets: Array<{ id: string; name: string }>;
+      sourceMode: string;
+      privacy: { confirmedByUser: boolean };
+    };
+    assert.equal(confirmBody.sourceMode, "stub");
+    assert.equal(confirmBody.privacy.confirmedByUser, true);
+    assert.equal(confirmBody.assets.length, 1);
+
+    const after = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(
+      ((await after.json()) as { assets: unknown[] }).assets.length,
+      1,
+    );
+
+    const bob = await signup(app, "bob-permit@example.com");
+    const bobSuggest = await app.request(
+      `/properties/${home.id}/ai/permits/suggest`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${bob.accessToken}`,
+        },
+        body: "{}",
+      },
+    );
+    assert.equal(bobSuggest.status, 404);
+  });
+});

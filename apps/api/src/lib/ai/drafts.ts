@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AssetCategory } from "../types.js";
+import type { PublicPermitHint } from "./permits.js";
 
 export type SuggestedManualDraft = {
   id: string;
@@ -33,12 +34,50 @@ export type ScanDraftRecord = {
   expiresAt: string;
 };
 
+/** Email / forward paste → AI summary draft (D18). */
+export type EmailIntakeDraftRecord = {
+  id: string;
+  userId: string;
+  propertyId: string;
+  mode: "mock" | "live";
+  summary: string;
+  workPerformed: string;
+  contractorName: string | null;
+  workDate: string | null;
+  assetsSuggested: SuggestedAssetDraft[];
+  /** Full pasted email kept server-side until confirm (or discard/expiry). */
+  rawEmailText: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+/** Public permit hints → suggest assets/jobs draft (D18). */
+export type PermitSuggestDraftRecord = {
+  id: string;
+  userId: string;
+  propertyId: string;
+  mode: "stub" | "live";
+  addressQuery: string;
+  sourceNote: string;
+  permits: PublicPermitHint[];
+  createdAt: string;
+  expiresAt: string;
+};
+
 const drafts = new Map<string, ScanDraftRecord>();
+const emailDrafts = new Map<string, EmailIntakeDraftRecord>();
+const permitDrafts = new Map<string, PermitSuggestDraftRecord>();
 const TTL_MS = 30 * 60 * 1000;
 
 function pruneExpired(now = Date.now()): void {
   for (const [id, draft] of drafts) {
     if (Date.parse(draft.expiresAt) <= now) drafts.delete(id);
+  }
+  for (const [id, draft] of emailDrafts) {
+    if (Date.parse(draft.expiresAt) <= now) emailDrafts.delete(id);
+  }
+  for (const [id, draft] of permitDrafts) {
+    if (Date.parse(draft.expiresAt) <= now) permitDrafts.delete(id);
   }
 }
 
@@ -120,7 +159,159 @@ export function toPublicScanDraft(draft: ScanDraftRecord) {
   };
 }
 
+export function createEmailIntakeDraft(input: {
+  userId: string;
+  propertyId: string;
+  mode: "mock" | "live";
+  summary: string;
+  workPerformed: string;
+  contractorName: string | null;
+  workDate: string | null;
+  assetsSuggested: SuggestedAssetDraft[];
+  rawEmailText: string;
+}): EmailIntakeDraftRecord {
+  pruneExpired();
+  const now = Date.now();
+  const draft: EmailIntakeDraftRecord = {
+    id: randomUUID(),
+    userId: input.userId,
+    propertyId: input.propertyId,
+    mode: input.mode,
+    summary: input.summary,
+    workPerformed: input.workPerformed,
+    contractorName: input.contractorName,
+    workDate: input.workDate,
+    assetsSuggested: input.assetsSuggested,
+    rawEmailText: input.rawEmailText,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + TTL_MS).toISOString(),
+  };
+  emailDrafts.set(draft.id, draft);
+  return draft;
+}
+
+export function getEmailIntakeDraftForUser(
+  draftId: string,
+  userId: string,
+  propertyId: string,
+): EmailIntakeDraftRecord | undefined {
+  pruneExpired();
+  const draft = emailDrafts.get(draftId);
+  if (!draft) return undefined;
+  if (draft.userId !== userId || draft.propertyId !== propertyId) {
+    return undefined;
+  }
+  return draft;
+}
+
+export function consumeEmailIntakeDraft(
+  draftId: string,
+  userId: string,
+  propertyId: string,
+): EmailIntakeDraftRecord | undefined {
+  const draft = getEmailIntakeDraftForUser(draftId, userId, propertyId);
+  if (!draft) return undefined;
+  emailDrafts.delete(draftId);
+  return draft;
+}
+
+export function toPublicEmailIntakeDraft(draft: EmailIntakeDraftRecord) {
+  return {
+    draftId: draft.id,
+    mode: draft.mode,
+    summary: draft.summary,
+    workPerformed: draft.workPerformed,
+    contractorName: draft.contractorName,
+    workDate: draft.workDate,
+    assetsSuggested: draft.assetsSuggested,
+    expiresAt: draft.expiresAt,
+    privacy: {
+      writes: false as const,
+      confirmRequired: true as const,
+      note: "Draft only from the email you pasted. Nothing is official until you approve.",
+    },
+  };
+}
+
+export function createPermitSuggestDraft(input: {
+  userId: string;
+  propertyId: string;
+  mode: "stub" | "live";
+  addressQuery: string;
+  sourceNote: string;
+  permits: PublicPermitHint[];
+}): PermitSuggestDraftRecord {
+  pruneExpired();
+  const now = Date.now();
+  const draft: PermitSuggestDraftRecord = {
+    id: randomUUID(),
+    userId: input.userId,
+    propertyId: input.propertyId,
+    mode: input.mode,
+    addressQuery: input.addressQuery,
+    sourceNote: input.sourceNote,
+    permits: input.permits,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + TTL_MS).toISOString(),
+  };
+  permitDrafts.set(draft.id, draft);
+  return draft;
+}
+
+export function getPermitSuggestDraftForUser(
+  draftId: string,
+  userId: string,
+  propertyId: string,
+): PermitSuggestDraftRecord | undefined {
+  pruneExpired();
+  const draft = permitDrafts.get(draftId);
+  if (!draft) return undefined;
+  if (draft.userId !== userId || draft.propertyId !== propertyId) {
+    return undefined;
+  }
+  return draft;
+}
+
+export function consumePermitSuggestDraft(
+  draftId: string,
+  userId: string,
+  propertyId: string,
+): PermitSuggestDraftRecord | undefined {
+  const draft = getPermitSuggestDraftForUser(draftId, userId, propertyId);
+  if (!draft) return undefined;
+  permitDrafts.delete(draftId);
+  return draft;
+}
+
+export function toPublicPermitSuggestDraft(draft: PermitSuggestDraftRecord) {
+  return {
+    draftId: draft.id,
+    mode: draft.mode,
+    addressQuery: draft.addressQuery,
+    sourceNote: draft.sourceNote,
+    permits: draft.permits.map((p) => ({
+      id: p.id,
+      title: p.title,
+      status: p.status,
+      filedOrClosedOn: p.filedOrClosedOn,
+      description: p.description,
+      sourceLabel: p.sourceLabel,
+      sourceUrl: p.sourceUrl,
+      suggestedAsset: p.suggestedAsset,
+      selectedByDefault: p.status === "final" || p.status === "closed",
+    })),
+    expiresAt: draft.expiresAt,
+    privacy: {
+      writes: false as const,
+      confirmRequired: true as const,
+      note: "Permit hints are suggestions only. You choose what to add — nothing silent.",
+    },
+  };
+}
+
 /** Test helper. */
 export function __resetAiDraftsForTests(): void {
   drafts.clear();
+  emailDrafts.clear();
+  permitDrafts.clear();
 }

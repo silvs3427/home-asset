@@ -4,17 +4,27 @@ import { createAsset, getAssetForProperty, updateAsset } from "../lib/assets.js"
 import { createDocument } from "../lib/documents.js";
 import { answerHowTo } from "../lib/ai/howto.js";
 import {
+  consumeEmailIntakeDraft,
+  consumePermitSuggestDraft,
   consumeScanDraft,
+  createEmailIntakeDraft,
+  createPermitSuggestDraft,
   createScanDraft,
+  toPublicEmailIntakeDraft,
+  toPublicPermitSuggestDraft,
   toPublicScanDraft,
 } from "../lib/ai/drafts.js";
+import { suggestPermitsForAddress } from "../lib/ai/permits.js";
 import {
   formatContractorInput,
+  formatEmailIntake,
   identifyProduct,
   resolveAiMode,
 } from "../lib/ai/provider.js";
+import { getPropertyForUser } from "../lib/properties.js";
 import {
   ASSET_CATEGORIES,
+  formatPropertyAddress,
   toPublicAsset,
   toPublicDocument,
 } from "../lib/types.js";
@@ -295,6 +305,340 @@ aiRoutes.post("/howto", async (c) => {
       assetId: parsed.data.assetId,
     });
     return c.json(result);
+  } catch (err) {
+    return mapAiError(err, c);
+  }
+});
+
+const emailIntakeSchema = z.object({
+  emailText: z.string().trim().min(20).max(20000),
+});
+
+/**
+ * POST /properties/:propertyId/ai/email-intake
+ * Paste / forward content → AI draft summary. No ledger writes.
+ */
+aiRoutes.post("/email-intake", async (c) => {
+  const claims = c.get("claims");
+  const propertyId = c.req.param("propertyId");
+  if (!propertyId) {
+    return c.json({ error: "not_found", message: "Home not found." }, 404);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = emailIntakeSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "invalid_input",
+        message:
+          "Paste the contractor email (or forward text). It must be at least a short paragraph.",
+      },
+      400,
+    );
+  }
+
+  try {
+    assertPropertyOwnedByUser(propertyId, claims.sub);
+    const formatted = await formatEmailIntake({
+      emailText: parsed.data.emailText,
+    });
+    const draft = createEmailIntakeDraft({
+      userId: claims.sub,
+      propertyId,
+      mode: formatted.mode,
+      summary: formatted.summary,
+      workPerformed: formatted.workPerformed,
+      contractorName: formatted.contractorName,
+      workDate: formatted.workDate,
+      assetsSuggested: formatted.assetsSuggested,
+      rawEmailText: parsed.data.emailText,
+    });
+    return c.json({
+      draft: toPublicEmailIntakeDraft(draft),
+      aiMode: resolveAiMode(),
+    });
+  } catch (err) {
+    return mapAiError(err, c);
+  }
+});
+
+const confirmEmailSchema = z.object({
+  draftId: z.string().uuid(),
+  /** Indices into draft.assetsSuggested the homeowner wants to keep. */
+  selectedAssetIndexes: z.array(z.number().int().min(0).max(20)).max(20),
+  /** Store a home-level note with the AI summary (default true). */
+  storeSummaryDocument: z.boolean().optional().default(true),
+  assetOverrides: z
+    .array(
+      z.object({
+        index: z.number().int().min(0).max(20),
+        name: z.string().trim().min(1).max(120).optional(),
+        category: z.enum(ASSET_CATEGORIES as [string, ...string[]]).optional(),
+        manufacturer: z.string().trim().max(120).optional().nullable(),
+        model: z.string().trim().max(120).optional().nullable(),
+        notes: z.string().trim().max(2000).optional().nullable(),
+      }),
+    )
+    .max(20)
+    .optional(),
+});
+
+/**
+ * POST /properties/:propertyId/ai/confirm-email-intake
+ * Explicit homeowner approval — only place email intake writes the ledger.
+ */
+aiRoutes.post("/confirm-email-intake", async (c) => {
+  const claims = c.get("claims");
+  const propertyId = c.req.param("propertyId");
+  if (!propertyId) {
+    return c.json({ error: "not_found", message: "Home not found." }, 404);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = confirmEmailSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "invalid_input",
+        message:
+          "Approve with draftId and the suggested assets you want to keep. Nothing is saved without this step.",
+      },
+      400,
+    );
+  }
+
+  try {
+    const draft = consumeEmailIntakeDraft(
+      parsed.data.draftId,
+      claims.sub,
+      propertyId,
+    );
+    if (!draft) throw new Error("DRAFT_NOT_FOUND");
+
+    const overrideByIndex = new Map(
+      (parsed.data.assetOverrides ?? []).map((row) => [row.index, row]),
+    );
+    const selected = [...new Set(parsed.data.selectedAssetIndexes)].sort(
+      (a, b) => a - b,
+    );
+    const assets = [];
+    for (const index of selected) {
+      const base = draft.assetsSuggested[index];
+      if (!base) continue;
+      const overrides = overrideByIndex.get(index);
+      assets.push(
+        createAsset(propertyId, claims.sub, {
+          name: overrides?.name ?? base.name,
+          category:
+            (overrides?.category as (typeof ASSET_CATEGORIES)[number]) ??
+            base.category,
+          manufacturer:
+            overrides?.manufacturer !== undefined
+              ? overrides.manufacturer
+              : base.manufacturer,
+          model:
+            overrides?.model !== undefined ? overrides.model : base.model,
+          serial: base.serial,
+          installerVendor: draft.contractorName,
+          installDate:
+            draft.workDate && /^\d{4}-\d{2}-\d{2}$/.test(draft.workDate)
+              ? draft.workDate
+              : null,
+          notes:
+            overrides?.notes !== undefined ? overrides.notes : base.notes,
+          provenance: "homeowner",
+        }),
+      );
+    }
+
+    let summaryDocument = null;
+    if (parsed.data.storeSummaryDocument) {
+      const bodyText = [
+        "HomeAsset email intake summary",
+        "",
+        `Summary: ${draft.summary}`,
+        "",
+        "Work performed:",
+        draft.workPerformed,
+        "",
+        draft.contractorName
+          ? `Contractor: ${draft.contractorName}`
+          : "Contractor: (not detected)",
+        draft.workDate ? `Date hint: ${draft.workDate}` : null,
+        "",
+        "---",
+        "Original pasted email (homeowner-provided):",
+        draft.rawEmailText,
+      ]
+        .filter((line) => line != null)
+        .join("\n");
+      const docDate =
+        draft.workDate && /^\d{4}-\d{2}-\d{2}$/.test(draft.workDate)
+          ? draft.workDate
+          : null;
+      summaryDocument = await createDocument(propertyId, claims.sub, {
+        title: `Email intake: ${draft.summary.slice(0, 80)}`,
+        docType: "install_paperwork",
+        documentDate: docDate,
+        source: "ai_fetched",
+        assetId: assets[0]?.id ?? null,
+        mimeType: "text/plain",
+        originalFilename: "email-intake-summary.txt",
+        bytes: Buffer.from(bodyText, "utf8"),
+      });
+    }
+
+    return c.json({
+      assets: assets.map(toPublicAsset),
+      summaryDocument: summaryDocument
+        ? toPublicDocument(summaryDocument)
+        : null,
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Saved only because you approved. Pasted emails never auto-add to your ledger.",
+      },
+    });
+  } catch (err) {
+    return mapAiError(err, c);
+  }
+});
+
+/**
+ * POST /properties/:propertyId/ai/permits/suggest
+ * Public permit-style hints for this home → suggestions only.
+ */
+aiRoutes.post("/permits/suggest", async (c) => {
+  const claims = c.get("claims");
+  const propertyId = c.req.param("propertyId");
+  if (!propertyId) {
+    return c.json({ error: "not_found", message: "Home not found." }, 404);
+  }
+
+  try {
+    const property = getPropertyForUser(propertyId, claims.sub);
+    if (!property) throw new Error("PROPERTY_NOT_FOUND");
+
+    const suggested = await suggestPermitsForAddress({
+      addressLine1: property.addressLine1,
+      addressLine2: property.addressLine2,
+      city: property.city,
+      region: property.region,
+      postalCode: property.postalCode,
+      country: property.country,
+    });
+
+    const draft = createPermitSuggestDraft({
+      userId: claims.sub,
+      propertyId,
+      mode: suggested.mode,
+      addressQuery: suggested.addressQuery || formatPropertyAddress(property),
+      sourceNote: suggested.sourceNote,
+      permits: suggested.permits,
+    });
+
+    return c.json({
+      draft: toPublicPermitSuggestDraft(draft),
+      sourceMode: suggested.mode,
+    });
+  } catch (err) {
+    return mapAiError(err, c);
+  }
+});
+
+const confirmPermitsSchema = z.object({
+  draftId: z.string().uuid(),
+  /** Permit hint ids the homeowner wants to turn into assets. */
+  selectedPermitIds: z.array(z.string().min(1).max(80)).max(20),
+  assetOverrides: z
+    .array(
+      z.object({
+        permitId: z.string().min(1).max(80),
+        name: z.string().trim().min(1).max(120).optional(),
+        category: z.enum(ASSET_CATEGORIES as [string, ...string[]]).optional(),
+        notes: z.string().trim().max(2000).optional().nullable(),
+      }),
+    )
+    .max(20)
+    .optional(),
+});
+
+/**
+ * POST /properties/:propertyId/ai/permits/confirm
+ * Explicit homeowner approval — only place permit suggestions write assets.
+ */
+aiRoutes.post("/permits/confirm", async (c) => {
+  const claims = c.get("claims");
+  const propertyId = c.req.param("propertyId");
+  if (!propertyId) {
+    return c.json({ error: "not_found", message: "Home not found." }, 404);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = confirmPermitsSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "invalid_input",
+        message:
+          "Approve with draftId and the permit suggestions you want to keep. Nothing is saved without this step.",
+      },
+      400,
+    );
+  }
+
+  try {
+    const draft = consumePermitSuggestDraft(
+      parsed.data.draftId,
+      claims.sub,
+      propertyId,
+    );
+    if (!draft) throw new Error("DRAFT_NOT_FOUND");
+
+    const selected = new Set(parsed.data.selectedPermitIds);
+    const overrideById = new Map(
+      (parsed.data.assetOverrides ?? []).map((row) => [row.permitId, row]),
+    );
+    const assets = [];
+    for (const permit of draft.permits) {
+      if (!selected.has(permit.id)) continue;
+      const base = permit.suggestedAsset;
+      const overrides = overrideById.get(permit.id);
+      assets.push(
+        createAsset(propertyId, claims.sub, {
+          name: overrides?.name ?? base.name,
+          category:
+            (overrides?.category as (typeof ASSET_CATEGORIES)[number]) ??
+            base.category,
+          manufacturer: base.manufacturer,
+          model: base.model,
+          serial: base.serial,
+          installDate: permit.filedOrClosedOn,
+          notes:
+            overrides?.notes !== undefined
+              ? overrides.notes
+              : [
+                  base.notes,
+                  `Public permit: ${permit.title} (${permit.status}).`,
+                  permit.sourceLabel,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
+          provenance: "homeowner",
+        }),
+      );
+    }
+
+    return c.json({
+      assets: assets.map(toPublicAsset),
+      sourceMode: draft.mode,
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Saved only because you approved. Public permit hints never auto-add.",
+      },
+    });
   } catch (err) {
     return mapAiError(err, c);
   }
