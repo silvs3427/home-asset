@@ -1332,3 +1332,340 @@ export async function cloudRegisterPushDevice(
     mapCloudError(err, "Could not register device.");
   }
 }
+
+type RecallNoticeRow = {
+  id: string;
+  external_id: string;
+  source: string;
+  title: string;
+  summary: string;
+  hazard: string | null;
+  manufacturer: string;
+  model: string;
+  serial_pattern: string | null;
+  product_type: string | null;
+  recall_date: string | null;
+  source_url: string | null;
+};
+
+type AssetRecallAlertRow = {
+  id: string;
+  property_id: string;
+  asset_id: string;
+  recall_notice_id: string;
+  status: "open" | "acknowledged" | "dismissed";
+  matched_on: "manufacturer_model" | "manufacturer_model_serial";
+  notified_at: string | null;
+  acknowledged_at: string | null;
+  dismissed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  assets?: { name: string } | null;
+  recall_notices?: RecallNoticeRow | null;
+};
+
+function publicAlertFromCloudRow(row: AssetRecallAlertRow): import("./api").PublicAssetRecallAlert {
+  const notice = row.recall_notices;
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    assetId: row.asset_id,
+    assetName: row.assets?.name ?? null,
+    status: row.status,
+    matchedOn: row.matched_on,
+    notifiedAt: row.notified_at,
+    acknowledgedAt: row.acknowledged_at,
+    dismissedAt: row.dismissed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    recall: {
+      id: row.recall_notice_id,
+      externalId: notice?.external_id ?? "",
+      source: notice?.source ?? "cpsc_fixture",
+      title: notice?.title ?? "Safety recall",
+      summary: notice?.summary ?? "",
+      hazard: notice?.hazard ?? null,
+      manufacturer: notice?.manufacturer ?? "",
+      model: notice?.model ?? "",
+      recallDate: notice?.recall_date ?? null,
+      sourceUrl: notice?.source_url ?? null,
+    },
+  };
+}
+
+export async function cloudListRecallAlerts(
+  _accessToken: string,
+  propertyId: string,
+  options?: { assetId?: string; status?: "open" | "acknowledged" | "dismissed" | "all" },
+): Promise<{ alerts: import("./api").PublicAssetRecallAlert[] }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    let query = supabase
+      .from("asset_recall_alerts")
+      .select("*, assets(name), recall_notices(*)")
+      .eq("property_id", propertyId)
+      .order("created_at", { ascending: false });
+    if (options?.assetId) query = query.eq("asset_id", options.assetId);
+    if (options?.status && options.status !== "all") {
+      query = query.eq("status", options.status);
+    }
+    const { data, error } = await query;
+    if (error) mapCloudError(error, "Could not load recall alerts.");
+    return {
+      alerts: ((data as AssetRecallAlertRow[]) ?? []).map(publicAlertFromCloudRow),
+    };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not load recall alerts.");
+  }
+}
+
+export async function cloudAcknowledgeRecallAlert(
+  _accessToken: string,
+  propertyId: string,
+  alertId: string,
+): Promise<{ alert: import("./api").PublicAssetRecallAlert }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("asset_recall_alerts")
+      .update({
+        status: "acknowledged",
+        acknowledged_at: now,
+        dismissed_at: null,
+        updated_at: now,
+      })
+      .eq("id", alertId)
+      .eq("property_id", propertyId);
+    if (error) mapCloudError(error, "Could not acknowledge recall.");
+    const listed = await cloudListRecallAlerts(_accessToken, propertyId);
+    const alert = listed.alerts.find((a) => a.id === alertId);
+    if (!alert) throw new ApiError("Recall alert not found.", "client", 404);
+    return { alert };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not acknowledge recall.");
+  }
+}
+
+export async function cloudDismissRecallAlert(
+  _accessToken: string,
+  propertyId: string,
+  alertId: string,
+): Promise<{ alert: import("./api").PublicAssetRecallAlert }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("asset_recall_alerts")
+      .update({
+        status: "dismissed",
+        dismissed_at: now,
+        updated_at: now,
+      })
+      .eq("id", alertId)
+      .eq("property_id", propertyId);
+    if (error) mapCloudError(error, "Could not dismiss recall.");
+    const listed = await cloudListRecallAlerts(_accessToken, propertyId);
+    const alert = listed.alerts.find((a) => a.id === alertId);
+    if (!alert) throw new ApiError("Recall alert not found.", "client", 404);
+    return { alert };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not dismiss recall.");
+  }
+}
+
+/**
+ * Cloud-path recall match using fixture public lists (no LAN API).
+ * Upserts notices, creates alerts, and writes in-app notifications.
+ */
+export async function cloudRunRecallCheck(
+  _accessToken: string,
+  propertyIdFilter?: string,
+): Promise<{
+  ok: boolean;
+  result: {
+    mode: string;
+    catalogSize: number;
+    assetsScanned: number;
+    matchesFound: number;
+    alertsCreated: number;
+    alertsExisting: number;
+    notificationsCreated: number;
+  };
+  unreadCount: number;
+  openCount?: number;
+}> {
+  try {
+    const session = await requireSession();
+    const supabase = requireSupabaseClient();
+    const { matchMobileRecallFixtures, MOBILE_RECALL_FIXTURES } = await import(
+      "./recallFixtures"
+    );
+
+    const result = {
+      mode: "fixture",
+      catalogSize: MOBILE_RECALL_FIXTURES.length,
+      assetsScanned: 0,
+      matchesFound: 0,
+      alertsCreated: 0,
+      alertsExisting: 0,
+      notificationsCreated: 0,
+    };
+
+    // Upsert fixture notices (idempotent by source+external_id).
+    const noticeIdByExternal = new Map<string, string>();
+    for (const entry of MOBILE_RECALL_FIXTURES) {
+      const { data: existing } = await supabase
+        .from("recall_notices")
+        .select("id")
+        .eq("source", entry.source)
+        .eq("external_id", entry.externalId)
+        .maybeSingle();
+      if (existing?.id) {
+        noticeIdByExternal.set(entry.externalId, String(existing.id));
+        continue;
+      }
+      const now = new Date().toISOString();
+      const { data: inserted, error } = await supabase
+        .from("recall_notices")
+        .insert({
+          external_id: entry.externalId,
+          source: entry.source,
+          title: entry.title,
+          summary: entry.summary,
+          hazard: entry.hazard,
+          manufacturer: entry.manufacturer,
+          model: entry.model,
+          serial_pattern: entry.serialPattern,
+          product_type: entry.productType,
+          recall_date: entry.recallDate,
+          source_url: entry.sourceUrl,
+          created_at: now,
+          updated_at: now,
+        })
+        .select("id")
+        .single();
+      if (error) mapCloudError(error, "Could not store recall notice.");
+      noticeIdByExternal.set(entry.externalId, String(inserted.id));
+    }
+
+    let propQuery = supabase
+      .from("properties")
+      .select("id")
+      .eq("owner_user_id", session.user.id);
+    if (propertyIdFilter) propQuery = propQuery.eq("id", propertyIdFilter);
+    const { data: props, error: propErr } = await propQuery;
+    if (propErr) mapCloudError(propErr, "Could not load homes.");
+    const propertyIds = ((props as Array<{ id: string }>) ?? []).map((p) => p.id);
+
+    const { data: prefsRow } = await supabase
+      .from("notification_preferences")
+      .select("recalls_enabled, in_app_enabled")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    const recallsEnabled = prefsRow?.recalls_enabled !== false;
+    const inAppEnabled = prefsRow?.in_app_enabled !== false;
+
+    for (const propertyId of propertyIds) {
+      const { data: assets, error: assetErr } = await supabase
+        .from("assets")
+        .select("id, name, manufacturer, model, serial, property_id")
+        .eq("property_id", propertyId);
+      if (assetErr) mapCloudError(assetErr, "Could not load assets.");
+
+      for (const asset of (assets as AssetRow[]) ?? []) {
+        result.assetsScanned += 1;
+        const hits = matchMobileRecallFixtures({
+          manufacturer: asset.manufacturer,
+          model: asset.model,
+          serial: asset.serial,
+        });
+        result.matchesFound += hits.length;
+
+        for (const hit of hits) {
+          const noticeId = noticeIdByExternal.get(hit.entry.externalId);
+          if (!noticeId) continue;
+
+          const { data: existingAlert } = await supabase
+            .from("asset_recall_alerts")
+            .select("id, notified_at")
+            .eq("asset_id", asset.id)
+            .eq("recall_notice_id", noticeId)
+            .maybeSingle();
+
+          let alertId: string;
+          if (existingAlert?.id) {
+            result.alertsExisting += 1;
+            alertId = String(existingAlert.id);
+          } else {
+            const now = new Date().toISOString();
+            const { data: created, error: createErr } = await supabase
+              .from("asset_recall_alerts")
+              .insert({
+                property_id: propertyId,
+                asset_id: asset.id,
+                recall_notice_id: noticeId,
+                status: "open",
+                matched_on: hit.matchedOn,
+                created_at: now,
+                updated_at: now,
+              })
+              .select("id")
+              .single();
+            if (createErr) mapCloudError(createErr, "Could not create recall alert.");
+            alertId = String(created.id);
+            result.alertsCreated += 1;
+          }
+
+          if (!existingAlert?.notified_at && recallsEnabled && inAppEnabled) {
+            const now = new Date().toISOString();
+            const dedupe = `recall_alert:${alertId}:${asset.id}`;
+            const { error: noteErr } = await supabase.from("notifications").upsert(
+              {
+                user_id: session.user.id,
+                property_id: propertyId,
+                kind: "recall_alert",
+                title: `Safety recall: ${asset.name}`,
+                body: `${hit.entry.title}. Open the asset to acknowledge or dismiss.`,
+                related_asset_id: asset.id,
+                related_entity_id: alertId,
+                dedupe_key: dedupe,
+                push_status: "skipped",
+                created_at: now,
+              },
+              { onConflict: "user_id,dedupe_key", ignoreDuplicates: true },
+            );
+            if (!noteErr) {
+              await supabase
+                .from("asset_recall_alerts")
+                .update({ notified_at: now, updated_at: now })
+                .eq("id", alertId);
+              result.notificationsCreated += 1;
+            }
+          }
+        }
+      }
+    }
+
+    const listed = await cloudListNotifications(_accessToken);
+    const unreadCount = listed.notifications.filter((n) => !n.readAt).length;
+    let openCount: number | undefined;
+    if (propertyIdFilter) {
+      const open = await cloudListRecallAlerts(_accessToken, propertyIdFilter, {
+        status: "open",
+      });
+      openCount = open.alerts.length;
+    }
+
+    return { ok: true, result, unreadCount, openCount };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not check recalls.");
+  }
+}

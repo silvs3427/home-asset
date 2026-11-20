@@ -519,8 +519,8 @@ export async function createNotification(
 }
 
 /**
- * Hook for EPIC 7: create a recall alert notification for a homeowner.
- * No-op until recalls land; preference + schema are ready.
+ * EPIC 7: create a recall alert notification for a homeowner.
+ * Preference + schema gate apply; deduped per recall alert + asset.
  */
 export async function notifyRecallAlert(input: {
   userId: string;

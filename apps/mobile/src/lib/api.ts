@@ -837,6 +837,40 @@ export type PushDeliveryStatus =
   | "stubbed"
   | "failed";
 
+export type AssetRecallAlertStatus = "open" | "acknowledged" | "dismissed";
+
+export type PublicAssetRecallAlert = {
+  id: string;
+  propertyId: string;
+  assetId: string;
+  assetName: string | null;
+  status: AssetRecallAlertStatus;
+  matchedOn: "manufacturer_model" | "manufacturer_model_serial";
+  notifiedAt: string | null;
+  acknowledgedAt: string | null;
+  dismissedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  recall: {
+    id: string;
+    externalId: string;
+    source: string;
+    title: string;
+    summary: string;
+    hazard: string | null;
+    manufacturer: string;
+    model: string;
+    recallDate: string | null;
+    sourceUrl: string | null;
+  };
+};
+
+export function recallAlertStatusLabel(status: AssetRecallAlertStatus): string {
+  if (status === "open") return "Open";
+  if (status === "acknowledged") return "Acknowledged";
+  return "Dismissed";
+}
+
 export type PublicNotification = {
   id: string;
   propertyId: string | null;
@@ -1048,6 +1082,134 @@ export async function runDueNotificationCheck(
     method: "POST",
     headers: { authorization: `Bearer ${accessToken}` },
   });
+  return parseJson(res);
+}
+
+export async function runRecallNotificationCheck(
+  accessToken: string,
+): Promise<{
+  ok: boolean;
+  result: {
+    mode?: string;
+    catalogSize?: number;
+    assetsScanned: number;
+    matchesFound: number;
+    alertsCreated: number;
+    alertsExisting: number;
+    notificationsCreated: number;
+  };
+  unreadCount: number;
+}> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudRunRecallCheck(accessToken);
+  }
+  const res = await fetch(`${API_BASE_URL}/me/notifications/run-recall-check`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  return parseJson(res);
+}
+
+export async function listRecallAlerts(
+  accessToken: string,
+  propertyId: string,
+  options?: { assetId?: string; status?: AssetRecallAlertStatus | "all" },
+): Promise<{ alerts: PublicAssetRecallAlert[] }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudListRecallAlerts(accessToken, propertyId, options);
+  }
+  const params = new URLSearchParams();
+  if (options?.assetId) params.set("assetId", options.assetId);
+  if (options?.status) params.set("status", options.status);
+  const qs = params.toString();
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/recalls${qs ? `?${qs}` : ""}`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function acknowledgeRecallAlert(
+  accessToken: string,
+  propertyId: string,
+  alertId: string,
+): Promise<{ alert: PublicAssetRecallAlert }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudAcknowledgeRecallAlert(
+      accessToken,
+      propertyId,
+      alertId,
+    );
+  }
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/recalls/${alertId}/acknowledge`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` },
+    },
+  );
+  return parseJson(res);
+}
+
+export async function dismissRecallAlert(
+  accessToken: string,
+  propertyId: string,
+  alertId: string,
+): Promise<{ alert: PublicAssetRecallAlert }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudDismissRecallAlert(
+      accessToken,
+      propertyId,
+      alertId,
+    );
+  }
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/recalls/${alertId}/dismiss`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` },
+    },
+  );
+  return parseJson(res);
+}
+
+export async function runPropertyRecallCheck(
+  accessToken: string,
+  propertyId: string,
+): Promise<{
+  ok: boolean;
+  result: {
+    mode?: string;
+    assetsScanned: number;
+    matchesFound: number;
+    alertsCreated: number;
+    notificationsCreated: number;
+  };
+  openCount: number;
+}> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const res = await require("./cloud").cloudRunRecallCheck(
+      accessToken,
+      propertyId,
+    );
+    return {
+      ok: res.ok,
+      result: res.result,
+      openCount: res.openCount ?? 0,
+    };
+  }
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/recalls/run-check`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` },
+    },
+  );
   return parseJson(res);
 }
 

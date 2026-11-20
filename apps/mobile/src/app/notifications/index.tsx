@@ -15,17 +15,18 @@ import {
   markNotificationRead,
   notificationKindLabel,
   runDueNotificationCheck,
+  runRecallNotificationCheck,
   type PublicNotification,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 /**
- * In-app notification center for due reminders (and later recalls / submits).
+ * In-app notification center for due reminders and safety recall alerts.
  * Account-scoped; property id is shown when the notice is about a home.
  */
 export default function NotificationsCenterScreen() {
   const router = useRouter();
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, activeProperty } = useAuth();
   const [items, setItems] = useState<PublicNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -116,6 +117,26 @@ export default function NotificationsCenterScreen() {
     }
   }
 
+  async function onRunRecallCheck() {
+    if (!accessToken) return;
+    setBusy(true);
+    setError(null);
+    setStatusNote(null);
+    try {
+      const res = await runRecallNotificationCheck(accessToken);
+      setStatusNote(
+        `Checked recalls on ${res.result.assetsScanned} asset(s); ${res.result.alertsCreated} new alert(s), ${res.result.notificationsCreated} notice(s).`,
+      );
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not check recalls.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -138,8 +159,8 @@ export default function NotificationsCenterScreen() {
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.copy}>
-          Due reminders show up here. Recall and contractor-submit notices will
-          use the same inbox later. No marketing.
+          Due reminders and safety recall alerts show up here. Contractor-submit
+          notices will use the same inbox later. No marketing.
         </Text>
 
         <View style={styles.actions}>
@@ -156,6 +177,20 @@ export default function NotificationsCenterScreen() {
             ]}
           >
             <Text style={styles.primaryLabel}>Check due reminders</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => {
+              void onRunRecallCheck();
+            }}
+            style={({ pressed }) => [
+              styles.secondaryBtn,
+              pressed && styles.pressed,
+              busy && styles.disabled,
+            ]}
+          >
+            <Text style={styles.secondaryLabel}>Check safety recalls</Text>
           </Pressable>
           {unreadCount > 0 ? (
             <Pressable
@@ -183,8 +218,9 @@ export default function NotificationsCenterScreen() {
           <ActivityIndicator color="#1B3A2F" style={styles.spinner} />
         ) : items.length === 0 ? (
           <Text style={styles.empty}>
-            No notices yet. Add a reminder due soon, then tap{" "}
-            <Text style={styles.emptyEm}>Check due reminders</Text>.
+            No notices yet. Add a reminder due soon, or add an asset with
+            manufacturer/model and tap{" "}
+            <Text style={styles.emptyEm}>Check safety recalls</Text>.
           </Text>
         ) : (
           <View style={styles.list}>
@@ -202,6 +238,22 @@ export default function NotificationsCenterScreen() {
                       item.relatedReminderId
                     ) {
                       router.push("/reminders");
+                    } else if (
+                      item.kind === "recall_alert" &&
+                      item.relatedAssetId
+                    ) {
+                      if (
+                        item.propertyId &&
+                        activeProperty &&
+                        item.propertyId !== activeProperty.id
+                      ) {
+                        // Stay in inbox if home switch would be needed; asset
+                        // detail requires the active home to match.
+                      }
+                      router.push({
+                        pathname: "/assets/[id]",
+                        params: { id: item.relatedAssetId },
+                      });
                     }
                   }}
                   style={[styles.row, unread && styles.rowUnread]}

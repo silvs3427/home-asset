@@ -164,7 +164,7 @@ export default function NotificationPreferencesScreen() {
                 }}
               />
               <PrefRow
-                label="Recall alerts (later)"
+                label="Safety recall alerts"
                 value={prefs.recallsEnabled}
                 disabled={saving}
                 onChange={(value) => {

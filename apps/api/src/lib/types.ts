@@ -389,7 +389,7 @@ export const REMINDER_RECURRENCES: ReminderRecurrence[] = [
 
 /**
  * In-app / push notification kinds.
- * reminder_due is live in EPIC 5; recall + contractor_submit are hooks for later epics.
+ * reminder_due (EPIC 5) and recall_alert (EPIC 7) are live; contractor_submit is EPIC 8.
  */
 export type NotificationKind =
   | "reminder_due"
@@ -403,9 +403,75 @@ export type PushDeliveryStatus =
   | "stubbed"
   | "failed";
 
+/** Public recall catalog row (free lists / fixtures). */
+export type RecallNoticeSource =
+  | "cpsc_fixture"
+  | "cpsc_live"
+  | "nhtsa_fixture";
+
+export type RecallNoticeRecord = {
+  id: string;
+  externalId: string;
+  source: RecallNoticeSource;
+  title: string;
+  summary: string;
+  hazard: string | null;
+  manufacturer: string;
+  model: string;
+  serialPattern: string | null;
+  productType: string | null;
+  recallDate: string | null;
+  sourceUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AssetRecallAlertStatus = "open" | "acknowledged" | "dismissed";
+
+export type AssetRecallAlertRecord = {
+  id: string;
+  propertyId: string;
+  assetId: string;
+  recallNoticeId: string;
+  status: AssetRecallAlertStatus;
+  matchedOn: "manufacturer_model" | "manufacturer_model_serial";
+  notifiedAt: string | null;
+  acknowledgedAt: string | null;
+  dismissedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Alert + nested notice for phone / API responses. */
+export type PublicAssetRecallAlert = {
+  id: string;
+  propertyId: string;
+  assetId: string;
+  assetName: string | null;
+  status: AssetRecallAlertStatus;
+  matchedOn: "manufacturer_model" | "manufacturer_model_serial";
+  notifiedAt: string | null;
+  acknowledgedAt: string | null;
+  dismissedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  recall: {
+    id: string;
+    externalId: string;
+    source: RecallNoticeSource;
+    title: string;
+    summary: string;
+    hazard: string | null;
+    manufacturer: string;
+    model: string;
+    recallDate: string | null;
+    sourceUrl: string | null;
+  };
+};
+
 export type NotificationPreferences = {
   remindersEnabled: boolean;
-  /** Hook for EPIC 7 — preference stored now, alerts arrive later. */
+  /** EPIC 7 — safety/recall alerts from free public lists. */
   recallsEnabled: boolean;
   /** Hook for EPIC 8 — preference stored now, submit pings arrive later. */
   contractorSubmitsEnabled: boolean;

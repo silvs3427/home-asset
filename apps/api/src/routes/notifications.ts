@@ -12,6 +12,7 @@ import {
   unregisterPushDevice,
   upsertNotificationPreferences,
 } from "../lib/notifications.js";
+import { runRecallMatchCheck } from "../lib/recalls.js";
 import {
   toPublicNotification,
   toPublicNotificationPreferences,
@@ -166,6 +167,17 @@ notificationRoutes.post("/read-all", (c) => {
 notificationRoutes.post("/run-due-check", async (c) => {
   const claims = c.get("claims");
   const result = await runDueReminderCheck({ userId: claims.sub });
+  const unreadCount = countUnreadNotifications(claims.sub);
+  return c.json({ ok: true, result, unreadCount });
+});
+
+/**
+ * Self-serve recall match for the signed-in homeowner.
+ * Only scans assets on homes they own. Uses free public lists / fixtures.
+ */
+notificationRoutes.post("/run-recall-check", async (c) => {
+  const claims = c.get("claims");
+  const result = await runRecallMatchCheck({ userId: claims.sub });
   const unreadCount = countUnreadNotifications(claims.sub);
   return c.json({ ok: true, result, unreadCount });
 });

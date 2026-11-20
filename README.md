@@ -2,7 +2,7 @@
 
 Phone-first home memory for homeowners (iPhone + Android), with a path for contractors to submit work into the homeowner’s ledger. **Homeowners own the record.** Privacy and approve-before-official are product requirements from day one.
 
-This repo includes **Supabase + installable EAS builds** (LightLift-style `app.json` / `app.config.js` / `eas.json`) on top of **EPIC 6** AI assist, **D18** email/permit intake (approve-before-official), notifications, reminders, documents, assets, and accounts. Local SQLite demo stays the CI default until you add Supabase secrets. Recalls and full contractor submit → homeowner approve come next.
+This repo includes **Supabase + installable EAS builds** (LightLift-style `app.json` / `app.config.js` / `eas.json`) on top of **EPIC 7** safety recalls (free public lists), **EPIC 6** AI assist, **D18** email/permit intake (approve-before-official), notifications, reminders, documents, assets, and accounts. Local SQLite demo stays the CI default until you add Supabase secrets. Full contractor submit → homeowner approve comes next.
 
 ## Stack
 
@@ -11,7 +11,7 @@ This repo includes **Supabase + installable EAS builds** (LightLift-style `app.j
 | Phone apps | Expo (React Native) | One codebase for iPhone and Android |
 | API | TypeScript + Hono | Small, fast Node API that is easy to deploy |
 | Accounts | Email + password → JWT (local API) or **Supabase Auth** when configured | Normal app login; SQLite default for CI/demo; Supabase when env set |
-| Homes + assets + docs + reminders + notices | SQLite (+ optional Supabase Postgres/Storage) | Durable local backup by default; cloud schema + RLS in `supabase/` |
+| Homes + assets + docs + reminders + recalls + notices | SQLite (+ optional Supabase Postgres/Storage) | Durable local backup by default; cloud schema + RLS in `supabase/` |
 | Phone install | EAS preview **APK** (LightLift layout) | Not Expo Go — real native modules |
 | Push | Expo push (stub without token) | Goes live when `EXPO_ACCESS_TOKEN` is set; in-app center works either way |
 | AI assist | Env key + local mock catalog | Live when `AI_API_KEY` / `OPENAI_API_KEY` is set; mock otherwise (CI-safe) |
@@ -22,7 +22,7 @@ This repo includes **Supabase + installable EAS builds** (LightLift-style `app.j
 ```text
 apps/
   mobile/   # Expo app — app.json + app.config.js + eas.json (LightLift layout)
-  api/      # Backend API (auth + properties + assets + documents + reminders + notifications + AI)
+  api/      # Backend API (auth + properties + assets + documents + reminders + recalls + notifications + AI)
 supabase/   # SQL migrations + founder setup README (Auth / Postgres / Storage / RLS)
 ```
 
@@ -180,9 +180,9 @@ docker run --rm -p 8787:8787 \
 
 ## Privacy & security
 
-- Auth required before any personal, home, asset, document, reminder, notification, or AI endpoint
-- Homes, assets, documents, and reminders are **property-scoped**: list/get/update/delete only succeed for homes you own
-- Notifications are **account-scoped** and never leak across users; reminder notices include the home id when relevant
+- Auth required before any personal, home, asset, document, reminder, recall, notification, or AI endpoint
+- Homes, assets, documents, reminders, and recall alerts are **property-scoped**: list/get/update/delete only succeed for homes you own
+- Notifications are **account-scoped** and never leak across users; reminder and recall notices include the home id when relevant
 - **AI never silently writes** — scan returns a draft; manuals/assets are saved only on explicit confirm; how-to and contractor format are draft/read-only
 - Preferences default to product notices only — **no marketing drip**, SMS out of scope
 - Passwords hashed (bcrypt) locally, or held by Supabase Auth when configured; API JWTs are short-lived
@@ -194,4 +194,4 @@ docker run --rm -p 8787:8787 \
 
 ## What’s next
 
-Founder: create Supabase project + EAS login to produce the downloadable APK. Next product EPICs: recalls (7) and contractor submit → homeowner approve (8).
+Founder: create Supabase project + EAS login to produce the downloadable APK. Next product EPIC: contractor submit → homeowner approve (8). Share-a-home (D19) is **next after Phase 1** (recalls / contractor / stores).
