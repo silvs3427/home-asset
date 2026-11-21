@@ -69,3 +69,9 @@ drop policy if exists asset_recall_alerts_all_own on public.asset_recall_alerts;
 create policy asset_recall_alerts_all_own on public.asset_recall_alerts
   for all using (public.owns_property(property_id))
   with check (public.owns_property(property_id));
+
+-- Table privileges (RLS still scopes rows). Without GRANT, phone gets
+-- "permission denied for table …" from PostgREST.
+grant select, insert, update on table public.recall_notices to authenticated;
+grant select, insert, update, delete on table public.asset_recall_alerts
+  to authenticated;

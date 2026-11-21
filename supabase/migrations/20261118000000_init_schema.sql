@@ -323,3 +323,27 @@ create policy documents_storage_delete on storage.objects
     bucket_id = 'documents'
     and public.owns_property((storage.foldername(name))[1]::uuid)
   );
+
+-- ---------------------------------------------------------------------------
+-- Table privileges for the authenticated role (RLS still filters rows).
+-- Without these GRANTs, PostgREST returns "permission denied for table …"
+-- even when RLS policies exist. Profiles: SELECT/UPDATE only — INSERT
+-- is via security-definer bootstrap_new_user (see next migration).
+-- ---------------------------------------------------------------------------
+grant usage on schema public to authenticated;
+grant execute on function public.owns_property(uuid) to authenticated;
+
+grant select, update on table public.profiles to authenticated;
+revoke insert, delete, truncate, references, trigger on table public.profiles
+  from authenticated;
+
+grant select, insert, update, delete on table public.properties to authenticated;
+grant select, insert, update, delete on table public.assets to authenticated;
+grant select, insert, update, delete on table public.documents to authenticated;
+grant select, insert, update, delete on table public.reminders to authenticated;
+grant select, insert, update, delete on table public.reminder_completions
+  to authenticated;
+grant select, insert, update, delete on table public.notification_preferences
+  to authenticated;
+grant select, insert, update, delete on table public.push_devices to authenticated;
+grant select, insert, update, delete on table public.notifications to authenticated;

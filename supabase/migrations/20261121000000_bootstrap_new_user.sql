@@ -110,5 +110,17 @@ $$;
 revoke all on function public.bootstrap_new_user(text, text) from public;
 grant execute on function public.bootstrap_new_user(text, text) to authenticated;
 
+-- Table privileges: RLS alone is not enough. Authenticated must SELECT
+-- profiles for PostgREST to return this RPC's composite type, and for
+-- client fetchProfile / update. No client INSERT (RPC security definer only).
+grant usage on schema public to authenticated;
+grant select, update on table public.profiles to authenticated;
+revoke insert, delete, truncate, references, trigger on table public.profiles
+  from authenticated;
+grant select, insert, update, delete on table public.notification_preferences
+  to authenticated;
+
 -- PostgREST may resolve defaults; also grant the zero-arg overload if created.
 -- Explicit two-arg form is what the phone calls.
+-- If signup still shows "permission denied for table profiles", also run
+-- migrations/20261121120000_profiles_table_grants.sql.
