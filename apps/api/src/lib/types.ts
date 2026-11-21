@@ -81,6 +81,8 @@ export type AssetRecord = {
   purchaseDate: string | null;
   installDate: string | null;
   installerVendor: string | null;
+  /** Optional Past contractors directory id (cloud); local demo may be null. */
+  installerContractorId: string | null;
   /** Most recent service date (YYYY-MM-DD). */
   lastServicedAt: string | null;
   /**
@@ -109,6 +111,7 @@ export type PublicAsset = {
   purchaseDate: string | null;
   installDate: string | null;
   installerVendor: string | null;
+  installerContractorId: string | null;
   lastServicedAt: string | null;
   confirmedByContractorName: string | null;
   location: string | null;
@@ -224,6 +227,7 @@ export function toPublicAsset(asset: AssetRecord): PublicAsset {
     purchaseDate: asset.purchaseDate,
     installDate: asset.installDate,
     installerVendor: asset.installerVendor,
+    installerContractorId: asset.installerContractorId,
     lastServicedAt: asset.lastServicedAt,
     confirmedByContractorName: asset.confirmedByContractorName,
     location: asset.location,

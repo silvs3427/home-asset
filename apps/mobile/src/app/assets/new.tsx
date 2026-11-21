@@ -12,6 +12,7 @@ import {
   KeyboardAwareScroll,
   KeyboardAwareTextInput,
 } from "@/components/KeyboardAwareScroll";
+import { InstallerVendorField } from "@/components/InstallerVendorField";
 import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   aiAssetIntake,
@@ -46,6 +47,9 @@ export default function NewAssetScreen() {
   const [purchaseDate, setPurchaseDate] = useState("");
   const [installDate, setInstallDate] = useState("");
   const [installerVendor, setInstallerVendor] = useState("");
+  const [installerContractorId, setInstallerContractorId] = useState<
+    string | null
+  >(null);
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
   const [warrantyEndDate, setWarrantyEndDate] = useState("");
@@ -92,6 +96,7 @@ export default function NewAssetScreen() {
       setPurchaseDate(suggested.purchaseDate?.trim() || "");
       setInstallDate(suggested.installDate?.trim() || "");
       setInstallerVendor(suggested.installerVendor?.trim() || "");
+      setInstallerContractorId(null);
       setLocation(suggested.location?.trim() || "");
       setNotes(suggested.notes?.trim() || "");
       setWarrantyEndDate(suggested.warrantyEndDate?.trim() || "");
@@ -130,6 +135,7 @@ export default function NewAssetScreen() {
         purchaseDate: purchaseDate.trim() || null,
         installDate: installDate.trim() || null,
         installerVendor: installerVendor.trim() || null,
+        installerContractorId,
         location: location.trim() || null,
         notes: notes.trim() || null,
         warrantyEndDate: warrantyEndDate.trim() || null,
@@ -263,10 +269,14 @@ export default function NewAssetScreen() {
           onChangeText={setWarrantyTerm}
           placeholder="e.g. 10 years, lifetime"
         />
-        <Field
-          label="Installer / vendor"
-          value={installerVendor}
-          onChangeText={setInstallerVendor}
+        <InstallerVendorField
+          accessToken={accessToken}
+          propertyId={activeProperty.id}
+          value={{ installerVendor, installerContractorId }}
+          onChange={(next) => {
+            setInstallerVendor(next.installerVendor);
+            setInstallerContractorId(next.installerContractorId);
+          }}
           placeholder="Who installed or sold it"
         />
         <Field

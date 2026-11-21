@@ -13,6 +13,7 @@ import {
   KeyboardAwareScroll,
   KeyboardAwareTextInput,
 } from "@/components/KeyboardAwareScroll";
+import { InstallerVendorField } from "@/components/InstallerVendorField";
 import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   acknowledgeRecallAlert,
@@ -82,6 +83,9 @@ export default function AssetDetailScreen() {
   const [purchaseDate, setPurchaseDate] = useState("");
   const [installDate, setInstallDate] = useState("");
   const [installerVendor, setInstallerVendor] = useState("");
+  const [installerContractorId, setInstallerContractorId] = useState<
+    string | null
+  >(null);
   const [lastServicedAt, setLastServicedAt] = useState("");
   const [confirmedByContractorName, setConfirmedByContractorName] =
     useState("");
@@ -105,6 +109,7 @@ export default function AssetDetailScreen() {
     setPurchaseDate(next.purchaseDate ?? "");
     setInstallDate(next.installDate ?? "");
     setInstallerVendor(next.installerVendor ?? "");
+    setInstallerContractorId(next.installerContractorId ?? null);
     setLastServicedAt(next.lastServicedAt ?? "");
     setConfirmedByContractorName(next.confirmedByContractorName ?? "");
     setLocation(next.location ?? "");
@@ -216,6 +221,7 @@ export default function AssetDetailScreen() {
         purchaseDate: purchaseDate.trim() || null,
         installDate: installDate.trim() || null,
         installerVendor: installerVendor.trim() || null,
+        installerContractorId,
         lastServicedAt: lastServicedAt.trim() || null,
         confirmedByContractorName: confirmedByContractorName.trim() || null,
         location: location.trim() || null,
@@ -394,6 +400,19 @@ export default function AssetDetailScreen() {
               <Fact label="Warranty ends" value={asset.warrantyEndDate} />
               <Fact label="Warranty term" value={asset.warrantyTerm} />
               <Fact label="Installer / vendor" value={asset.installerVendor} />
+              {asset.installerContractorId && asset.installerVendor ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() =>
+                    router.push(`/contractors/${asset.installerContractorId}`)
+                  }
+                  style={styles.linkRow}
+                >
+                  <Text style={styles.linkLabel}>
+                    Open in Past contractors ›
+                  </Text>
+                </Pressable>
+              ) : null}
               <Fact
                 label="Service confirmation"
                 value={
@@ -466,10 +485,14 @@ export default function AssetDetailScreen() {
               onChangeText={setWarrantyTerm}
               placeholder="e.g. 10 years, lifetime"
             />
-            <Field
-              label="Installer / vendor"
-              value={installerVendor}
-              onChangeText={setInstallerVendor}
+            <InstallerVendorField
+              accessToken={accessToken}
+              propertyId={activeProperty.id}
+              value={{ installerVendor, installerContractorId }}
+              onChange={(next) => {
+                setInstallerVendor(next.installerVendor);
+                setInstallerContractorId(next.installerContractorId);
+              }}
             />
             <Field
               label="Last serviced (YYYY-MM-DD)"
@@ -996,6 +1019,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     color: colors.ink,
+  },
+  linkRow: {
+    marginTop: -6,
+  },
+  linkLabel: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: "700",
   },
   sectionHeading: {
     marginTop: 32,

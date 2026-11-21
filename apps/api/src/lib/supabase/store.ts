@@ -88,6 +88,8 @@ function assetFromRow(row: Record<string, unknown>): AssetRecord {
     purchaseDate: (row.purchase_date as string | null) ?? null,
     installDate: (row.install_date as string | null) ?? null,
     installerVendor: (row.installer_vendor as string | null) ?? null,
+    installerContractorId:
+      (row.installer_contractor_id as string | null) ?? null,
     lastServicedAt: (row.last_serviced_at as string | null) ?? null,
     confirmedByContractorName:
       (row.confirmed_by_contractor_name as string | null) ?? null,
@@ -316,6 +318,7 @@ export async function sbCreateAsset(
     purchaseDate: input.purchaseDate,
     installDate: input.installDate,
     installerVendor: input.installerVendor,
+    installerContractorId: input.installerContractorId ?? null,
     lastServicedAt: input.lastServicedAt,
     confirmedByContractorName: input.confirmedByContractorName,
     location: input.location,
@@ -337,6 +340,7 @@ export async function sbCreateAsset(
     purchase_date: asset.purchaseDate,
     install_date: asset.installDate,
     installer_vendor: asset.installerVendor,
+    installer_contractor_id: asset.installerContractorId,
     last_serviced_at: asset.lastServicedAt,
     confirmed_by_contractor_name: asset.confirmedByContractorName,
     location: asset.location,

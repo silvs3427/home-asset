@@ -37,6 +37,7 @@ const createSchema = z.object({
   purchaseDate: optionalDate,
   installDate: optionalDate,
   installerVendor: optionalText,
+  installerContractorId: z.string().uuid().optional().nullable(),
   lastServicedAt: optionalDate,
   confirmedByContractorName: z.string().trim().max(160).optional().nullable(),
   location: z.string().trim().max(200).optional().nullable(),

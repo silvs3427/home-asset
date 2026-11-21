@@ -88,6 +88,8 @@ export type PublicAsset = {
   purchaseDate: string | null;
   installDate: string | null;
   installerVendor: string | null;
+  /** Optional Past contractors directory link for installer/vendor. */
+  installerContractorId: string | null;
   /** Most recent service date (YYYY-MM-DD). */
   lastServicedAt: string | null;
   /**
@@ -113,6 +115,8 @@ export type CreateAssetInput = {
   purchaseDate?: string | null;
   installDate?: string | null;
   installerVendor?: string | null;
+  /** When set, links Installer / vendor to Past contractors for this home. */
+  installerContractorId?: string | null;
   lastServicedAt?: string | null;
   confirmedByContractorName?: string | null;
   location?: string | null;
@@ -1760,6 +1764,8 @@ export type AssetIntakeSuggested = {
   purchaseDate: string | null;
   installDate: string | null;
   installerVendor: string | null;
+  /** Optional Past contractors link when homeowner picked from directory. */
+  installerContractorId?: string | null;
   location: string | null;
   notes: string | null;
   warrantyEndDate: string | null;
@@ -2064,6 +2070,7 @@ export async function aiConfirmAssetIntake(
       purchaseDate: input.assetOverrides.purchaseDate,
       installDate: input.assetOverrides.installDate,
       installerVendor: input.assetOverrides.installerVendor,
+      installerContractorId: input.assetOverrides.installerContractorId,
       location: input.assetOverrides.location,
       notes: input.assetOverrides.notes,
       warrantyEndDate: input.assetOverrides.warrantyEndDate,
