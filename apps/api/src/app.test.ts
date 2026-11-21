@@ -1283,7 +1283,7 @@ describe("HomeAsset API — AI assist (EPIC 6)", () => {
       method: "POST",
       headers,
       body: JSON.stringify({
-        question: "What stock should I buy tomorrow?",
+        question: "How often should I service a ZX4 turbo muffler bearing?",
       }),
     });
     assert.equal(ungrounded.status, 200);
@@ -1293,6 +1293,86 @@ describe("HomeAsset API — AI assist (EPIC 6)", () => {
     };
     assert.equal(ungroundedBody.grounded, false);
     assert.match(ungroundedBody.answer, /don.?t have enough|manuals/i);
+  });
+
+  it("soft-rejects clearly off-topic Ask HomeAsset how-to asks", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "ai-offtopic@example.com");
+    const home = await createHome(app, auth.accessToken, "Scope Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const refused = await app.request(`/properties/${home.id}/ai/howto`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        question: "Write me a Python function to parse JSON and debug my React app",
+      }),
+    });
+    assert.equal(refused.status, 200);
+    const body = (await refused.json()) as {
+      grounded: boolean;
+      refused?: boolean;
+      code?: string;
+      answer: string;
+      privacy: { writes: boolean };
+    };
+    assert.equal(body.grounded, false);
+    assert.equal(body.refused, true);
+    assert.equal(body.code, "off_topic");
+    assert.equal(body.privacy.writes, false);
+    assert.match(body.answer, /home help|coding projects|Ask HomeAsset/i);
+  });
+
+  it("enforces per-user Ask HomeAsset burst rate limits", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    process.env.AI_ASSIST_BURST_LIMIT = "3";
+    process.env.AI_ASSIST_BURST_WINDOW_SECONDS = "60";
+    process.env.AI_ASSIST_DAILY_CAP = "40";
+    const { __resetAiAssistRateLimitForTests } = await import(
+      "./lib/ai/rateLimit.js"
+    );
+    __resetAiAssistRateLimitForTests();
+
+    const app = createApp();
+    const auth = await signup(app, "ai-ratelimit@example.com");
+    const home = await createHome(app, auth.accessToken, "Limit Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    for (let i = 0; i < 3; i += 1) {
+      const scan = await app.request(`/properties/${home.id}/ai/scan`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ hint: `Generac scan ${i}` }),
+      });
+      assert.equal(scan.status, 200, `scan ${i} should succeed`);
+    }
+
+    const blocked = await app.request(`/properties/${home.id}/ai/scan`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ hint: "Generac blocked" }),
+    });
+    assert.equal(blocked.status, 429);
+    const blockedBody = (await blocked.json()) as {
+      error: string;
+      code: string;
+      message: string;
+    };
+    assert.equal(blockedBody.error, "rate_limited");
+    assert.equal(blockedBody.code, "burst");
+    assert.match(blockedBody.message, /short pause|too many asks/i);
+
+    delete process.env.AI_ASSIST_BURST_LIMIT;
+    delete process.env.AI_ASSIST_BURST_WINDOW_SECONDS;
+    delete process.env.AI_ASSIST_DAILY_CAP;
+    __resetAiAssistRateLimitForTests();
   });
 
   it("formats contractor notes as a draft without writing the ledger", async () => {

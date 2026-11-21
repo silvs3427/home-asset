@@ -19,8 +19,14 @@ Server-side AI for HomeAsset (scan / how-to / contractor format / email intake /
 | `AI_MODEL` | No | OpenAI model when using OpenAI keys (default `gpt-4o-mini`) |
 | `AI_BASE_URL` | No | OpenAI-compatible base (default `https://api.openai.com/v1`) |
 | `AI_ASSIST_LIVE` | No | Default on when a key is set; set `false` to force mock |
+| `AI_ASSIST_BURST_LIMIT` | No | Default `10` asks per burst window |
+| `AI_ASSIST_BURST_WINDOW_SECONDS` | No | Default `60` |
+| `AI_ASSIST_DAILY_CAP` | No | Default `40` asks per UTC day per user |
+| `UPSTASH_REDIS_REST_URL` / `TOKEN` | No | Optional Redis backend for caps |
 
 Without any AI key (or with live flag off), the function returns **mock** catalog drafts so demos still work. Live mode turns on when a key is present.
+
+**Usage limits:** each signed-in user is capped (defaults above). Apply migration `20261121140000_ai_assist_rate_limits.sql` so daily caps stay durable across edge cold starts. Off-topic coding / general-chat asks are soft-refused with a clear message and do not need a phone rebuild.
 
 ## Deploy
 
@@ -66,6 +72,8 @@ supabase secrets set AI_ASSIST_LIVE=true
 - Drafts are never written to the home ledger until the homeowner confirms in the app
 - Function logs record operational codes / user id / model — not full email bodies or photo bytes
 - How-to answers only use the user’s stored manuals + asset facts (plus catalog fallback)
+- Ask HomeAsset is home-scoped (ledger / equipment / manuals / maintenance / recalls / intake) — not a general coding assistant
+- Rate and daily caps are enforced on the server; the phone cannot bypass them
 
 ## Debugging
 

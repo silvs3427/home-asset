@@ -26,6 +26,8 @@ type EdgeErrorBody = {
   reason?: string;
   hint?: string;
   model?: string;
+  message?: string;
+  retry_after?: number | null;
 };
 
 /** In-memory scan draft + manual bodies until the homeowner confirms (cloud path). */
@@ -309,9 +311,23 @@ async function formatEdgeInvokeError(error: unknown): Promise<string> {
 
 function formatEdgeErrorBody(payload: EdgeErrorBody | null | undefined): string {
   if (!payload) return "";
+  const code = payload.code?.trim() ?? "";
+  const friendly =
+    payload.message?.trim() ||
+    payload.error?.trim() ||
+    "";
+  // Rate / topic refusals: show the plain message only (no code= noise).
+  if (
+    code === "rate_limited" ||
+    code === "daily_cap" ||
+    code === "off_topic" ||
+    code === "burst"
+  ) {
+    return friendly || "Ask HomeAsset could not complete that ask.";
+  }
   const parts: string[] = [];
-  if (payload.error?.trim()) parts.push(payload.error.trim());
-  if (payload.code?.trim()) parts.push(`code=${payload.code.trim()}`);
+  if (friendly) parts.push(friendly);
+  if (code) parts.push(`code=${code}`);
   if (payload.reason?.trim()) parts.push(payload.reason.trim());
   if (payload.hint?.trim()) parts.push(payload.hint.trim());
   return parts.join(" — ");
