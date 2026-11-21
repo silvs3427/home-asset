@@ -5,6 +5,7 @@ import {
   type CatalogProduct,
 } from "./catalog.js";
 import type { SuggestedAssetDraft, SuggestedManualDraft } from "./drafts.js";
+import { HOME_SCOPE_SYSTEM_BLURB } from "./topicGuard.js";
 import { ASSET_CATEGORIES, type AssetCategory } from "../types.js";
 
 export type AiMode = "mock" | "live";
@@ -170,6 +171,7 @@ async function liveIdentifyHint(query: string): Promise<string | null> {
           {
             role: "system",
             content:
+              `${HOME_SCOPE_SYSTEM_BLURB} ` +
               "You identify home equipment from short user hints. Reply with JSON only: " +
               '{"manufacturer":"...","model":"...","category":"generator|hvac|water_heater|appliance|other","name":"..."}',
           },
@@ -254,6 +256,7 @@ export async function formatContractorInput(input: {
             {
               role: "system",
               content:
+                `${HOME_SCOPE_SYSTEM_BLURB} ` +
                 "Format contractor job notes into JSON with keys: summary, workPerformed, " +
                 "assetsSuggested (array of {name,category,manufacturer,model,notes}), materials (string[]), followUps (string[]).",
             },
@@ -386,6 +389,7 @@ export async function formatEmailIntake(input: {
             {
               role: "system",
               content:
+                `${HOME_SCOPE_SYSTEM_BLURB} ` +
                 "You turn a homeowner's forwarded contractor email into JSON only with keys: " +
                 "summary (short), workPerformed, contractorName (string|null), workDate (string|null), " +
                 "assetsSuggested (array of {name,category,manufacturer,model,notes}). " +

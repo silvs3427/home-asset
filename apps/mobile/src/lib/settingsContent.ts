@@ -29,7 +29,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Ask HomeAsset",
-    body: "The AI feature. From Home, open Ask HomeAsset to: Add or update asset (drop in a photo of a label, contractor email, invoice, or notes — AI drafts one asset, asks Add or Update, fills what it knows, and prompts only for gaps; nothing saves until you confirm), Scan a picture (identify a product and manuals; confirm before save), or Ask how-to (answers from manuals and facts on this home; asking never writes the ledger).",
+    body: "The AI feature for this home — not a general coding or chat assistant. From Home, open Ask HomeAsset to: Add or update asset (photo of a label, contractor email, invoice, or notes → draft → you confirm), Scan a picture (product + manuals; confirm before save), or Ask how-to (answers from manuals and facts on this home; asking never writes the ledger). Fair-use limits apply: about 10 asks per minute and 40 per day per signed-in account, enforced on the server. If you hit a limit or ask something off-topic, the app explains clearly.",
   },
   {
     title: "View Assets",
@@ -84,7 +84,11 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "AI and your data",
-    body: "How-to answers use manuals and facts already on the home when possible. Asset intake and scans create drafts only. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; add/update and scan wait for your confirm.",
+    body: "How-to answers use manuals and facts already on the home when possible. Asset intake and scans create drafts only. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; add/update and scan wait for your confirm. Ask HomeAsset stays on home help (ledger, equipment, manuals, maintenance, recalls, intake) — not coding projects or unrelated chat.",
+  },
+  {
+    title: "Ask HomeAsset limits",
+    body: "To keep costs fair and the feature focused, each signed-in account has server-side caps (about 10 asks per minute and 40 per day). Limits reset the next day (UTC). Hitting a limit or an off-topic ask shows a plain message — nothing silent happens to your ledger.",
   },
 ];
 
@@ -95,7 +99,7 @@ export const SECURITY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Server rules, not phone trust",
-    body: "Cloud data is protected so each signed-in user only reaches their own homes and ledger rows. The phone never holds a privileged “admin” key. Official writes are checked on the server.",
+    body: "Cloud data is protected so each signed-in user only reaches their own homes and ledger rows. The phone never holds a privileged “admin” key. Official writes are checked on the server. Ask HomeAsset rate and topic rules are enforced on the server too — the phone cannot bypass them.",
   },
   {
     title: "Session on the device",

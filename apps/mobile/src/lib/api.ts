@@ -1315,6 +1315,8 @@ export type AiHowToResponse = {
   mode: "mock" | "live";
   answer: string;
   grounded: boolean;
+  refused?: boolean;
+  code?: string;
   citations: AiHowToCitation[];
   privacy: { writes: false; note: string };
 };

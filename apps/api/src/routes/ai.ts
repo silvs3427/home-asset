@@ -25,6 +25,8 @@ import {
   identifyProduct,
   resolveAiMode,
 } from "../lib/ai/provider.js";
+import { consumeAiAssistQuota } from "../lib/ai/rateLimit.js";
+import { assessAskHomeAssetTopic } from "../lib/ai/topicGuard.js";
 import { getPropertyForUser } from "../lib/properties.js";
 import {
   ASSET_CATEGORIES,
@@ -45,6 +47,23 @@ import {
 export const aiRoutes = new Hono<{ Variables: AuthVariables }>();
 
 aiRoutes.use("*", requireAuth);
+
+function rateLimitOrNull(c: Context<{ Variables: AuthVariables }>) {
+  const claims = c.get("claims");
+  const rate = consumeAiAssistQuota(claims.sub);
+  if (rate.allowed) return null;
+  return c.json(
+    {
+      error: "rate_limited",
+      code: rate.reason ?? "rate_limited",
+      message: rate.message,
+      retry_after: rate.retryAfterSeconds,
+      daily_cap: rate.dailyCap,
+      daily_remaining: rate.dailyRemaining,
+    },
+    429,
+  );
+}
 
 function mapAiError(err: unknown, c: Context<{ Variables: AuthVariables }>) {
   if (err instanceof Error && err.message === "PROPERTY_NOT_FOUND") {
@@ -77,6 +96,9 @@ aiRoutes.post("/scan", async (c) => {
   if (!propertyId) {
     return c.json({ error: "not_found", message: "Home not found." }, 404);
   }
+
+  const limited = rateLimitOrNull(c);
+  if (limited) return limited;
 
   try {
     assertPropertyOwnedByUser(propertyId, claims.sub);
@@ -304,6 +326,25 @@ aiRoutes.post("/howto", async (c) => {
     );
   }
 
+  const topic = assessAskHomeAssetTopic(parsed.data.question);
+  if (!topic.allowed) {
+    return c.json({
+      mode: resolveAiMode(),
+      grounded: false,
+      refused: true,
+      code: topic.code,
+      answer: topic.message,
+      citations: [],
+      privacy: {
+        writes: false as const,
+        note: "How-to answers never change your ledger.",
+      },
+    });
+  }
+
+  const limited = rateLimitOrNull(c);
+  if (limited) return limited;
+
   try {
     const result = await answerHowTo({
       propertyId,
@@ -344,6 +385,21 @@ aiRoutes.post("/email-intake", async (c) => {
       400,
     );
   }
+
+  const topic = assessAskHomeAssetTopic(parsed.data.emailText);
+  if (!topic.allowed) {
+    return c.json(
+      {
+        error: "off_topic",
+        code: topic.code,
+        message: topic.message,
+      },
+      422,
+    );
+  }
+
+  const limited = rateLimitOrNull(c);
+  if (limited) return limited;
 
   try {
     assertPropertyOwnedByUser(propertyId, claims.sub);
@@ -556,6 +612,21 @@ aiRoutes.post("/asset-intake", async (c) => {
     );
   }
 
+  const topic = assessAskHomeAssetTopic([hint, text].filter(Boolean).join("\n"));
+  if (!topic.allowed) {
+    return c.json(
+      {
+        error: "off_topic",
+        code: topic.code,
+        message: topic.message,
+      },
+      422,
+    );
+  }
+
+  const limited = rateLimitOrNull(c);
+  if (limited) return limited;
+
   try {
     assertPropertyOwnedByUser(propertyId, claims.sub);
     const existing = listAssetsForProperty(propertyId, claims.sub).map((a) => ({
@@ -704,6 +775,9 @@ aiRoutes.post("/permits/suggest", async (c) => {
   if (!propertyId) {
     return c.json({ error: "not_found", message: "Home not found." }, 404);
   }
+
+  const limited = rateLimitOrNull(c);
+  if (limited) return limited;
 
   try {
     const property = getPropertyForUser(propertyId, claims.sub);
@@ -858,6 +932,21 @@ contractorAiRoutes.post("/format", async (c) => {
       400,
     );
   }
+
+  const topic = assessAskHomeAssetTopic(parsed.data.inputText);
+  if (!topic.allowed) {
+    return c.json(
+      {
+        error: "off_topic",
+        code: topic.code,
+        message: topic.message,
+      },
+      422,
+    );
+  }
+
+  const limited = rateLimitOrNull(c);
+  if (limited) return limited;
 
   const result = await formatContractorInput(parsed.data);
   return c.json(result);

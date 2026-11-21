@@ -23,7 +23,11 @@ import {
   matchCatalogProducts,
   type CatalogProduct,
 } from "../_shared/catalog.ts";
-import { enforceRateLimitStub } from "../_shared/rateLimitStub.ts";
+import { enforceRateLimit } from "../_shared/rateLimitStub.ts";
+import {
+  assessAskHomeAssetTopic,
+  HOME_SCOPE_SYSTEM_BLURB,
+} from "../_shared/topicGuard.ts";
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
@@ -38,6 +42,8 @@ type ErrorCode =
   | "supabase_env_missing"
   | "unauthorized"
   | "rate_limited"
+  | "daily_cap"
+  | "off_topic"
   | "invalid_json"
   | "invalid_request_body"
   | "property_not_found"
@@ -148,18 +154,6 @@ Deno.serve(async (req) => {
     });
   }
 
-  const rate = await enforceRateLimitStub({
-    key: user.id,
-    route: "ai-assist",
-    limit: 30,
-    windowSeconds: 60,
-  });
-  if (!rate.allowed) {
-    return errorResponse(429, "rate_limited", "Rate limited", {
-      extra: { retry_after: rate.retryAfterSeconds },
-    });
-  }
-
   let rawBody: unknown;
   try {
     rawBody = await req.json();
@@ -177,6 +171,69 @@ Deno.serve(async (req) => {
   const body = parsed.data;
   const live = resolveLiveConfig();
 
+  // Soft topic reject before burning quota (howto + free-text intakes).
+  if (body.action === "howto") {
+    const topic = assessAskHomeAssetTopic(body.question);
+    if (!topic.allowed) {
+      return jsonResponse({
+        mode: live.mode,
+        grounded: false,
+        refused: true,
+        code: "off_topic",
+        answer: topic.message,
+        citations: [],
+        privacy: {
+          writes: false,
+          note: "How-to answers never change your ledger.",
+        },
+      });
+    }
+  } else if (body.action === "contractor-format") {
+    const topic = assessAskHomeAssetTopic(body.inputText);
+    if (!topic.allowed) {
+      return errorResponse(422, "off_topic", topic.message);
+    }
+  } else if (body.action === "email-intake") {
+    const topic = assessAskHomeAssetTopic(body.emailText);
+    if (!topic.allowed) {
+      return errorResponse(422, "off_topic", topic.message);
+    }
+  } else if (body.action === "asset-intake") {
+    const topic = assessAskHomeAssetTopic(
+      [body.hint, body.text].filter(Boolean).join("\n"),
+    );
+    if (!topic.allowed) {
+      return errorResponse(422, "off_topic", topic.message);
+    }
+  }
+
+  const rate = await enforceRateLimit({
+    key: user.id,
+    route: "ai-assist",
+    supabase,
+    skip: body.action === "status",
+  });
+  if (!rate.allowed) {
+    const code: ErrorCode =
+      rate.reason === "daily_cap" ? "daily_cap" : "rate_limited";
+    return errorResponse(
+      429,
+      code,
+      rate.message ??
+        (rate.reason === "daily_cap"
+          ? `You've reached today's Ask HomeAsset limit (${rate.dailyCap} asks).`
+          : "Ask HomeAsset needs a short pause — try again in a moment."),
+      {
+        extra: {
+          retry_after: rate.retryAfterSeconds,
+          daily_cap: rate.dailyCap,
+          daily_remaining: rate.dailyRemaining,
+          reason: rate.reason,
+        },
+      },
+    );
+  }
+
   try {
     switch (body.action) {
       case "status":
@@ -192,6 +249,11 @@ Deno.serve(async (req) => {
             permitsSuggest: true,
             submitToLedger: false,
             note: "Confirm / approve writes happen on the phone via Supabase RLS — never silently.",
+          },
+          limits: {
+            burstLimit: rate.burstLimit,
+            dailyCap: rate.dailyCap,
+            note: "Server-enforced per signed-in user. Home help only — not a general coding assistant.",
           },
           privacy: {
             writes: false,
@@ -576,6 +638,7 @@ async function liveRefineHint(
 ): Promise<string | null> {
   if (live.mode !== "live") return null;
   const system =
+    `${HOME_SCOPE_SYSTEM_BLURB} ` +
     "You identify home equipment from short user hints. Reply with JSON only: " +
     '{"manufacturer":"...","model":"...","category":"generator|hvac|water_heater|appliance|other","name":"..."}';
   const user = `Identify this home product for a homeowner ledger: ${query}`;
@@ -696,6 +759,7 @@ async function formatContractor(input: {
       const content = await chatJsonText({
         live: input.live,
         system:
+          `${HOME_SCOPE_SYSTEM_BLURB} ` +
           "Format contractor job notes into JSON with keys: summary, workPerformed, " +
           "assetsSuggested (array of {name,category,manufacturer,model,notes}), materials (string[]), followUps (string[]).",
         user: text,
@@ -946,6 +1010,7 @@ async function formatAssetIntake(input: {
       const content = await chatJsonText({
         live: input.live,
         system:
+          `${HOME_SCOPE_SYSTEM_BLURB} ` +
           "You extract ONE distinct home asset from homeowner input (photo label hint, contractor email, invoice, or notes). " +
           "Reply with JSON only: {intent:\"add\"|\"update\", matchedAssetId:string|null, identificationLabel:string, confidence:number, " +
           "suggestedAsset:{name,category,manufacturer,model,serial,purchaseDate,installDate,installerVendor,location,notes,warrantyEndDate,warrantyTerm}, " +
@@ -1111,6 +1176,7 @@ async function formatEmailIntake(input: {
       const content = await chatJsonText({
         live: input.live,
         system:
+          `${HOME_SCOPE_SYSTEM_BLURB} ` +
           "You turn a homeowner's forwarded contractor email into JSON only with keys: " +
           "summary (short), workPerformed, contractorName (string|null), workDate (string|null), " +
           "assetsSuggested (array of {name,category,manufacturer,model,notes}). " +

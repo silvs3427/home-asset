@@ -192,6 +192,7 @@ docker run --rm -p 8787:8787 \
 - Homes, assets, documents, reminders, and recall alerts are **property-scoped**: list/get/update/delete only succeed for homes you own
 - Notifications are **account-scoped** and never leak across users; reminder and recall notices include the home id when relevant
 - **AI never silently writes** — scan returns a draft; manuals/assets are saved only on explicit confirm; how-to and contractor format are draft/read-only; AI keys stay on edge/server (not `EXPO_PUBLIC_*`)
+- **Ask HomeAsset limits** — server-side burst (~10/min) and daily (~40/day) caps per signed-in user; soft reject for clearly off-topic coding / general chat; home ledger help stays allowed
 - Preferences default to product notices only — **no marketing drip**, SMS out of scope
 - Passwords hashed (bcrypt) locally, or held by Supabase Auth when configured; API JWTs are short-lived
 - Homeowner control: least data shared, approve-before-official, no silent auto-adds
