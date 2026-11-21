@@ -1,0 +1,11 @@
+# Supabase local/CLI config for HomeAsset edge functions.
+# invite-submit is public (token-gated) — contractors are not signed in.
+
+[functions.invite-submit]
+verify_jwt = false
+
+[functions.ai-assist]
+verify_jwt = true
+
+[functions.send-push]
+verify_jwt = true

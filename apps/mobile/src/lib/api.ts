@@ -110,6 +110,8 @@ export type CreateAssetInput = {
   notes?: string | null;
   warrantyEndDate?: string | null;
   warrantyTerm?: string | null;
+  /** Defaults to homeowner. Use contractor for invite-link / LightLift approvals. */
+  provenance?: AssetProvenance;
 };
 
 export type UpdateAssetInput = Partial<CreateAssetInput>;
@@ -2214,4 +2216,182 @@ export async function aiConfirmPermits(
     },
   );
   return parseJson(res);
+}
+
+// ---------------------------------------------------------------------------
+// Contractor invite links (cloud-only phone path)
+// ---------------------------------------------------------------------------
+
+export type ContractorInviteDraftAsset = {
+  name: string;
+  category: string;
+  manufacturer: string | null;
+  model: string | null;
+  notes: string | null;
+};
+
+export type ContractorInviteDraft = {
+  summary: string;
+  workPerformed: string;
+  contractorName: string | null;
+  workDate: string | null;
+  assetsSuggested: ContractorInviteDraftAsset[];
+  materials: string[];
+  followUps: string[];
+};
+
+export type PublicContractorInvite = {
+  id: string;
+  propertyId: string;
+  label: string | null;
+  token: string;
+  inviteUrl: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
+export type PublicContractorSubmissionMedia = {
+  id: string;
+  kind: "photo" | "audio" | "other";
+  mimeType: string;
+  originalFilename: string;
+  byteSize: number;
+  createdAt: string;
+  signedUrl: string | null;
+};
+
+export type PublicContractorSubmission = {
+  id: string;
+  inviteId: string;
+  propertyId: string;
+  status: "pending" | "approved" | "declined";
+  contractorName: string | null;
+  companyName: string | null;
+  notesText: string | null;
+  draft: ContractorInviteDraft;
+  aiMode: "mock" | "live";
+  reviewedAt: string | null;
+  createdAt: string;
+  media: PublicContractorSubmissionMedia[];
+};
+
+const INVITE_CLOUD_ONLY =
+  "Contractor invite links need Supabase cloud on this phone (URL + anon key).";
+
+export async function createContractorInvite(
+  accessToken: string,
+  propertyId: string,
+  input: { label?: string | null; expiresInDays?: number | null } = {},
+): Promise<{ invite: PublicContractorInvite }> {
+  if (!useCloud()) {
+    throw new ApiError(INVITE_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudCreateContractorInvite(
+    accessToken,
+    propertyId,
+    input,
+  );
+}
+
+export async function listContractorInvites(
+  accessToken: string,
+  propertyId: string,
+): Promise<{ invites: PublicContractorInvite[] }> {
+  if (!useCloud()) {
+    throw new ApiError(INVITE_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudListContractorInvites(accessToken, propertyId);
+}
+
+export async function revokeContractorInvite(
+  accessToken: string,
+  propertyId: string,
+  inviteId: string,
+): Promise<{ invite: PublicContractorInvite }> {
+  if (!useCloud()) {
+    throw new ApiError(INVITE_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudRevokeContractorInvite(
+    accessToken,
+    propertyId,
+    inviteId,
+  );
+}
+
+export async function listContractorSubmissions(
+  accessToken: string,
+  propertyId: string,
+  options: { status?: "pending" | "approved" | "declined" | "all" } = {},
+): Promise<{ submissions: PublicContractorSubmission[] }> {
+  if (!useCloud()) {
+    throw new ApiError(INVITE_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudListContractorSubmissions(
+    accessToken,
+    propertyId,
+    options,
+  );
+}
+
+export async function getContractorSubmission(
+  accessToken: string,
+  propertyId: string,
+  submissionId: string,
+): Promise<{ submission: PublicContractorSubmission }> {
+  if (!useCloud()) {
+    throw new ApiError(INVITE_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudGetContractorSubmission(
+    accessToken,
+    propertyId,
+    submissionId,
+  );
+}
+
+export async function declineContractorSubmission(
+  accessToken: string,
+  propertyId: string,
+  submissionId: string,
+): Promise<{ submission: PublicContractorSubmission }> {
+  if (!useCloud()) {
+    throw new ApiError(INVITE_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudDeclineContractorSubmission(
+    accessToken,
+    propertyId,
+    submissionId,
+  );
+}
+
+export async function approveContractorSubmission(
+  accessToken: string,
+  propertyId: string,
+  submissionId: string,
+  input: {
+    selectedAssetIndexes: number[];
+    storeSummaryDocument?: boolean;
+  },
+): Promise<{
+  submission: PublicContractorSubmission;
+  assets: PublicAsset[];
+  summaryDocument: PublicDocument | null;
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  if (!useCloud()) {
+    throw new ApiError(INVITE_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudApproveContractorSubmission(
+    accessToken,
+    propertyId,
+    submissionId,
+    input,
+  );
 }

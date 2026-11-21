@@ -42,19 +42,19 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Notifications",
-    body: "One place for upcoming reminders and recent notices (due items, safety recalls, and later contractor submissions). Add reminders here. Use Check safety recalls to match your assets to public lists. Push and in-app delivery are under Settings → Push & in-app — turn on Safety recall alerts and Push, then Register this phone for push if you want lock-screen alerts when a match is found.",
+    body: "One place for upcoming reminders and recent notices (due items, safety recalls, and contractor submissions). Add reminders here. Tap a contractor notice to review the draft. Use Check safety recalls to match your assets to public lists. Push and in-app delivery are under Settings → Push & in-app — turn on Safety recall alerts, Contractor submissions, and Push, then Register this phone for push if you want lock-screen alerts.",
   },
   {
     title: "Settings",
-    body: "Add another home, How to use, Privacy, Security (including app lock), push & in-app delivery prefs, and sign out.",
+    body: "Add another home, Invite a contractor (share a submission link), Review contractor submits, How to use, Privacy, Security (including app lock), push & in-app delivery prefs, and sign out.",
   },
   {
     title: "App lock",
     body: "Under Settings → Security, turn on Lock when idle or away. After a quiet stretch (1–5 minutes, your choice) or when you leave the app for a short while, HomeAsset hides the ledger until you unlock with Face ID / fingerprint (when your phone supports it) or your password. Your sign-in session stays on the phone; we never store your biometrics.",
   },
   {
-    title: "Contractors (coming soon)",
-    body: "HomeAsset is for homeowners only. Pros who use LightLift can push finished work into your home for you to approve. Pros without LightLift: you will be able to send a submission link; they type notes, record voice, and upload photos. Ask HomeAsset ingests that voice, photos, and text into a draft; nothing becomes official until you approve. That invite link is not in the app yet.",
+    title: "Contractors",
+    body: "HomeAsset is for homeowners only. Pros who use LightLift can push finished work into your home for you to approve (LightLift side — later). Pros without LightLift: Settings → Invite a contractor creates a link you share. They open it in a browser (no HomeAsset login), type notes, record voice, and upload photos. Ask HomeAsset formats a draft; you approve, edit selection, or decline before anything is official. Review waiting drafts under Settings → Review contractor submits or from a contractor notice.",
   },
   {
     title: "Privacy and security",
@@ -65,11 +65,11 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
 export const PRIVACY_SECTIONS: ContentSection[] = [
   {
     title: "You own the record",
-    body: "HomeAsset is homeowner-only. You own what is official on each home. Contractors may send work through LightLift or a future submission link you share; they do not silently write your ledger.",
+    body: "HomeAsset is homeowner-only. You own what is official on each home. Contractors may send work through LightLift or a submission link you share; they do not silently write your ledger.",
   },
   {
     title: "Approve before official",
-    body: "Ask HomeAsset drafts (scan a picture, PDF upload, free-text format, photo/email/invoice intake, suggested manuals/spec sheets, and similar helpers) wait for your review. Future contractor submissions — including invite-link voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Nothing is auto-added as official without your confirm.",
+    body: "Ask HomeAsset drafts (scan a picture, PDF upload, free-text format, photo/email/invoice intake, suggested manuals/spec sheets, and similar helpers) wait for your review. Contractor invite-link submissions — voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Nothing is auto-added as official without your confirm.",
   },
   {
     title: "Signed-in and home-scoped",

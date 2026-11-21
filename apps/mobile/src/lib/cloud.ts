@@ -23,7 +23,7 @@ import {
   type UpdateReminderInput,
   type AssetCategory,
 } from "./api";
-import { requireSupabaseClient } from "./supabase";
+import { getSupabasePublicUrl, requireSupabaseClient } from "./supabase";
 import { newUuid } from "./uuid";
 
 type ProfileRow = {
@@ -662,7 +662,7 @@ export async function cloudCreateAsset(
         notes: input.notes?.trim() || null,
         warranty_end_date: input.warrantyEndDate || null,
         warranty_term: input.warrantyTerm?.trim() || null,
-        provenance: "homeowner",
+        provenance: input.provenance === "contractor" ? "contractor" : "homeowner",
         created_at: now,
         updated_at: now,
       })
@@ -1937,5 +1937,531 @@ export async function cloudCreateDocumentFromBytes(
   } catch (err) {
     if (err instanceof ApiError) throw err;
     mapCloudError(err, "Could not save document.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Contractor invite links + pending submissions (Path B — non-LightLift)
+// ---------------------------------------------------------------------------
+
+export type ContractorInviteDraftAsset = {
+  name: string;
+  category: string;
+  manufacturer: string | null;
+  model: string | null;
+  notes: string | null;
+};
+
+export type ContractorInviteDraft = {
+  summary: string;
+  workPerformed: string;
+  contractorName: string | null;
+  workDate: string | null;
+  assetsSuggested: ContractorInviteDraftAsset[];
+  materials: string[];
+  followUps: string[];
+};
+
+export type PublicContractorInvite = {
+  id: string;
+  propertyId: string;
+  label: string | null;
+  token: string;
+  inviteUrl: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+};
+
+export type PublicContractorSubmissionMedia = {
+  id: string;
+  kind: "photo" | "audio" | "other";
+  mimeType: string;
+  originalFilename: string;
+  byteSize: number;
+  createdAt: string;
+  signedUrl: string | null;
+};
+
+export type PublicContractorSubmission = {
+  id: string;
+  inviteId: string;
+  propertyId: string;
+  status: "pending" | "approved" | "declined";
+  contractorName: string | null;
+  companyName: string | null;
+  notesText: string | null;
+  draft: ContractorInviteDraft;
+  aiMode: "mock" | "live";
+  reviewedAt: string | null;
+  createdAt: string;
+  media: PublicContractorSubmissionMedia[];
+};
+
+type InviteRow = {
+  id: string;
+  property_id: string;
+  label: string | null;
+  token: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+type SubmissionRow = {
+  id: string;
+  invite_id: string;
+  property_id: string;
+  status: "pending" | "approved" | "declined";
+  contractor_name: string | null;
+  company_name: string | null;
+  notes_text: string | null;
+  draft_json: ContractorInviteDraft | Record<string, unknown>;
+  ai_mode: "mock" | "live";
+  reviewed_at: string | null;
+  created_at: string;
+};
+
+type MediaRow = {
+  id: string;
+  kind: "photo" | "audio" | "other";
+  mime_type: string;
+  original_filename: string;
+  storage_key: string;
+  byte_size: number;
+  created_at: string;
+};
+
+function inviteUrlForToken(token: string): string {
+  return `${getSupabasePublicUrl()}/functions/v1/invite-submit?t=${encodeURIComponent(token)}`;
+}
+
+function inviteFromRow(row: InviteRow): PublicContractorInvite {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    label: row.label,
+    token: row.token,
+    inviteUrl: inviteUrlForToken(row.token),
+    expiresAt: row.expires_at,
+    revokedAt: row.revoked_at,
+    createdAt: row.created_at,
+  };
+}
+
+function normalizeDraft(raw: unknown): ContractorInviteDraft {
+  const d = (raw && typeof raw === "object" ? raw : {}) as Partial<ContractorInviteDraft>;
+  return {
+    summary: String(d.summary ?? "Contractor submission").slice(0, 200),
+    workPerformed: String(d.workPerformed ?? "").slice(0, 4000),
+    contractorName: d.contractorName != null ? String(d.contractorName) : null,
+    workDate: d.workDate != null ? String(d.workDate) : null,
+    assetsSuggested: Array.isArray(d.assetsSuggested)
+      ? d.assetsSuggested.map((a) => ({
+          name: String(a?.name ?? "Installed item"),
+          category: String(a?.category ?? "other"),
+          manufacturer: a?.manufacturer != null ? String(a.manufacturer) : null,
+          model: a?.model != null ? String(a.model) : null,
+          notes: a?.notes != null ? String(a.notes) : null,
+        }))
+      : [],
+    materials: Array.isArray(d.materials)
+      ? d.materials.map((m) => String(m))
+      : [],
+    followUps: Array.isArray(d.followUps)
+      ? d.followUps.map((f) => String(f))
+      : [],
+  };
+}
+
+function newInviteToken(): string {
+  return `${newUuid()}${newUuid()}`.replace(/-/g, "");
+}
+
+export async function cloudCreateContractorInvite(
+  _accessToken: string,
+  propertyId: string,
+  input: { label?: string | null; expiresInDays?: number | null } = {},
+): Promise<{ invite: PublicContractorInvite }> {
+  try {
+    const session = await requireSession();
+    const supabase = requireSupabaseClient();
+    const now = new Date();
+    const expiresInDays =
+      input.expiresInDays === null
+        ? null
+        : Math.min(Math.max(input.expiresInDays ?? 14, 1), 90);
+    const expiresAt =
+      expiresInDays == null
+        ? null
+        : new Date(now.getTime() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+    const token = newInviteToken();
+    const { data, error } = await supabase
+      .from("contractor_invites")
+      .insert({
+        property_id: propertyId,
+        created_by: session.user.id,
+        token,
+        label: input.label?.trim() || null,
+        expires_at: expiresAt,
+        created_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .select("*")
+      .single();
+    if (error) mapCloudError(error, "Could not create invite link.");
+    return { invite: inviteFromRow(data as InviteRow) };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not create invite link.");
+  }
+}
+
+export async function cloudListContractorInvites(
+  _accessToken: string,
+  propertyId: string,
+): Promise<{ invites: PublicContractorInvite[] }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const { data, error } = await supabase
+      .from("contractor_invites")
+      .select("*")
+      .eq("property_id", propertyId)
+      .order("created_at", { ascending: false });
+    if (error) mapCloudError(error, "Could not load invite links.");
+    return {
+      invites: ((data as InviteRow[]) ?? []).map(inviteFromRow),
+    };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not load invite links.");
+  }
+}
+
+export async function cloudRevokeContractorInvite(
+  _accessToken: string,
+  propertyId: string,
+  inviteId: string,
+): Promise<{ invite: PublicContractorInvite }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("contractor_invites")
+      .update({ revoked_at: now, updated_at: now })
+      .eq("id", inviteId)
+      .eq("property_id", propertyId)
+      .is("revoked_at", null)
+      .select("*")
+      .maybeSingle();
+    if (error) mapCloudError(error, "Could not revoke invite.");
+    if (!data) throw new ApiError("Invite not found or already revoked.", "client", 404);
+    return { invite: inviteFromRow(data as InviteRow) };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not revoke invite.");
+  }
+}
+
+async function loadSubmissionMedia(
+  supabase: ReturnType<typeof requireSupabaseClient>,
+  submissionId: string,
+): Promise<PublicContractorSubmissionMedia[]> {
+  const { data, error } = await supabase
+    .from("contractor_submission_media")
+    .select("*")
+    .eq("submission_id", submissionId)
+    .order("created_at", { ascending: true });
+  if (error) mapCloudError(error, "Could not load submission media.");
+  const rows = (data as MediaRow[]) ?? [];
+  const out: PublicContractorSubmissionMedia[] = [];
+  for (const row of rows) {
+    let signedUrl: string | null = null;
+    const { data: signed } = await supabase.storage
+      .from("invite-media")
+      .createSignedUrl(row.storage_key, 60 * 30);
+    if (signed?.signedUrl) signedUrl = signed.signedUrl;
+    out.push({
+      id: row.id,
+      kind: row.kind,
+      mimeType: row.mime_type,
+      originalFilename: row.original_filename,
+      byteSize: row.byte_size,
+      createdAt: row.created_at,
+      signedUrl,
+    });
+  }
+  return out;
+}
+
+function submissionFromRow(
+  row: SubmissionRow,
+  media: PublicContractorSubmissionMedia[],
+): PublicContractorSubmission {
+  return {
+    id: row.id,
+    inviteId: row.invite_id,
+    propertyId: row.property_id,
+    status: row.status,
+    contractorName: row.contractor_name,
+    companyName: row.company_name,
+    notesText: row.notes_text,
+    draft: normalizeDraft(row.draft_json),
+    aiMode: row.ai_mode,
+    reviewedAt: row.reviewed_at,
+    createdAt: row.created_at,
+    media,
+  };
+}
+
+export async function cloudListContractorSubmissions(
+  _accessToken: string,
+  propertyId: string,
+  options: { status?: "pending" | "approved" | "declined" | "all" } = {},
+): Promise<{ submissions: PublicContractorSubmission[] }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    let query = supabase
+      .from("contractor_submissions")
+      .select("*")
+      .eq("property_id", propertyId)
+      .order("created_at", { ascending: false });
+    if (options.status && options.status !== "all") {
+      query = query.eq("status", options.status);
+    }
+    const { data, error } = await query;
+    if (error) mapCloudError(error, "Could not load contractor submissions.");
+    const rows = (data as SubmissionRow[]) ?? [];
+    const submissions: PublicContractorSubmission[] = [];
+    for (const row of rows) {
+      const media = await loadSubmissionMedia(supabase, row.id);
+      submissions.push(submissionFromRow(row, media));
+    }
+    return { submissions };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not load contractor submissions.");
+  }
+}
+
+export async function cloudGetContractorSubmission(
+  _accessToken: string,
+  propertyId: string,
+  submissionId: string,
+): Promise<{ submission: PublicContractorSubmission }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const { data, error } = await supabase
+      .from("contractor_submissions")
+      .select("*")
+      .eq("id", submissionId)
+      .eq("property_id", propertyId)
+      .maybeSingle();
+    if (error) mapCloudError(error, "Could not load submission.");
+    if (!data) throw new ApiError("Submission not found.", "client", 404);
+    const media = await loadSubmissionMedia(supabase, submissionId);
+    return {
+      submission: submissionFromRow(data as SubmissionRow, media),
+    };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not load submission.");
+  }
+}
+
+export async function cloudDeclineContractorSubmission(
+  _accessToken: string,
+  propertyId: string,
+  submissionId: string,
+): Promise<{ submission: PublicContractorSubmission }> {
+  try {
+    const session = await requireSession();
+    const supabase = requireSupabaseClient();
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("contractor_submissions")
+      .update({
+        status: "declined",
+        reviewed_at: now,
+        reviewed_by: session.user.id,
+        updated_at: now,
+      })
+      .eq("id", submissionId)
+      .eq("property_id", propertyId)
+      .eq("status", "pending")
+      .select("*")
+      .maybeSingle();
+    if (error) mapCloudError(error, "Could not decline submission.");
+    if (!data) {
+      throw new ApiError(
+        "Submission not found or already reviewed.",
+        "client",
+        404,
+      );
+    }
+    const media = await loadSubmissionMedia(supabase, submissionId);
+    return {
+      submission: submissionFromRow(data as SubmissionRow, media),
+    };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not decline submission.");
+  }
+}
+
+export async function cloudApproveContractorSubmission(
+  accessToken: string,
+  propertyId: string,
+  submissionId: string,
+  input: {
+    selectedAssetIndexes: number[];
+    storeSummaryDocument?: boolean;
+  },
+): Promise<{
+  submission: PublicContractorSubmission;
+  assets: PublicAsset[];
+  summaryDocument: PublicDocument | null;
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  try {
+    const session = await requireSession();
+    const supabase = requireSupabaseClient();
+    const { submission } = await cloudGetContractorSubmission(
+      accessToken,
+      propertyId,
+      submissionId,
+    );
+    if (submission.status !== "pending") {
+      throw new ApiError(
+        "This submission was already reviewed.",
+        "client",
+        409,
+      );
+    }
+
+    const assets: PublicAsset[] = [];
+    for (const index of [...new Set(input.selectedAssetIndexes)].sort(
+      (a, b) => a - b,
+    )) {
+      const base = submission.draft.assetsSuggested[index];
+      if (!base) continue;
+      const category = (base.category || "other") as AssetCategory;
+      const created = await cloudCreateAsset(accessToken, propertyId, {
+        name: base.name,
+        category: [
+          "hvac",
+          "roof",
+          "appliance",
+          "generator",
+          "water_heater",
+          "plumbing",
+          "electrical",
+          "kids_gear",
+          "vehicle",
+          "other",
+        ].includes(category)
+          ? category
+          : "other",
+        manufacturer: base.manufacturer,
+        model: base.model,
+        installerVendor:
+          submission.contractorName ||
+          submission.companyName ||
+          submission.draft.contractorName,
+        installDate:
+          submission.draft.workDate &&
+          /^\d{4}-\d{2}-\d{2}$/.test(submission.draft.workDate)
+            ? submission.draft.workDate
+            : null,
+        notes: base.notes,
+        provenance: "contractor",
+      });
+      assets.push(created.asset);
+    }
+
+    let summaryDocument: PublicDocument | null = null;
+    if (input.storeSummaryDocument !== false) {
+      const bodyText = [
+        "HomeAsset contractor invite submission",
+        "",
+        `Summary: ${submission.draft.summary}`,
+        "",
+        "Work performed:",
+        submission.draft.workPerformed,
+        "",
+        submission.contractorName
+          ? `Contractor: ${submission.contractorName}`
+          : null,
+        submission.companyName ? `Company: ${submission.companyName}` : null,
+        submission.draft.workDate
+          ? `Date hint: ${submission.draft.workDate}`
+          : null,
+        "",
+        submission.notesText
+          ? ["Original notes:", submission.notesText].join("\n")
+          : null,
+        "",
+        `Media files: ${submission.media.length}`,
+        `AI mode: ${submission.aiMode}`,
+      ]
+        .filter((line) => line != null)
+        .join("\n");
+      const { document } = await cloudCreateDocumentFromBytes(propertyId, {
+        title: `Contractor submit: ${submission.draft.summary.slice(0, 80)}`,
+        docType: "install_paperwork",
+        documentDate:
+          submission.draft.workDate &&
+          /^\d{4}-\d{2}-\d{2}$/.test(submission.draft.workDate)
+            ? submission.draft.workDate
+            : null,
+        assetId: assets[0]?.id ?? null,
+        source: "contractor",
+        mimeType: "text/plain",
+        originalFilename: "contractor-invite-summary.txt",
+        bytes: new TextEncoder().encode(bodyText),
+      });
+      summaryDocument = document;
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("contractor_submissions")
+      .update({
+        status: "approved",
+        reviewed_at: now,
+        reviewed_by: session.user.id,
+        updated_at: now,
+      })
+      .eq("id", submissionId)
+      .eq("property_id", propertyId)
+      .eq("status", "pending")
+      .select("*")
+      .maybeSingle();
+    if (error) mapCloudError(error, "Could not approve submission.");
+    if (!data) {
+      throw new ApiError(
+        "Submission not found or already reviewed.",
+        "client",
+        404,
+      );
+    }
+    const media = await loadSubmissionMedia(supabase, submissionId);
+    return {
+      submission: submissionFromRow(data as SubmissionRow, media),
+      assets,
+      summaryDocument,
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Saved only because you approved. Invite-link submits never auto-add to your ledger.",
+      },
+    };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not approve submission.");
   }
 }

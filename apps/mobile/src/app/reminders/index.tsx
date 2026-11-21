@@ -333,6 +333,14 @@ export default function NotificationsScreen() {
                 disabled={busy}
                 onPress={() => {
                   void onMarkRead(item);
+                  if (
+                    item.kind === "contractor_submit" &&
+                    item.relatedEntityId
+                  ) {
+                    router.push(
+                      `/contractor-submissions/${item.relatedEntityId}`,
+                    );
+                  }
                 }}
                 style={[styles.row, unread && styles.rowUnread]}
               >
