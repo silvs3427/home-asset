@@ -3,6 +3,7 @@
  * EXPO_PUBLIC_SUPABASE_URL + anon key are set. Mirrors LightLift: no LAN API.
  */
 import type { Session } from "@supabase/supabase-js";
+import * as Crypto from "expo-crypto";
 import {
   ApiError,
   type AppFace,
@@ -792,7 +793,7 @@ export async function cloudUploadDocument(
   try {
     await requireSession();
     const supabase = requireSupabaseClient();
-    const documentId = crypto.randomUUID();
+    const documentId = Crypto.randomUUID();
     const safeName = input.name.replace(/[^\w.\-()+ ]+/g, "_") || "file";
     const storageKey = `${propertyId}/${documentId}/${safeName}`;
 
@@ -1895,7 +1896,7 @@ export async function cloudCreateDocumentFromBytes(
   try {
     await requireSession();
     const supabase = requireSupabaseClient();
-    const documentId = crypto.randomUUID();
+    const documentId = Crypto.randomUUID();
     const safeName =
       input.originalFilename.replace(/[^\w.\-()+ ]+/g, "_") || "file.txt";
     const storageKey = `${propertyId}/${documentId}/${safeName}`;
