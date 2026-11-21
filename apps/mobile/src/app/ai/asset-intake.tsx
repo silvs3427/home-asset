@@ -15,6 +15,7 @@ import {
   aiAssetIntake,
   aiConfirmAssetIntake,
   categoryLabel,
+  manualsSuggestPath,
   type AssetCategory,
   type AssetIntakeDraft,
   type AssetIntakeSourceKind,
@@ -73,6 +74,8 @@ export default function AssetIntakeScreen() {
     text?: string | null;
     hint?: string | null;
     filename?: string | null;
+    imageBase64?: string | null;
+    mediaMimeType?: string | null;
   }) {
     if (!accessToken || !activeProperty) return;
     setError(null);
@@ -91,8 +94,16 @@ export default function AssetIntakeScreen() {
     setError(null);
     try {
       const picked =
-        source === "camera" ? await pickFromCamera() : await pickFromLibrary();
+        source === "camera"
+          ? await pickFromCamera({ forAi: true })
+          : await pickFromLibrary({ forAi: true });
       if (!picked) return;
+      if (!picked.base64) {
+        setError(
+          "Could not read that photo for Ask HomeAsset. Try taking it again.",
+        );
+        return;
+      }
       setPhotoName(picked.name);
       setPdfName(null);
       setMode("pick");
@@ -100,6 +111,8 @@ export default function AssetIntakeScreen() {
         sourceKind: "photo",
         filename: picked.name,
         text: pasteText.trim() || null,
+        imageBase64: picked.base64,
+        mediaMimeType: picked.mimeType || "image/jpeg",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open camera.");
@@ -109,8 +122,14 @@ export default function AssetIntakeScreen() {
   async function onPdf() {
     setError(null);
     try {
-      const picked = await pickPdfFile();
+      const picked = await pickPdfFile({ forAi: true });
       if (!picked) return;
+      if (!picked.base64) {
+        setError(
+          "Could not read that PDF for Ask HomeAsset. Try another file.",
+        );
+        return;
+      }
       setPdfName(picked.name);
       setPhotoName(null);
       setMode("pdf");
@@ -118,6 +137,8 @@ export default function AssetIntakeScreen() {
       await runIntake({
         sourceKind: "invoice",
         filename: picked.name,
+        imageBase64: picked.base64,
+        mediaMimeType: picked.mimeType || "application/pdf",
         text: pasteText.trim() || null,
         hint: "PDF invoice or paperwork",
       });
@@ -172,7 +193,16 @@ export default function AssetIntakeScreen() {
       });
       setDraft(null);
       setFields(null);
-      router.replace(`/assets/${res.asset.id}`);
+      const manualsPath = manualsSuggestPath({
+        assetId: res.asset.id,
+        manufacturer: res.asset.manufacturer ?? fields.manufacturer,
+        model: res.asset.model ?? fields.model,
+      });
+      if (manualsPath) {
+        router.replace(manualsPath);
+      } else {
+        router.replace(`/assets/${res.asset.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Confirm failed.");
     } finally {

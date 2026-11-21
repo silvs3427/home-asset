@@ -21,6 +21,7 @@ import { z } from "npm:zod@4";
 import {
   getCatalogProduct,
   matchCatalogProducts,
+  PRODUCT_CATALOG,
   type CatalogProduct,
 } from "../_shared/catalog.ts";
 import { enforceRateLimit } from "../_shared/rateLimitStub.ts";
@@ -95,6 +96,7 @@ const RequestSchema = z
       "contractor-format",
       "email-intake",
       "asset-intake",
+      "suggest-manuals",
       "permits-suggest",
     ]),
     propertyId: z.string().uuid().optional(),
@@ -107,9 +109,52 @@ const RequestSchema = z
     emailText: z.string().max(20000).optional(),
     sourceKind: z.enum(["photo", "email", "invoice", "notes"]).optional(),
     text: z.string().max(20000).optional().nullable(),
+    /** Raw base64 (no data-URL prefix). Phone compresses before send. */
+    imageBase64: z.string().max(3_500_000).optional().nullable(),
+    mediaMimeType: z
+      .enum([
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+        "application/pdf",
+      ])
+      .optional()
+      .nullable(),
+    manufacturer: z.string().max(120).optional().nullable(),
+    model: z.string().max(120).optional().nullable(),
     existingAssets: z.array(ExistingAssetSchema).max(100).optional(),
   })
   .strict();
+
+const INTAKE_MEDIA_MIMES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+]);
+
+/** Strip accidental data-URL wrappers; keep pure base64 for providers. */
+function normalizeBase64Payload(raw: string): string {
+  const trimmed = raw.trim();
+  const dataUrl = /^data:[^;]+;base64,(.+)$/i.exec(trimmed);
+  return (dataUrl?.[1] ?? trimmed).replace(/\s+/g, "");
+}
+
+function normalizeIntakeMime(
+  mime: string | null | undefined,
+): string | null {
+  if (!mime) return null;
+  const lower = mime.trim().toLowerCase();
+  if (lower === "image/jpg") return "image/jpeg";
+  if (!INTAKE_MEDIA_MIMES.has(lower)) return null;
+  return lower;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -271,6 +316,7 @@ Deno.serve(async (req) => {
             contractorFormat: true,
             emailIntake: true,
             assetIntake: true,
+            suggestManuals: true,
             permitsSuggest: true,
             submitToLedger: false,
             note: "Confirm / approve writes happen on the phone via Supabase RLS — never silently.",
@@ -404,11 +450,35 @@ Deno.serve(async (req) => {
         const intakeText = (body.text ?? body.emailText ?? "").trim();
         const intakeHint = (body.hint ?? "").trim();
         const intakeFilename = (body.filename ?? "").trim();
-        if (!intakeText && !intakeHint && !intakeFilename) {
+        const rawMedia = body.imageBase64?.trim() || "";
+        const mediaBase64 = rawMedia
+          ? normalizeBase64Payload(rawMedia)
+          : null;
+        const mediaMimeType = normalizeIntakeMime(body.mediaMimeType);
+        if (mediaBase64 && !mediaMimeType) {
           return errorResponse(
             400,
             "invalid_request_body",
-            "Provide photo filename, hint, or pasted text",
+            "mediaMimeType required with imageBase64 (image/* or application/pdf)",
+          );
+        }
+        if (mediaBase64 && mediaBase64.length < 64) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "Attached media looks empty or truncated",
+          );
+        }
+        if (
+          !intakeText &&
+          !intakeHint &&
+          !intakeFilename &&
+          !mediaBase64
+        ) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "Provide a photo/PDF attachment, filename, hint, or pasted text",
           );
         }
         await assertPropertyOwned(supabase, body.propertyId, user.id);
@@ -417,6 +487,8 @@ Deno.serve(async (req) => {
           text: intakeText || null,
           hint: intakeHint || null,
           filename: intakeFilename || null,
+          mediaBase64,
+          mediaMimeType,
           existingAssets: body.existingAssets ?? [],
           live,
         });
@@ -437,6 +509,50 @@ Deno.serve(async (req) => {
             privacy: intake.privacy,
           },
           aiMode: intake.mode,
+        });
+      }
+
+      case "suggest-manuals": {
+        if (!body.propertyId) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "propertyId required",
+          );
+        }
+        const mfr = (body.manufacturer ?? "").trim();
+        const mdl = (body.model ?? "").trim();
+        if (!mfr || !mdl) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "manufacturer and model required to suggest manuals",
+          );
+        }
+        await assertPropertyOwned(supabase, body.propertyId, user.id);
+        const manualsDraft = await suggestManualsForMakeModel({
+          manufacturer: mfr,
+          model: mdl,
+          live,
+        });
+        const draftId = crypto.randomUUID();
+        return jsonResponse({
+          draft: {
+            draftId,
+            mode: manualsDraft.mode,
+            manufacturer: mfr,
+            model: mdl,
+            identificationLabel: `${mfr} ${mdl}`,
+            manuals: manualsDraft.manuals,
+            expiresAt: new Date(Date.now() + DRAFT_TTL_MS).toISOString(),
+            privacy: {
+              writes: false,
+              confirmRequired: true,
+              note: "Suggested docs only. Nothing is stored until you choose which to keep.",
+            },
+          },
+          aiMode: manualsDraft.mode,
+          manualContents: manualsDraft.manualContents,
         });
       }
 
@@ -700,16 +816,33 @@ async function identifyProduct(input: {
   return identifyFromCatalog(baseQuery, "mock");
 }
 
+type ChatMediaPart = {
+  mimeType: string;
+  base64: string;
+};
+
 async function chatJsonText(args: {
   live: LiveConfig;
   system: string;
   user: string;
+  media?: ChatMediaPart | null;
 }): Promise<string | null> {
   if (args.live.provider === "gemini") {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/` +
       `${encodeURIComponent(args.live.geminiModel)}:generateContent` +
       `?key=${encodeURIComponent(args.live.geminiKey)}`;
+    const parts: Array<Record<string, unknown>> = [
+      { text: `${args.system}\n\n${args.user}` },
+    ];
+    if (args.media?.base64) {
+      parts.push({
+        inline_data: {
+          mime_type: args.media.mimeType,
+          data: args.media.base64,
+        },
+      });
+    }
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -717,7 +850,7 @@ async function chatJsonText(args: {
         contents: [
           {
             role: "user",
-            parts: [{ text: `${args.system}\n\n${args.user}` }],
+            parts,
           },
         ],
         generationConfig: { temperature: 0 },
@@ -739,6 +872,17 @@ async function chatJsonText(args: {
   }
 
   if (args.live.provider === "openai") {
+    const userContent: Array<Record<string, unknown>> = [
+      { type: "text", text: args.user },
+    ];
+    if (args.media?.base64) {
+      userContent.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${args.media.mimeType};base64,${args.media.base64}`,
+        },
+      });
+    }
     const response = await fetch(`${args.live.openaiBase}/chat/completions`, {
       method: "POST",
       headers: {
@@ -750,7 +894,10 @@ async function chatJsonText(args: {
         temperature: 0,
         messages: [
           { role: "system", content: args.system },
-          { role: "user", content: args.user },
+          {
+            role: "user",
+            content: args.media?.base64 ? userContent : args.user,
+          },
         ],
       }),
     });
@@ -765,6 +912,197 @@ async function chatJsonText(args: {
   }
 
   return null;
+}
+
+/**
+ * After make + model are known: suggest manuals / spec sheets for approve.
+ * Catalog first; live Gemini may add public manufacturer links (draft only).
+ * Never writes the ledger — phone stores only after homeowner confirm.
+ */
+async function suggestManualsForMakeModel(input: {
+  manufacturer: string;
+  model: string;
+  live: LiveConfig;
+}): Promise<{
+  mode: AiMode;
+  manuals: Array<{
+    id: string;
+    title: string;
+    sourceUrl: string | null;
+    preview: string;
+    kind: "manual" | "spec" | "other";
+    selectedByDefault: boolean;
+  }>;
+  manualContents: Record<string, string>;
+}> {
+  const qMfr = input.manufacturer.toLowerCase().trim();
+  const qMdl = input.model.toLowerCase().trim();
+  // Exact-ish make/model match only — do not fall back to the default catalog product.
+  const catalogProduct =
+    PRODUCT_CATALOG.find((p) => {
+      const mfr = p.manufacturer.toLowerCase();
+      const mdl = p.model.toLowerCase();
+      const mfrHit = mfr.includes(qMfr) || qMfr.includes(mfr);
+      const mdlHit =
+        mdl.includes(qMdl) ||
+        qMdl.includes(mdl) ||
+        p.matchTerms.some((t) => qMdl.includes(t.toLowerCase()));
+      return mfrHit && mdlHit;
+    }) ?? null;
+
+  const manuals: Array<{
+    id: string;
+    title: string;
+    sourceUrl: string | null;
+    preview: string;
+    kind: "manual" | "spec" | "other";
+    selectedByDefault: boolean;
+  }> = [];
+  const manualContents: Record<string, string> = {};
+
+  if (catalogProduct) {
+    catalogProduct.manuals.forEach((m, index) => {
+      manuals.push({
+        id: m.id,
+        title: m.title,
+        sourceUrl: m.sourceUrl,
+        preview: m.content.slice(0, 280) + (m.content.length > 280 ? "…" : ""),
+        kind: "manual",
+        selectedByDefault: index === 0,
+      });
+      manualContents[m.id] = m.content;
+    });
+  }
+
+  if (input.live.mode === "live") {
+    try {
+      const content = await chatJsonTextWithOptionalSearch({
+        live: input.live,
+        system:
+          `${HOME_SCOPE_SYSTEM_BLURB} ` +
+          "Find official manufacturer owner's manuals and spec sheets for ONE home equipment model. " +
+          "Prefer manufacturer.com / support / literature PDF links over random blogs. " +
+          "Reply with JSON only: {documents:[{title,url,kind:\"manual\"|\"spec\"|\"other\",note}]}. " +
+          "Include at most 5 high-confidence docs. If unsure of a URL, omit it — never invent domains. " +
+          "This is a draft for homeowner approve; do not claim documents are already stored.",
+        user: `manufacturer=${input.manufacturer}\nmodel=${input.model}\nFind public manuals and spec sheets.`,
+        useGoogleSearch: input.live.provider === "gemini",
+      });
+      const jsonMatch = content?.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as {
+          documents?: Array<{
+            title?: string;
+            url?: string;
+            kind?: string;
+            note?: string;
+          }>;
+        };
+        const seenUrls = new Set(
+          manuals
+            .map((m) => m.sourceUrl?.toLowerCase())
+            .filter(Boolean) as string[],
+        );
+        for (const doc of parsed.documents ?? []) {
+          const title = String(doc.title ?? "").trim().slice(0, 160);
+          const url = String(doc.url ?? "").trim();
+          if (!title || !/^https:\/\//i.test(url)) continue;
+          const urlKey = url.toLowerCase();
+          if (seenUrls.has(urlKey)) continue;
+          seenUrls.add(urlKey);
+          const kind =
+            doc.kind === "spec" || doc.kind === "manual" || doc.kind === "other"
+              ? doc.kind
+              : "manual";
+          const id = `web-${manuals.length + 1}-${crypto.randomUUID().slice(0, 8)}`;
+          const note = String(doc.note ?? "").trim().slice(0, 280);
+          const body = [
+            `${title}`,
+            "",
+            `Manufacturer: ${input.manufacturer}`,
+            `Model: ${input.model}`,
+            `Kind: ${kind}`,
+            `Source: ${url}`,
+            "",
+            note ||
+              "Link suggested by Ask HomeAsset from a public web search. Open in a browser to view or download. Not fetched automatically.",
+            "",
+            "Stored only because you confirmed. HomeAsset does not silently add manuals.",
+          ].join("\n");
+          manuals.push({
+            id,
+            title,
+            sourceUrl: url,
+            preview: note || url,
+            kind,
+            selectedByDefault: manuals.length === 0,
+          });
+          manualContents[id] = body;
+          if (manuals.length >= 6) break;
+        }
+      }
+    } catch {
+      // keep catalog-only draft
+    }
+  }
+
+  return {
+    mode: input.live.mode,
+    manuals,
+    manualContents,
+  };
+}
+
+/** Gemini may use Google Search grounding; OpenAI path is plain JSON chat. */
+async function chatJsonTextWithOptionalSearch(args: {
+  live: LiveConfig;
+  system: string;
+  user: string;
+  useGoogleSearch?: boolean;
+}): Promise<string | null> {
+  if (args.live.provider === "gemini" && args.useGoogleSearch) {
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/` +
+      `${encodeURIComponent(args.live.geminiModel)}:generateContent` +
+      `?key=${encodeURIComponent(args.live.geminiKey)}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `${args.system}\n\n${args.user}` }],
+          },
+        ],
+        tools: [{ google_search: {} }],
+        generationConfig: { temperature: 0 },
+      }),
+    });
+    const rawText = await response.text();
+    if (!response.ok) {
+      // Fall back to non-search chat if the tool is unavailable on this model/key.
+      return chatJsonText({
+        live: args.live,
+        system: args.system,
+        user: args.user,
+      });
+    }
+    const envelope = JSON.parse(rawText) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    return (
+      envelope.candidates?.[0]?.content?.parts
+        ?.map((p) => p.text ?? "")
+        .join("")
+        .trim() || null
+    );
+  }
+  return chatJsonText({
+    live: args.live,
+    system: args.system,
+    user: args.user,
+  });
 }
 
 async function formatContractor(input: {
@@ -997,6 +1335,28 @@ function matchExistingAsset(
   return null;
 }
 
+const ASSET_INTAKE_SYSTEM =
+  `${HOME_SCOPE_SYSTEM_BLURB} ` +
+  "You extract ONE distinct home asset from homeowner input. " +
+  "When an image or PDF is attached, carefully OCR / read ALL visible text: equipment nameplates, data plates, " +
+  "HVAC proposals, invoices, receipts, stickers, and purchase screenshots. " +
+  "Prefer exact printed values over guesses. Transcribe model and serial character-for-character " +
+  "(watch O vs 0, I vs 1, S vs 5). " +
+  "Look for labels such as: Manufacturer / Mfr / Brand, Model / Mod / Model No / Catalog No, " +
+  "Serial / Ser / S/N / SN, Capacity / Tons / Ton / BTU / MBH / kW / Gallons / SEER / AFUE / HSPF / EER, " +
+  "Refrigerant, Voltage / Volts / Phase, Date / DOM / Install. " +
+  "Put capacity and other plate facts (tons, BTU, SEER, refrigerant, voltage) into suggestedAsset.notes " +
+  "when there is no dedicated field — e.g. \"Capacity: 3 ton / 36000 BTU · SEER 16\". " +
+  "identificationLabel should be brand + model when known (e.g. \"Carrier 24ACC636A003\"). " +
+  "Reply with JSON only: {intent:\"add\"|\"update\", matchedAssetId:string|null, identificationLabel:string, confidence:number, " +
+  "capacity:string|null, " +
+  "suggestedAsset:{name,category,manufacturer,model,serial,purchaseDate,installDate,installerVendor,location,notes,warrantyEndDate,warrantyTerm}, " +
+  "missingFields:string[]}. " +
+  "category must be one of: hvac,roof,appliance,generator,water_heater,plumbing,electrical,kids_gear,vehicle,other. " +
+  "matchedAssetId must be one of the provided existing asset ids or null. Prefer update when the same equipment already exists. " +
+  "Do not invent serial numbers, model numbers, or capacity. Dates YYYY-MM-DD or null. " +
+  "Fill only facts grounded in the input or attached media. missingFields = keys still unknown that a homeowner should confirm.";
+
 /**
  * Multi-source Ask HomeAsset intake: photo label / email / invoice / notes →
  * one distinct asset draft with Add or Update. Never writes the ledger.
@@ -1006,6 +1366,8 @@ async function formatAssetIntake(input: {
   text: string | null;
   hint: string | null;
   filename: string | null;
+  mediaBase64: string | null;
+  mediaMimeType: string | null;
   existingAssets: ExistingAssetLite[];
   live: LiveConfig;
 }) {
@@ -1019,6 +1381,7 @@ async function formatAssetIntake(input: {
     .join(" ")
     .trim();
   const existingIds = new Set(input.existingAssets.map((a) => a.id));
+  const hasMedia = Boolean(input.mediaBase64 && input.mediaMimeType);
 
   if (input.live.mode === "live") {
     try {
@@ -1032,18 +1395,23 @@ async function formatAssetIntake(input: {
           serial: a.serial ?? null,
         })),
       );
+      const mediaNote = hasMedia
+        ? `mediaAttached=true mime=${input.mediaMimeType} (read the attached ${
+            input.mediaMimeType === "application/pdf" ? "PDF" : "photo"
+          } carefully for nameplate / proposal / invoice text)`
+        : "mediaAttached=false";
       const content = await chatJsonText({
         live: input.live,
-        system:
-          `${HOME_SCOPE_SYSTEM_BLURB} ` +
-          "You extract ONE distinct home asset from homeowner input (photo label hint, contractor email, invoice, or notes). " +
-          "Reply with JSON only: {intent:\"add\"|\"update\", matchedAssetId:string|null, identificationLabel:string, confidence:number, " +
-          "suggestedAsset:{name,category,manufacturer,model,serial,purchaseDate,installDate,installerVendor,location,notes,warrantyEndDate,warrantyTerm}, " +
-          "missingFields:string[]}. " +
-          "category must be one of: hvac,roof,appliance,generator,water_heater,plumbing,electrical,kids_gear,vehicle,other. " +
-          "matchedAssetId must be one of the provided existing asset ids or null. Prefer update when the same equipment already exists. " +
-          "Do not invent serial numbers. Dates YYYY-MM-DD or null. Fill only facts grounded in the input. missingFields = keys still unknown that a homeowner should confirm.",
-        user: `sourceKind=${input.sourceKind}\nexistingAssets=${existingJson}\ninput:\n${query}`,
+        system: ASSET_INTAKE_SYSTEM,
+        user:
+          `sourceKind=${input.sourceKind}\n${mediaNote}\n` +
+          `existingAssets=${existingJson}\ninput:\n${query || "(see attached media)"}`,
+        media: hasMedia
+          ? {
+              mimeType: input.mediaMimeType!,
+              base64: input.mediaBase64!,
+            }
+          : null,
       });
       const jsonMatch = content?.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
@@ -1052,9 +1420,21 @@ async function formatAssetIntake(input: {
           matchedAssetId?: string | null;
           identificationLabel?: string;
           confidence?: number;
+          capacity?: string | null;
           suggestedAsset?: Partial<AssetIntakeSuggested> & { category?: string };
           missingFields?: unknown;
         };
+        let notes = nullableTrim(parsed.suggestedAsset?.notes, 2000);
+        const capacity = nullableTrim(parsed.capacity, 160);
+        if (capacity) {
+          const capacityLine = `Capacity: ${capacity}`;
+          notes = notes
+            ? notes.toLowerCase().includes("capacity:")
+              ? notes
+              : `${notes}\n${capacityLine}`
+            : capacityLine;
+          notes = notes.slice(0, 2000);
+        }
         const suggestedAsset: AssetIntakeSuggested = {
           name: String(parsed.suggestedAsset?.name ?? "Home asset")
             .trim()
@@ -1070,7 +1450,7 @@ async function formatAssetIntake(input: {
             120,
           ),
           location: nullableTrim(parsed.suggestedAsset?.location, 120),
-          notes: nullableTrim(parsed.suggestedAsset?.notes, 2000),
+          notes,
           warrantyEndDate: nullableDate(parsed.suggestedAsset?.warrantyEndDate),
           warrantyTerm: nullableTrim(parsed.suggestedAsset?.warrantyTerm, 120),
         };
@@ -1121,7 +1501,17 @@ async function formatAssetIntake(input: {
             ),
           confidence: Math.min(
             1,
-            Math.max(0, Number(parsed.confidence ?? 0.7) || 0.7),
+            Math.max(
+              0,
+              Number(
+                parsed.confidence ??
+                  (hasMedia &&
+                  suggestedAsset.manufacturer &&
+                  suggestedAsset.model
+                    ? 0.85
+                    : 0.7),
+              ) || 0.7,
+            ),
           ),
           suggestedAsset,
           missingFields,
@@ -1129,7 +1519,7 @@ async function formatAssetIntake(input: {
         };
       }
     } catch {
-      // fall through
+      // fall through — never log media bytes
     }
   }
 
@@ -1150,7 +1540,9 @@ async function formatAssetIntake(input: {
     installDate,
     installerVendor: from && from.length <= 120 ? from : null,
     location: null,
-    notes: `Drafted from ${input.sourceKind} via Ask HomeAsset (mock). Confirm before saving.`,
+    notes: hasMedia
+      ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (mock — live vision unavailable). Confirm before saving.`
+      : `Drafted from ${input.sourceKind} via Ask HomeAsset (mock). Confirm before saving.`,
     warrantyEndDate: null,
     warrantyTerm: null,
   };

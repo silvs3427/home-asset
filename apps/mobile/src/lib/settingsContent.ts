@@ -38,7 +38,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Add or Update an Asset",
-    body: "From Home: Scan a picture (camera or photo library), Upload a PDF (invoice or paperwork), or Free text (describe the item and tap Format with Ask HomeAsset). Review the draft, edit if needed, then Save / Confirm — nothing is official until you approve.",
+    body: "From Home: Scan a picture (camera or photo library), Upload a PDF (invoice or paperwork), or Free text (describe the item and tap Format with Ask HomeAsset). Photos of labels and nameplates are read for brand, model, serial, and capacity when visible. After Save / Confirm with make and model, Ask HomeAsset can suggest manuals and spec sheets for you to approve — it does not silently add them, and you do not need to photograph manuals separately for that step.",
   },
   {
     title: "Notifications",
@@ -69,7 +69,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Approve before official",
-    body: "Ask HomeAsset drafts (scan a picture, PDF upload, free-text format, photo/email/invoice intake, and similar helpers) wait for your review. Future contractor submissions — including invite-link voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Nothing is auto-added as official without your confirm.",
+    body: "Ask HomeAsset drafts (scan a picture, PDF upload, free-text format, photo/email/invoice intake, suggested manuals/spec sheets, and similar helpers) wait for your review. Future contractor submissions — including invite-link voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Nothing is auto-added as official without your confirm.",
   },
   {
     title: "Signed-in and home-scoped",
@@ -89,7 +89,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "AI and your data",
-    body: "How-to answers use manuals and facts already on the home when possible. Asset intake and scans create drafts only. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; add/update and scan wait for your confirm. Ask HomeAsset stays on home help (ledger, equipment, manuals, maintenance, recalls, intake) — not coding projects or unrelated chat.",
+    body: "How-to answers use manuals and facts already on the home when possible. Asset intake and scans create drafts only. When you attach a photo or PDF for Add or update, that file is sent to the server AI helper so it can read the label — it is not auto-saved as an official document. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; add/update and scan wait for your confirm. Ask HomeAsset stays on home help (ledger, equipment, manuals, maintenance, recalls, intake) — not coding projects or unrelated chat.",
   },
   {
     title: "Ask HomeAsset limits",

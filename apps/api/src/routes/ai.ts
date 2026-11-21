@@ -573,6 +573,8 @@ const assetIntakeSchema = z.object({
   text: z.string().trim().max(20000).optional().nullable(),
   hint: z.string().trim().max(500).optional().nullable(),
   filename: z.string().trim().max(200).optional().nullable(),
+  imageBase64: z.string().max(3_500_000).optional().nullable(),
+  mediaMimeType: z.string().trim().max(80).optional().nullable(),
 });
 
 /**
@@ -602,11 +604,14 @@ aiRoutes.post("/asset-intake", async (c) => {
   const text = parsed.data.text?.trim() || null;
   const hint = parsed.data.hint?.trim() || null;
   const filename = parsed.data.filename?.trim() || null;
-  if (!text && !hint && !filename) {
+  const imageBase64 = parsed.data.imageBase64?.trim() || null;
+  const mediaMimeType = parsed.data.mediaMimeType?.trim() || null;
+  if (!text && !hint && !filename && !imageBase64) {
     return c.json(
       {
         error: "invalid_input",
-        message: "Provide a photo filename, hint, or pasted text.",
+        message:
+          "Provide a photo/PDF attachment, filename, hint, or pasted text.",
       },
       400,
     );
@@ -642,6 +647,8 @@ aiRoutes.post("/asset-intake", async (c) => {
       text,
       hint,
       filename,
+      imageBase64,
+      mediaMimeType,
       existingAssets: existing,
     });
     const draft = createAssetIntakeDraft({

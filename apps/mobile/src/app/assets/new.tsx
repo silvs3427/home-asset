@@ -14,6 +14,7 @@ import {
   ASSET_CATEGORIES,
   aiAssetIntake,
   createAsset,
+  manualsSuggestPath,
   type AssetCategory,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -132,7 +133,16 @@ export default function NewAssetScreen() {
         warrantyEndDate: warrantyEndDate.trim() || null,
         warrantyTerm: warrantyTerm.trim() || null,
       });
-      router.replace(`/assets/${res.asset.id}`);
+      const manualsPath = manualsSuggestPath({
+        assetId: res.asset.id,
+        manufacturer: res.asset.manufacturer,
+        model: res.asset.model,
+      });
+      if (manualsPath) {
+        router.replace(manualsPath);
+      } else {
+        router.replace(`/assets/${res.asset.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save asset.");
     } finally {

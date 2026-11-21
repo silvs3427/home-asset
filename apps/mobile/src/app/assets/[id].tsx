@@ -26,6 +26,7 @@ import {
   listDocuments,
   listRecallAlerts,
   listReminders,
+  manualsSuggestPath,
   recallAlertStatusLabel,
   recurrenceLabel,
   runPropertyRecallCheck,
@@ -391,6 +392,30 @@ export default function AssetDetailScreen() {
                 }
               />
             </View>
+
+            {manualsSuggestPath({
+              assetId: asset.id,
+              manufacturer: asset.manufacturer,
+              model: asset.model,
+            }) ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  const path = manualsSuggestPath({
+                    assetId: asset.id,
+                    manufacturer: asset.manufacturer,
+                    model: asset.model,
+                  });
+                  if (path) router.push(path);
+                }}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.secondaryLabel}>Find manuals</Text>
+              </Pressable>
+            ) : null}
 
             <Text style={styles.sectionHeading}>Safety recalls</Text>
             <Pressable

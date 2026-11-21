@@ -1282,6 +1282,30 @@ export type SuggestedManualDraft = {
   selectedByDefault: boolean;
 };
 
+export type SuggestedDocsManual = {
+  id: string;
+  title: string;
+  sourceUrl: string | null;
+  preview: string;
+  kind: "manual" | "spec" | "other";
+  selectedByDefault: boolean;
+};
+
+export type SuggestManualsDraft = {
+  draftId: string;
+  mode: "mock" | "live";
+  manufacturer: string;
+  model: string;
+  identificationLabel: string;
+  manuals: SuggestedDocsManual[];
+  expiresAt: string;
+  privacy: {
+    writes: false;
+    confirmRequired: true;
+    note: string;
+  };
+};
+
 export type AiScanDraft = {
   draftId: string;
   mode: "mock" | "live";
@@ -1836,6 +1860,9 @@ export async function aiAssetIntake(
     text?: string | null;
     hint?: string | null;
     filename?: string | null;
+    /** Compressed photo/PDF bytes for multimodal OCR (cloud edge). */
+    imageBase64?: string | null;
+    mediaMimeType?: string | null;
   },
 ): Promise<{ draft: AssetIntakeDraft; aiMode: "mock" | "live" }> {
   if (useCloud()) {
@@ -1860,6 +1887,8 @@ export async function aiAssetIntake(
       text: input.text ?? null,
       hint: input.hint ?? null,
       filename: input.filename ?? null,
+      imageBase64: input.imageBase64 ?? null,
+      mediaMimeType: input.mediaMimeType ?? null,
       existingAssets,
     });
     rememberAssetIntakeDraft(res.draft.draftId, {
@@ -1962,6 +1991,139 @@ export async function aiConfirmAssetIntake(
     },
   );
   return parseJson(res);
+}
+
+/**
+ * After make + model are on an asset: draft manuals / spec sheets for approve.
+ * Cloud edge searches catalog + (live) public web; nothing stored until confirm.
+ */
+export async function aiSuggestManuals(
+  accessToken: string,
+  propertyId: string,
+  input: {
+    assetId: string;
+    manufacturer: string;
+    model: string;
+  },
+): Promise<{ draft: SuggestManualsDraft; aiMode: "mock" | "live" }> {
+  if (useCloud()) {
+    const { invokeAiAssist, rememberManualsDraft } = await import("./aiEdge");
+    const res = await invokeAiAssist<{
+      draft: SuggestManualsDraft;
+      aiMode: "mock" | "live";
+      manualContents?: Record<string, string>;
+    }>("suggest-manuals", {
+      propertyId,
+      manufacturer: input.manufacturer,
+      model: input.model,
+      assetId: input.assetId,
+    });
+    rememberManualsDraft(res.draft.draftId, {
+      propertyId,
+      assetId: input.assetId,
+      manufacturer: input.manufacturer,
+      model: input.model,
+      manuals: res.draft.manuals.map((m) => ({ id: m.id, title: m.title })),
+      manualContents: res.manualContents ?? {},
+    });
+    return { draft: res.draft, aiMode: res.aiMode };
+  }
+  // Local API: no dedicated route yet — return empty draft so UX stays approve-gated.
+  return {
+    draft: {
+      draftId: `local-manuals-${Date.now()}`,
+      mode: "mock",
+      manufacturer: input.manufacturer,
+      model: input.model,
+      identificationLabel: `${input.manufacturer} ${input.model}`,
+      manuals: [],
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      privacy: {
+        writes: false,
+        confirmRequired: true,
+        note: "Suggested docs only. Nothing is stored until you choose which to keep.",
+      },
+    },
+    aiMode: "mock",
+  };
+}
+
+export async function aiConfirmSuggestedManuals(
+  accessToken: string,
+  propertyId: string,
+  input: {
+    draftId: string;
+    assetId: string;
+    selectedManualIds: string[];
+  },
+): Promise<{
+  documents: PublicDocument[];
+  storedManualCount: number;
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  if (useCloud()) {
+    const { takeManualsDraft } = await import("./aiEdge");
+    const { cloudCreateDocumentFromBytes } = await import("./cloud");
+    const held = takeManualsDraft(input.draftId);
+    if (
+      !held ||
+      held.propertyId !== propertyId ||
+      held.assetId !== input.assetId
+    ) {
+      throw new ApiError(
+        "That manuals draft expired or was already used. Try again.",
+        "client",
+        404,
+      );
+    }
+    const titleById = new Map(held.manuals.map((m) => [m.id, m.title]));
+    const documents: PublicDocument[] = [];
+    for (const manualId of input.selectedManualIds) {
+      const content = held.manualContents[manualId];
+      if (!content) continue;
+      const bytes = new TextEncoder().encode(content);
+      const { document } = await cloudCreateDocumentFromBytes(propertyId, {
+        title: titleById.get(manualId) || manualId,
+        docType: "manual",
+        assetId: input.assetId,
+        source: "ai_fetched",
+        mimeType: "text/plain",
+        originalFilename: `${manualId}.txt`,
+        bytes,
+      });
+      documents.push(document);
+    }
+    return {
+      documents,
+      storedManualCount: documents.length,
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Saved only because you confirmed. Ask HomeAsset never auto-adds manuals.",
+      },
+    };
+  }
+  throw new ApiError(
+    "Manuals confirm needs the cloud path for this preview.",
+    "client",
+    501,
+  );
+}
+
+/** Navigate helper target after asset save when make + model are present. */
+export function manualsSuggestPath(input: {
+  assetId: string;
+  manufacturer: string | null | undefined;
+  model: string | null | undefined;
+}): string | null {
+  const manufacturer = input.manufacturer?.trim() || "";
+  const model = input.model?.trim() || "";
+  if (!manufacturer || !model) return null;
+  return (
+    `/ai/suggest-manuals?assetId=${encodeURIComponent(input.assetId)}` +
+    `&manufacturer=${encodeURIComponent(manufacturer)}` +
+    `&model=${encodeURIComponent(model)}`
+  );
 }
 
 export async function aiSuggestPermits(
