@@ -2342,12 +2342,53 @@ export type PublicContractorSubmission = {
   status: "pending" | "approved" | "declined";
   contractorName: string | null;
   companyName: string | null;
+  phone: string | null;
+  email: string | null;
+  servicesOffered: string[];
   notesText: string | null;
   draft: ContractorInviteDraft;
   aiMode: "mock" | "live";
   reviewedAt: string | null;
   createdAt: string;
   media: PublicContractorSubmissionMedia[];
+};
+
+export type PublicHomeContractorWork = {
+  id: string;
+  contractorId: string;
+  propertyId: string;
+  submissionId: string | null;
+  summary: string;
+  workPerformed: string | null;
+  workDate: string | null;
+  createdAt: string;
+};
+
+export type PublicHomeContractor = {
+  id: string;
+  propertyId: string;
+  displayName: string;
+  companyName: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  servicesOffered: string[];
+  notes: string | null;
+  lastWorkedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  work: PublicHomeContractorWork[];
+};
+
+export type HomeContractorInput = {
+  displayName: string;
+  companyName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  servicesOffered?: string[] | string | null;
+  notes?: string | null;
+  lastWorkedAt?: string | null;
 };
 
 const INVITE_CLOUD_ONLY =
@@ -2468,4 +2509,131 @@ export async function approveContractorSubmission(
     submissionId,
     input,
   );
+}
+
+const DIRECTORY_CLOUD_ONLY =
+  "Contractor directory needs Supabase cloud on this phone (URL + anon key).";
+
+export async function listHomeContractors(
+  accessToken: string,
+  propertyId: string,
+): Promise<{ contractors: PublicHomeContractor[] }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudListHomeContractors(accessToken, propertyId);
+}
+
+export async function getHomeContractor(
+  accessToken: string,
+  propertyId: string,
+  contractorId: string,
+): Promise<{ contractor: PublicHomeContractor }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudGetHomeContractor(
+    accessToken,
+    propertyId,
+    contractorId,
+  );
+}
+
+export async function createHomeContractor(
+  accessToken: string,
+  propertyId: string,
+  input: HomeContractorInput,
+): Promise<{ contractor: PublicHomeContractor }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudCreateHomeContractor(
+    accessToken,
+    propertyId,
+    input,
+  );
+}
+
+export async function updateHomeContractor(
+  accessToken: string,
+  propertyId: string,
+  contractorId: string,
+  input: HomeContractorInput,
+): Promise<{ contractor: PublicHomeContractor }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudUpdateHomeContractor(
+    accessToken,
+    propertyId,
+    contractorId,
+    input,
+  );
+}
+
+export async function deleteHomeContractor(
+  accessToken: string,
+  propertyId: string,
+  contractorId: string,
+): Promise<{ ok: true }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudDeleteHomeContractor(
+    accessToken,
+    propertyId,
+    contractorId,
+  );
+}
+
+export async function addHomeContractorWork(
+  accessToken: string,
+  propertyId: string,
+  contractorId: string,
+  input: {
+    summary: string;
+    workPerformed?: string | null;
+    workDate?: string | null;
+  },
+): Promise<{ work: PublicHomeContractorWork }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudAddHomeContractorWork(
+    accessToken,
+    propertyId,
+    contractorId,
+    input,
+  );
+}
+
+/** Client-side directory search across contact, work, and services. */
+export function filterHomeContractors(
+  contractors: PublicHomeContractor[],
+  query: string,
+): PublicHomeContractor[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return contractors;
+  return contractors.filter((c) => {
+    const hay = [
+      c.displayName,
+      c.companyName,
+      c.phone,
+      c.email,
+      c.website,
+      c.notes,
+      ...c.servicesOffered,
+      ...c.work.flatMap((w) => [w.summary, w.workPerformed]),
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .toLowerCase();
+    return hay.includes(q);
+  });
 }

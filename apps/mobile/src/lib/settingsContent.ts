@@ -8,7 +8,7 @@
  * Product UI: keep screens clean — put explanations here, not as in-app
  * commentary on feature screens. Use `lib/theme.ts` colors everywhere.
  * Home CTAs: Ask HomeAsset → View Assets → Add or Update an Asset →
- * Notifications → Settings.
+ * Contractors → Notifications → Settings.
  * Suggest-from-permits is not a primary CTA.
  * HomeAsset is homeowner-only — no contractor face in the app.
  */
@@ -22,7 +22,7 @@ export type ContentSection = {
 export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   {
     title: "Home",
-    body: "Shows your current address and five actions, top to bottom: Ask HomeAsset, View Assets, Add or Update an Asset, Notifications, and Settings. Switch homes here when you have more than one. From any other screen, tap Home (orange, top right) to return here.",
+    body: "Shows your current address and six actions, top to bottom: Ask HomeAsset, View Assets, Add or Update an Asset, Contractors, Notifications, and Settings. Switch homes here when you have more than one. From any other screen, tap Home (orange, top right) to return here.",
   },
   {
     title: "Homes",
@@ -45,16 +45,16 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
     body: "One place for upcoming reminders and recent notices (due items, safety recalls, and contractor submissions). Add reminders here. Tap a contractor notice to review the draft. Use Check safety recalls to match your assets to public lists. Push and in-app delivery are under Settings → Push & in-app — turn on Safety recall alerts, Contractor submissions, and Push, then Register this phone for push if you want lock-screen alerts.",
   },
   {
+    title: "Contractors",
+    body: "From Home → Contractors: Invite a contractor (share a submission link), Review contractor submissions (approve before official), and View past contractors (searchable directory of contact info, work done for this home, and other services they offer). HomeAsset is for homeowners only — pros use LightLift or your invite link in a browser (no HomeAsset contractor login). Invite submitters can add optional phone, email, and services; those land in your directory only after you approve. When you approve an invite draft, selected assets can get Last serviced and Confirmed by contractor from the pro’s name and work date — you can edit those anytime on the asset. You can also add a past pro by hand.",
+  },
+  {
     title: "Settings",
-    body: "Add another home, Invite a contractor (share a submission link), Review contractor submits, How to use, Privacy, Security (including app lock), push & in-app delivery prefs, and sign out.",
+    body: "Add another home, How to use, Privacy, Security (including app lock), push & in-app delivery prefs, and sign out. Contractor invite and review live under Home → Contractors.",
   },
   {
     title: "App lock",
     body: "Under Settings → Security, turn on Lock when idle or away. After a quiet stretch (1–5 minutes, your choice) or when you leave the app for a short while, HomeAsset hides the ledger until you unlock with Face ID / fingerprint (when your phone supports it) or your password. Your sign-in session stays on the phone; we never store your biometrics.",
-  },
-  {
-    title: "Contractors",
-    body: "HomeAsset is for homeowners only. Pros who use LightLift can push finished work into your home for you to approve (LightLift side — later). Pros without LightLift: Settings → Invite a contractor creates a link you share. They open it in a browser (no HomeAsset login), type notes, record voice, and upload photos. Ask HomeAsset formats a draft; you approve, edit selection, or decline before anything is official. When you approve, selected assets can get Last serviced and Confirmed by contractor from the pro’s name and work date — you can edit those anytime on the asset. Review waiting drafts under Settings → Review contractor submits or from a contractor notice.",
   },
   {
     title: "Privacy and security",
@@ -69,7 +69,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Approve before official",
-    body: "Ask HomeAsset drafts (scan a picture, PDF upload, free-text format, photo/email/invoice intake, suggested manuals/spec sheets, and similar helpers) wait for your review. Contractor invite-link submissions — voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Nothing is auto-added as official without your confirm.",
+    body: "Ask HomeAsset drafts (scan a picture, PDF upload, free-text format, photo/email/invoice intake, suggested manuals/spec sheets, and similar helpers) wait for your review. Contractor invite-link submissions — voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Contact details a pro adds on the invite form enter your Past contractors directory only after you approve. Nothing is auto-added as official without your confirm.",
   },
   {
     title: "Signed-in and home-scoped",
