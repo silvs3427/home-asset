@@ -10,6 +10,7 @@ Mobile Expo specifics live in [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
 2. SQL: `supabase/migrations/20261121000000_bootstrap_new_user.sql` — security definer, `auth.uid()` only, idempotent.
 3. Do not reintroduce Auth→profiles triggers as the sole account-creation path.
 4. Do not add broad `profiles` INSERT policies for arbitrary user ids.
+5. Homeowner / contractor are **separate enrollments**. Signup sets one face. Second role only via `enroll_face` (SQL: `20261121210000_enroll_face.sql`). Face switch must not auto-unlock (`enableIfMissing` removed). Settings shows switch only when both faces are enrolled.
 
 ## Cloud vs local demo
 

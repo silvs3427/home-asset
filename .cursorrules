@@ -12,6 +12,7 @@ Phone-first home memory for homeowners. Contractors may submit work into the hom
 
 - RLS on every homeowner ledger table; least privilege.
 - Users may only bootstrap / read / update **their own** profile (`auth.uid()`). No broad insert policies that let one user create another’s profile.
+- Homeowner vs contractor: **separate role enrollment**. Do not unlock the other face via a free Settings toggle; use explicit `enroll_face` (and `set_active_face` for switches among enrolled faces).
 - No service-role key on the phone. Parameterized queries / bound RPC args only.
 - Don’t trust the client for tenancy, ownership, or “official” writes.
 

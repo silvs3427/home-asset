@@ -18,8 +18,9 @@ HomeAsset’s cloud project ref (from project docs): `iiyhogiwqqotlrsjlqud` → 
 | 2 | `migrations/20261120000000_epic7_recalls.sql` | **Required for phone safety recalls** — `recall_notices` + `asset_recall_alerts` + RLS (safe to re-run) |
 | 3 | `migrations/20261121000000_bootstrap_new_user.sql` | LightLift-style `bootstrap_new_user` RPC; drops Auth trigger / insert-own policy if present |
 | 4 | `migrations/20261121120000_profiles_table_grants.sql` | **Paste now if signup says permission denied for table profiles** — GRANTs + re-assert select/update policies (safe re-run; no app rebuild) |
+| 5 | `migrations/20261121210000_enroll_face.sql` | **Distinct role enrollment** — `enroll_face` + `set_active_face` RPCs; blocks free unlock of contractor/homeowner via profile UPDATE |
 
-That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, and adds a private Storage bucket for manuals / photos. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message.
+That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, enroll a second role on purpose, and adds a private Storage bucket for manuals / photos. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message.
 
 ### Exact clicks (first-time)
 
@@ -29,6 +30,7 @@ That setup creates the homeowner ledger tables, enables RLS so each user only se
 4. If signup shows **permission denied for table profiles**, paste and run **only** `20261121120000_profiles_table_grants.sql` (**no app rebuild**).
 5. If signup shows **Could not load profile** / bootstrap failed (function missing), re-run `20261121000000_bootstrap_new_user.sql`, then the grants file if needed.
 6. If **Check safety recalls** says tables are missing, re-run `20261120000000_epic7_recalls.sql`.
+7. For separate homeowner/contractor enrollment (Settings → Enroll as…), run `20261121210000_enroll_face.sql` (**no app rebuild** — JS already calls the RPCs).
 
 ### Trigger choice (documented)
 

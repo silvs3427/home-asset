@@ -94,7 +94,7 @@ If Expo Go says the project is incompatible, you have the wrong SDK client — u
 
 ### 4. Smoke accounts through AI assist
 
-1. Create an account (choose **homeowner** or **contractor**).
+1. Create an account (choose **homeowner** or **contractor** — roles are separate).
 2. On the homeowner face, tap **Add home**, enter name + address, save.
 3. Tap **Scan product (AI)** → hint `Generac GP6500` (or take a photo) → review suggested manuals → **Confirm & save**.
 4. Open the asset → confirm a **safety recall** alert appears (or Home → **Notifications** → **Check safety recalls**) → **Ack** or **Dismiss**. Needs epic7 SQL on Supabase — see [`supabase/README.md`](./supabase/README.md).
@@ -102,9 +102,10 @@ If Expo Go says the project is incompatible, you have the wrong SDK client — u
 6. Tap **Paste contractor email** → paste a sample contractor message → draft → **Approve & save** (nothing is official until approve).
 7. Tap **Suggest from permits** → review stub hints for the address → select → **Approve selected**.
 8. From home, also try **View assets**, documents, reminders, and **Notifications** as before.
-9. Switch to **contractor face** → **Format notes (AI)** → paste job notes → confirm draft wording (nothing is written to a home ledger yet).
-10. Add a second home, switch, and confirm assets/docs stay empty there.
-11. Sign out / sign in again — session and data should still be there.
+9. Settings → if you only signed up as homeowner, tap **Enroll as contractor** (not a free switch). After both roles are enrolled, use **Switch to contractor** / **Switch to homeowner**.
+10. On contractor → Ask HomeAsset → format notes → confirm draft wording (nothing is written to a home ledger yet).
+11. Add a second home, switch, and confirm assets/docs stay empty there.
+12. Sign out / sign in again — session and data should still be there.
 
 ### 5. Scheduler (optional)
 
@@ -189,6 +190,7 @@ docker run --rm -p 8787:8787 \
 
 - Auth required before any personal, home, asset, document, reminder, recall, notification, or AI endpoint
 - **Auth bootstrap:** LightLift-style RPC only creates the signed-in user’s own profile; RLS select/update own; no service-role on device
+- **Roles:** homeowner and contractor are enrolled separately (`bootstrap_new_user` starting face; later `enroll_face`). Face switch only among enrolled roles — no free unlock by flipping Settings
 - Homes, assets, documents, reminders, and recall alerts are **property-scoped**: list/get/update/delete only succeed for homes you own
 - Notifications are **account-scoped** and never leak across users; reminder and recall notices include the home id when relevant
 - **AI never silently writes** — scan returns a draft; manuals/assets are saved only on explicit confirm; how-to and contractor format are draft/read-only; AI keys stay on edge/server (not `EXPO_PUBLIC_*`)

@@ -225,9 +225,9 @@ describe("HomeAsset API — accounts & properties", () => {
     assert.equal(meBody.activeProperty?.name, "Cabin");
   });
 
-  it("switches face on the same login and refreshes the token", async () => {
+  it("refuses to switch into a role that was never enrolled", async () => {
     const app = createApp();
-    const auth = await signup(app, "faces@example.com", "homeowner");
+    const auth = await signup(app, "faces-blocked@example.com", "homeowner");
 
     const face = await app.request("/me/face", {
       method: "POST",
@@ -235,13 +235,43 @@ describe("HomeAsset API — accounts & properties", () => {
         "content-type": "application/json",
         authorization: `Bearer ${auth.accessToken}`,
       },
-      body: JSON.stringify({ face: "contractor", enableIfMissing: true }),
+      body: JSON.stringify({ face: "contractor" }),
+    });
+    assert.equal(face.status, 403);
+    const faceBody = (await face.json()) as { error?: string };
+    assert.equal(faceBody.error, "face_not_available");
+  });
+
+  it("enrolls the second role then allows switching", async () => {
+    const app = createApp();
+    const auth = await signup(app, "faces@example.com", "homeowner");
+
+    const enroll = await app.request("/me/face/enroll", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({ face: "contractor" }),
+    });
+    assert.equal(enroll.status, 200);
+    const enrollBody = (await enroll.json()) as AuthBody;
+    assert.ok(enrollBody.accessToken);
+    assert.equal(enrollBody.user.activeFace, "contractor");
+    assert.ok(enrollBody.user.faces.includes("homeowner"));
+    assert.ok(enrollBody.user.faces.includes("contractor"));
+
+    const face = await app.request("/me/face", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${enrollBody.accessToken}`,
+      },
+      body: JSON.stringify({ face: "homeowner" }),
     });
     assert.equal(face.status, 200);
     const faceBody = (await face.json()) as AuthBody;
-    assert.ok(faceBody.accessToken);
-    assert.equal(faceBody.user.activeFace, "contractor");
-    assert.ok(faceBody.user.faces.includes("homeowner"));
+    assert.equal(faceBody.user.activeFace, "homeowner");
     assert.ok(faceBody.user.faces.includes("contractor"));
   });
 });

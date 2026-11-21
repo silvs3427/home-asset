@@ -51,7 +51,8 @@ drop function if exists public.ensure_own_profile(text, text);
 -- RPC: bootstrap_new_user — create the caller's profile (+ prefs) only.
 -- Mirrors LightLift bootstrap_new_user (auth.uid(), SECURITY DEFINER,
 -- idempotent, advisory lock). HomeAsset has no separate homeowners table;
--- homeowner/contractor is active_face on profiles.
+-- homeowner/contractor are faces on profiles (one starting face here;
+-- second role via enroll_face — see 20261121210000_enroll_face.sql).
 -- ---------------------------------------------------------------------------
 create or replace function public.bootstrap_new_user(
   p_email text default null,

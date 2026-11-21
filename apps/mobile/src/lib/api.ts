@@ -411,23 +411,39 @@ export async function fetchMe(accessToken: string): Promise<MeResponse> {
   });
 }
 
+/** Switch to an already-enrolled face. Does not unlock a missing role. */
 export async function switchFace(
   accessToken: string,
   face: AppFace,
-  enableIfMissing = true,
 ): Promise<AuthResponse> {
   if (useCloud()) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("./cloud").cloudSwitchFace(
-      accessToken,
-      face,
-      enableIfMissing,
-    );
+    return require("./cloud").cloudSwitchFace(accessToken, face);
   }
   const res = await fetch(`${API_BASE_URL}/me/face`, {
     method: "POST",
     headers: authHeaders(accessToken),
-    body: JSON.stringify({ face, enableIfMissing }),
+    body: JSON.stringify({ face }),
+  });
+  return parseJson<AuthResponse>(res);
+}
+
+/**
+ * Explicit second-role enrollment (homeowner ↔ contractor).
+ * Required before switchFace can target a role you did not sign up with.
+ */
+export async function enrollFace(
+  accessToken: string,
+  face: AppFace,
+): Promise<AuthResponse> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudEnrollFace(accessToken, face);
+  }
+  const res = await fetch(`${API_BASE_URL}/me/face/enroll`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify({ face }),
   });
   return parseJson<AuthResponse>(res);
 }

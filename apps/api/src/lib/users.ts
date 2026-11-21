@@ -187,8 +187,8 @@ export async function setActiveFaceAsync(
 }
 
 /**
- * Enable an additional face on the same login (homeowner ↔ contractor).
- * No separate account required.
+ * Explicit second-role enrollment on the same login.
+ * Distinct from setActiveFace — never call this from a free face toggle.
  */
 export function enableFace(userId: string, face: AppFace): UserRecord {
   const user = getUserById(userId);

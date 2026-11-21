@@ -1,4 +1,7 @@
-/** Product faces on one login (thin switch; CRM-lite comes later). */
+/**
+ * Product roles on one login. Each role is enrolled separately at signup
+ * (or via explicit enroll). Toggle only among already-enrolled faces.
+ */
 export type AppFace = "homeowner" | "contractor";
 
 export type UserRecord = {

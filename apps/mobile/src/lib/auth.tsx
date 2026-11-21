@@ -14,6 +14,7 @@ import {
   login as apiLogin,
   selectProperty as apiSelectProperty,
   signup as apiSignup,
+  enrollFace as apiEnrollFace,
   switchFace as apiSwitchFace,
   type AppFace,
   type CreatePropertyInput,
@@ -41,6 +42,8 @@ type AuthState = {
   addHome: (input: CreatePropertyInput) => Promise<PublicProperty>;
   selectHome: (propertyId: string) => Promise<void>;
   setFace: (face: AppFace) => Promise<void>;
+  /** Explicit second-role enrollment (not a free toggle). */
+  enrollFace: (face: AppFace) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -193,7 +196,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setFace = useCallback(
     async (face: AppFace) => {
       if (!accessToken) throw new Error("Sign in required.");
-      const res = await apiSwitchFace(accessToken, face, true);
+      const res = await apiSwitchFace(accessToken, face);
+      await saveToken(res.accessToken);
+      setAccessToken(res.accessToken);
+      setUser(res.user);
+    },
+    [accessToken],
+  );
+
+  const enrollFace = useCallback(
+    async (face: AppFace) => {
+      if (!accessToken) throw new Error("Sign in required.");
+      const res = await apiEnrollFace(accessToken, face);
       await saveToken(res.accessToken);
       setAccessToken(res.accessToken);
       setUser(res.user);
@@ -215,6 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       addHome,
       selectHome,
       setFace,
+      enrollFace,
     }),
     [
       ready,
@@ -229,6 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       addHome,
       selectHome,
       setFace,
+      enrollFace,
     ],
   );
 

@@ -17,8 +17,6 @@ import { config } from "../config.js";
 
 const faceSchema = z.object({
   face: z.enum(["homeowner", "contractor"]),
-  /** When true, unlocks the face on this login if not already present. */
-  enableIfMissing: z.boolean().optional(),
 });
 
 export const meRoutes = new Hono<{ Variables: AuthVariables }>();
@@ -56,7 +54,8 @@ meRoutes.get("/", (c) => {
 });
 
 /**
- * Switch (and optionally unlock) homeowner / contractor face on the same login.
+ * Switch to an already-enrolled face on this login.
+ * Does NOT unlock a missing role — use POST /me/face/enroll for that.
  * Issues a fresh access token so JWT claims stay in sync.
  */
 meRoutes.post("/face", async (c) => {
@@ -75,9 +74,6 @@ meRoutes.post("/face", async (c) => {
 
   const face = parsed.data.face as AppFace;
   try {
-    if (parsed.data.enableIfMissing) {
-      await enableFaceAsync(claims.sub, face);
-    }
     const user = await setActiveFaceAsync(claims.sub, face);
     const accessToken = await issueAccessToken(user);
     return c.json({
@@ -92,11 +88,51 @@ meRoutes.post("/face", async (c) => {
         {
           error: "face_not_available",
           message:
-            "That face is not on this account yet. Enable it first, or sign up for it.",
+            "That role is not enrolled on this account yet. Enroll for it first — homeowner and contractor are signed up separately.",
         },
         403,
       );
     }
+    if (err instanceof Error && err.message === "USER_NOT_FOUND") {
+      return c.json(
+        { error: "not_found", message: "Account no longer exists." },
+        404,
+      );
+    }
+    throw err;
+  }
+});
+
+/**
+ * Explicit second-role enrollment on the same login.
+ * Distinct from face switch: you must enroll before you can toggle.
+ */
+meRoutes.post("/face/enroll", async (c) => {
+  const claims = c.get("claims");
+  const body = await c.req.json().catch(() => null);
+  const parsed = faceSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "invalid_input",
+        message: "Choose homeowner or contractor.",
+      },
+      400,
+    );
+  }
+
+  const face = parsed.data.face as AppFace;
+  try {
+    await enableFaceAsync(claims.sub, face);
+    const user = await setActiveFaceAsync(claims.sub, face);
+    const accessToken = await issueAccessToken(user);
+    return c.json({
+      accessToken,
+      tokenType: "Bearer",
+      expiresIn: config.jwtTtlSeconds,
+      user: toPublicUser(user),
+    });
+  } catch (err) {
     if (err instanceof Error && err.message === "USER_NOT_FOUND") {
       return c.json(
         { error: "not_found", message: "Account no longer exists." },

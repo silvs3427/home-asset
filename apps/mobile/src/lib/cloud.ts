@@ -239,7 +239,7 @@ function mapCloudError(err: unknown, fallback: string): never {
     (lower.includes("profiles") && lower.includes("does not exist"))
   ) {
     throw new ApiError(
-      "HomeAsset cloud setup is incomplete. In Supabase SQL Editor, run in order: 20261118000000_init_schema.sql, 20261120000000_epic7_recalls.sql, then 20261121000000_bootstrap_new_user.sql (LightLift-style Auth bootstrap).",
+      "HomeAsset cloud setup is incomplete. In Supabase SQL Editor, run in order: 20261118000000_init_schema.sql, 20261120000000_epic7_recalls.sql, 20261121000000_bootstrap_new_user.sql, then 20261121210000_enroll_face.sql (role enrollment).",
       "server",
     );
   }
@@ -486,36 +486,97 @@ export async function cloudFetchMe(_accessToken?: string): Promise<MeResponse> {
   }
 }
 
+/**
+ * Switch among enrolled faces only. Never unlocks a missing role —
+ * use cloudEnrollFace for that (LightLift-style enroll_face RPC).
+ */
 export async function cloudSwitchFace(
   _accessToken: string,
   face: AppFace,
-  enableIfMissing = true,
 ): Promise<AuthResponse> {
   try {
     const session = await requireSession();
     const profile = await ensureBootstrappedProfile(session);
-    let faces = facesFrom(profile.faces_json);
+    const faces = facesFrom(profile.faces_json);
     if (!faces.includes(face)) {
-      if (!enableIfMissing) {
-        throw new ApiError(
-          "That face is not on this account yet.",
-          "auth",
-          403,
-        );
-      }
-      faces = [...faces, face];
+      throw new ApiError(
+        "That role is not enrolled on this account yet. Enroll for it first — homeowner and contractor are signed up separately.",
+        "auth",
+        403,
+      );
     }
     const supabase = requireSupabaseClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({ faces_json: faces, active_face: face })
-      .eq("id", session.user.id);
-    if (error) mapCloudError(error, "Could not switch face.");
+    const { data, error } = await supabase.rpc("set_active_face", {
+      p_face: face,
+    });
+    if (error) {
+      // Fallback if set_active_face SQL is not applied yet: update active_face
+      // only (faces_json stays unchanged — no free unlock).
+      const lower = extractErrorMessage(error, "").toLowerCase();
+      if (
+        lower.includes("could not find the function") ||
+        lower.includes("set_active_face") ||
+        lower.includes("schema cache")
+      ) {
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ active_face: face })
+          .eq("id", session.user.id);
+        if (updateError) mapCloudError(updateError, "Could not switch face.");
+      } else {
+        mapCloudError(error, "Could not switch face.");
+      }
+    } else {
+      const row = (Array.isArray(data) ? data[0] : data) as ProfileRow | null;
+      if (!row?.id) {
+        throw new ApiError("Could not switch face.", "server");
+      }
+    }
     const me = await meFromSession(session);
     return authResponse(session, me.user);
   } catch (err) {
     if (err instanceof ApiError) throw err;
     mapCloudError(err, "Could not switch face.");
+  }
+}
+
+/**
+ * Explicit second-role enrollment via security-definer enroll_face RPC.
+ */
+export async function cloudEnrollFace(
+  _accessToken: string,
+  face: AppFace,
+): Promise<AuthResponse> {
+  try {
+    const session = await requireSession();
+    await ensureBootstrappedProfile(session);
+    const supabase = requireSupabaseClient();
+    const { data, error } = await supabase.rpc("enroll_face", {
+      p_face: face,
+    });
+    if (error) {
+      const lower = extractErrorMessage(error, "").toLowerCase();
+      if (
+        lower.includes("could not find the function") ||
+        lower.includes("enroll_face") ||
+        lower.includes("schema cache")
+      ) {
+        throw new ApiError(
+          "Role enrollment is not set up yet. In Supabase SQL Editor, run 20261121210000_enroll_face.sql, then try again.",
+          "server",
+        );
+      }
+      mapCloudError(error, "Could not enroll that role.");
+    }
+    const row = (Array.isArray(data) ? data[0] : data) as ProfileRow | null;
+    if (!row?.id) {
+      throw new ApiError("Could not enroll that role.", "server");
+    }
+    const me = await meFromSession(session);
+    return authResponse(session, me.user);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not enroll that role.");
   }
 }
 

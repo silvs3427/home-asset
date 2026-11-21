@@ -9,17 +9,18 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import type { AppFace } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
 /**
  * Settings: Add home, guide (How to use / Privacy / Security),
- * alert delivery prefs, face switch, sign out.
- * AI scan/how-to: persistent FAB. Permits intake: not a primary CTA.
+ * alert delivery prefs, role switch or enroll, sign out.
+ * Face switch only when both roles are enrolled; otherwise enroll first.
  */
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, signOut, setFace } = useAuth();
+  const { user, signOut, setFace, enrollFace } = useAuth();
   const [faceBusy, setFaceBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,14 +29,33 @@ export default function SettingsScreen() {
   }
 
   const isHomeownerFace = user.activeFace === "homeowner";
+  const faces = user.faces ?? [];
+  const hasHomeowner = faces.includes("homeowner");
+  const hasContractor = faces.includes("contractor");
+  const hasBothRoles = hasHomeowner && hasContractor;
+  const otherFace: AppFace = isHomeownerFace ? "contractor" : "homeowner";
 
   async function onToggleFace() {
     setError(null);
     setFaceBusy(true);
     try {
-      await setFace(isHomeownerFace ? "contractor" : "homeowner");
+      await setFace(otherFace);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not switch face.");
+    } finally {
+      setFaceBusy(false);
+    }
+  }
+
+  async function onEnrollOtherRole() {
+    setError(null);
+    setFaceBusy(true);
+    try {
+      await enrollFace(otherFace);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not enroll that role.",
+      );
     } finally {
       setFaceBusy(false);
     }
@@ -91,31 +111,64 @@ export default function SettingsScreen() {
           <Text style={styles.metaLabel}>Signed in as</Text>
           <Text style={styles.metaValue}>{user.email}</Text>
           <Text style={styles.metaFace}>
-            Face: {isHomeownerFace ? "Homeowner" : "Contractor"}
+            Role: {isHomeownerFace ? "Homeowner" : "Contractor"}
+            {hasBothRoles ? " (both enrolled)" : ""}
           </Text>
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          disabled={faceBusy}
-          onPress={() => {
-            void onToggleFace();
-          }}
-          style={({ pressed }) => [
-            styles.secondaryBtn,
-            pressed && styles.pressed,
-          ]}
-        >
-          {faceBusy ? (
-            <ActivityIndicator color={colors.brand} />
-          ) : (
-            <Text style={styles.secondaryLabel}>
-              {isHomeownerFace
-                ? "Switch to contractor face"
-                : "Switch to homeowner face"}
+        {hasBothRoles ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={faceBusy}
+            onPress={() => {
+              void onToggleFace();
+            }}
+            style={({ pressed }) => [
+              styles.secondaryBtn,
+              pressed && styles.pressed,
+            ]}
+          >
+            {faceBusy ? (
+              <ActivityIndicator color={colors.brand} />
+            ) : (
+              <Text style={styles.secondaryLabel}>
+                {isHomeownerFace
+                  ? "Switch to contractor"
+                  : "Switch to homeowner"}
+              </Text>
+            )}
+          </Pressable>
+        ) : (
+          <View style={styles.enrollBlock}>
+            <Text style={styles.enrollCopy}>
+              Homeowner and contractor are separate roles. You signed up as{" "}
+              {isHomeownerFace ? "homeowner" : "contractor"} only. Enroll the
+              other role here when you need it — then you can switch back and
+              forth.
             </Text>
-          )}
-        </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={faceBusy}
+              onPress={() => {
+                void onEnrollOtherRole();
+              }}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              {faceBusy ? (
+                <ActivityIndicator color={colors.brand} />
+              ) : (
+                <Text style={styles.secondaryLabel}>
+                  {isHomeownerFace
+                    ? "Enroll as contractor"
+                    : "Enroll as homeowner"}
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        )}
 
         <Pressable
           accessibilityRole="button"
@@ -235,6 +288,14 @@ const styles = StyleSheet.create({
   metaFace: {
     marginTop: 4,
     fontSize: 14,
+    color: colors.muted,
+  },
+  enrollBlock: {
+    gap: 12,
+  },
+  enrollCopy: {
+    fontSize: 14,
+    lineHeight: 20,
     color: colors.muted,
   },
   secondaryBtn: {

@@ -40,11 +40,11 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Settings",
-    body: "Add another home, How to use, Privacy, Security, push & in-app delivery prefs, face switch, and sign out.",
+    body: "Add another home, How to use, Privacy, Security, push & in-app delivery prefs, role switch or enroll, and sign out.",
   },
   {
-    title: "Contractor face",
-    body: "Switch faces in Settings. Ask HomeAsset can format notes. Submitting into a homeowner ledger with their approval comes later.",
+    title: "Homeowner and contractor roles",
+    body: "These are separate. At sign-up you choose one. If you only have one role, Settings offers Enroll as the other — not a free switch. After both are enrolled on the same login, you can toggle back and forth in Settings. Contractor tools (format notes) live under Ask HomeAsset on the contractor role; submitting into a homeowner ledger with their approval comes later.",
   },
   {
     title: "Privacy and security",
@@ -55,7 +55,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
 export const PRIVACY_SECTIONS: ContentSection[] = [
   {
     title: "You own the record",
-    body: "Homeowners own what is official on each home. Contractors may help prepare drafts later; they do not silently write your ledger.",
+    body: "Homeowners own what is official on each home. Contractors may help prepare drafts later; they do not silently write your ledger. Signing up as a homeowner does not make you a contractor (and the reverse) until you enroll that role on purpose.",
   },
   {
     title: "Approve before official",
@@ -78,11 +78,11 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
 export const SECURITY_SECTIONS: ContentSection[] = [
   {
     title: "Account is yours only",
-    body: "After sign-up or sign-in, the app asks the server to create or refresh only your own profile. One user cannot create or take over another person’s account record.",
+    body: "After sign-up or sign-in, the app asks the server to create or refresh only your own profile. One user cannot create or take over another person’s account record. Homeowner and contractor roles are enrolled separately — the phone cannot silently unlock the other role.",
   },
   {
     title: "Server rules, not phone trust",
-    body: "Cloud data is protected so each signed-in user only reaches their own homes and ledger rows. The phone never holds a privileged “admin” key. Official writes are checked on the server.",
+    body: "Cloud data is protected so each signed-in user only reaches their own homes and ledger rows. Role enrollment and face switches go through server checks. The phone never holds a privileged “admin” key. Official writes are checked on the server.",
   },
   {
     title: "Session on the device",
