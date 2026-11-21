@@ -30,7 +30,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Ask HomeAsset",
-    body: "Talk or Text — type what you need or attach a voice note. Ask HomeAsset answers home and ledger questions (equipment, manuals, maintenance, recalls). It is not a general coding or chat assistant. Fair-use limits apply: about 10 asks per minute and 40 per day per signed-in account, enforced on the server. Asking never writes the ledger.",
+    body: "Talk or Text — type what you need or attach a voice note. Ask HomeAsset answers home and ledger questions (equipment, manuals, maintenance reminders and schedule from what you saved, recalls). Reminder questions list this home’s upcoming reminders and related service fields — they do not invent tasks or open manuals. How-to / manual questions still use your saved manuals. It is not a general coding or chat assistant. Fair-use limits apply: about 10 asks per minute and 40 per day per signed-in account, enforced on the server. Asking never writes the ledger.",
   },
   {
     title: "View Assets",

@@ -1391,6 +1391,91 @@ describe("HomeAsset API — AI assist (EPIC 6)", () => {
     assert.match(ungroundedBody.answer, /don.?t have enough|manuals/i);
   });
 
+  it("answers maintenance reminder questions from saved reminders, not manuals", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "ai-reminders-ask@example.com");
+    const home = await createHome(app, auth.accessToken, "Ask Reminders Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const assetRes = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: "Furnace",
+        category: "hvac",
+        lastServicedAt: "2026-01-10",
+      }),
+    });
+    assert.equal(assetRes.status, 201);
+    const asset = ((await assetRes.json()) as AssetBody).asset;
+
+    const remRes = await app.request(`/properties/${home.id}/reminders`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        assetId: asset.id,
+        title: "Replace air filter",
+        dueDate: "2026-12-15",
+        recurrence: "quarterly",
+      }),
+    });
+    assert.equal(remRes.status, 201);
+
+    const ask = await app.request(`/properties/${home.id}/ai/howto`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        question: "Do I have any maintenance reminders coming up?",
+      }),
+    });
+    assert.equal(ask.status, 200);
+    const body = (await ask.json()) as {
+      grounded: boolean;
+      answer: string;
+      citations: Array<{ kind: string; title: string }>;
+      privacy: { writes: boolean };
+    };
+    assert.equal(body.grounded, true);
+    assert.equal(body.privacy.writes, false);
+    assert.match(body.answer, /Replace air filter/);
+    assert.match(body.answer, /2026-12-15/);
+    assert.doesNotMatch(body.answer, /don.?t have enough saved manuals/i);
+    assert.ok(body.citations.some((c) => c.kind === "reminder"));
+    assert.match(body.answer, /Last serviced: 2026-01-10/);
+
+    const emptyHome = await createHome(
+      app,
+      auth.accessToken,
+      "No Reminders Home",
+    );
+    await app.request(`/properties/${emptyHome.id}/select`, {
+      method: "POST",
+      headers: { authorization: headers.authorization },
+    });
+    const emptyAsk = await app.request(
+      `/properties/${emptyHome.id}/ai/howto`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          question: "Do I have any maintenance reminders coming up?",
+        }),
+      },
+    );
+    assert.equal(emptyAsk.status, 200);
+    const emptyBody = (await emptyAsk.json()) as {
+      grounded: boolean;
+      answer: string;
+    };
+    assert.equal(emptyBody.grounded, true);
+    assert.match(emptyBody.answer, /no upcoming maintenance reminders/i);
+    assert.doesNotMatch(emptyBody.answer, /don.?t have enough saved manuals/i);
+  });
+
   it("soft-rejects clearly off-topic Ask HomeAsset how-to asks", async () => {
     process.env.AI_FORCE_MOCK = "1";
     const app = createApp();

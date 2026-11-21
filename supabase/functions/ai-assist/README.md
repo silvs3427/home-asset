@@ -72,7 +72,7 @@ npx supabase secrets set AI_ASSIST_LIVE=true
 | --- | --- | --- |
 | `status` | — | `{ aiMode, provider, capabilities, privacy }` |
 | `scan` | `propertyId`, `hint?`, `filename?` | `{ draft, aiMode, manualContents }` |
-| `howto` | `propertyId`, `question`, `assetId?` | how-to answer + citations |
+| `howto` | `propertyId`, `question`, `assetId?` | how-to / manuals answer, or reminder-schedule list from this home’s RLS reminders + asset service fields (no invent) + citations |
 | `contractor-format` | `inputText`, `inputKind?` | format draft (no writes) |
 | `email-intake` | `propertyId`, `emailText` | email intake draft |
 | `asset-intake` | `propertyId`, `sourceKind`, `text?`, `hint?`, `filename?`, `imageBase64?`, `mediaMimeType?`, `existingAssets?` | one-asset Add/Update draft + missing fields (multimodal OCR for photos/PDFs) |

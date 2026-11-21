@@ -1403,7 +1403,7 @@ export type AiScanDraft = {
 };
 
 export type AiHowToCitation = {
-  kind: "document" | "asset" | "catalog";
+  kind: "document" | "asset" | "catalog" | "reminder";
   id: string;
   title: string;
 };
