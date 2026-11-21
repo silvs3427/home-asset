@@ -2,16 +2,16 @@ import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 
@@ -58,70 +58,65 @@ export default function AddHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.flex}
-      >
-        <ScreenHeader title="Add home" />
+      <ScreenHeader title="Add home" />
 
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          <Field label="Home name" value={name} onChangeText={setName} placeholder="e.g. Oak Street" />
-          <Field
-            label="Street address"
-            value={addressLine1}
-            onChangeText={setAddressLine1}
-            placeholder="123 Main St"
-            autoComplete="street-address"
-          />
-          <Field
-            label="Apt / suite (optional)"
-            value={addressLine2}
-            onChangeText={setAddressLine2}
-            placeholder="Unit 2"
-          />
-          <Field label="City" value={city} onChangeText={setCity} placeholder="Austin" />
-          <View style={styles.row}>
-            <View style={styles.half}>
-              <Field
-                label="State / region"
-                value={region}
-                onChangeText={setRegion}
-                placeholder="TX"
-              />
-            </View>
-            <View style={styles.half}>
-              <Field
-                label="Postal code"
-                value={postalCode}
-                onChangeText={setPostalCode}
-                placeholder="78701"
-                autoComplete="postal-code"
-              />
-            </View>
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
+        <Field label="Home name" value={name} onChangeText={setName} placeholder="e.g. Oak Street" />
+        <Field
+          label="Street address"
+          value={addressLine1}
+          onChangeText={setAddressLine1}
+          placeholder="123 Main St"
+          autoComplete="street-address"
+        />
+        <Field
+          label="Apt / suite (optional)"
+          value={addressLine2}
+          onChangeText={setAddressLine2}
+          placeholder="Unit 2"
+        />
+        <Field label="City" value={city} onChangeText={setCity} placeholder="Austin" />
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Field
+              label="State / region"
+              value={region}
+              onChangeText={setRegion}
+              placeholder="TX"
+            />
           </View>
+          <View style={styles.half}>
+            <Field
+              label="Postal code"
+              value={postalCode}
+              onChangeText={setPostalCode}
+              placeholder="78701"
+              autoComplete="postal-code"
+            />
+          </View>
+        </View>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Pressable
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={() => {
-              void onSubmit();
-            }}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed && styles.pressed,
-              busy && styles.disabled,
-            ]}
-          >
-            {busy ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.primaryLabel}>Save home</Text>
-            )}
-          </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => {
+            void onSubmit();
+          }}
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            pressed && styles.pressed,
+            busy && styles.disabled,
+          ]}
+        >
+          {busy ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.primaryLabel}>Save home</Text>
+          )}
+        </Pressable>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }
@@ -136,7 +131,7 @@ function Field(props: {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{props.label}</Text>
-      <TextInput
+      <KeyboardAwareTextInput
         style={styles.input}
         value={props.value}
         onChangeText={props.onChangeText}
@@ -153,44 +148,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F2F5FA",
   },
-  flex: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  back: {
-    paddingVertical: 8,
-    minWidth: 56,
-  },
-  backSpacer: {
-    minWidth: 56,
-  },
-  backLabel: {
-    color: "#1E4D96",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  brand: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#002D72",
-  },
   body: {
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 40,
-  },
-  copy: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#3D4F66",
-    marginBottom: 12,
   },
   field: {
     marginTop: 10,
