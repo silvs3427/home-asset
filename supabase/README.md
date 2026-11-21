@@ -49,7 +49,7 @@ Copy `apps/mobile/.env.example` to `apps/mobile/.env` (never commit a real `.env
 - `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (local Expo)
 - `SUPABASE_URL` / `SUPABASE_ANON_KEY` (Cursor/Cloud secrets; `EXPO_PUBLIC_` is reserved in bind-app-secrets)
 
-With those two set, the phone uses **Supabase Auth + Postgres (+ Storage) directly** — no laptop API and **no `EXPO_PUBLIC_API_URL` / LAN IP** for signup, login, homes, the core ledger, **safety recalls**, **and AI assist**.
+With those two set, the phone uses **Supabase Auth + Postgres (+ Storage) directly** — no laptop API and **no `EXPO_PUBLIC_API_URL` / LAN IP** for signup, login, homes, the core ledger, **safety recalls** (in-app + lock-screen push via edge), **and AI assist**.
 
 `EXPO_PUBLIC_API_URL` is optional: only for the local SQLite demo without Supabase, or a hosted API for cron / jobs.
 
@@ -72,6 +72,21 @@ supabase functions deploy ai-assist
 ```
 
 Without a key, the function returns **mock** catalog drafts so demos still work. Confirm / approve writes stay on the phone via RLS (homeowner must tap confirm). See `functions/ai-assist/README.md`.
+
+## Recall lock-screen push (`send-push`)
+
+`functions/send-push` delivers Expo push after the phone matches a safety recall on the cloud path. Prefs (`Safety recall alerts` + `Push`) and the user’s own `push_devices` are checked under RLS.
+
+| Secret | Notes |
+| --- | --- |
+| `EXPO_ACCESS_TOKEN` | Required for **live** lock-screen delivery; without it, push is stubbed/logged and in-app notices still work |
+
+```bash
+supabase secrets set EXPO_ACCESS_TOKEN=your-expo-token
+supabase functions deploy send-push
+```
+
+See `functions/send-push/README.md`. **No phone rebuild** for this alone if the install already can register push tokens.
 
 **Windows:** name the file exactly `.env` (not `.env.txt`). After changes, restart with `npx expo start -c` (or `npm run start:dev-client` for an installable build).
 

@@ -1133,6 +1133,7 @@ export async function runRecallNotificationCheck(
     alertsCreated: number;
     alertsExisting: number;
     notificationsCreated: number;
+    pushesAttempted?: number;
   };
   unreadCount: number;
 }> {
@@ -1224,6 +1225,7 @@ export async function runPropertyRecallCheck(
     matchesFound: number;
     alertsCreated: number;
     notificationsCreated: number;
+    pushesAttempted?: number;
   };
   openCount: number;
 }> {

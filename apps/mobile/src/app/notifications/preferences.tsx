@@ -114,7 +114,9 @@ export default function NotificationPreferencesScreen() {
       // Lazy call path — push.ts itself avoids top-level expo-notifications.
       const result = await registerForPushNotifications(accessToken);
       if (result.ok) {
-        setNote("This phone is registered for push (delivery needs API config).");
+        setNote(
+          "This phone is registered for push. Lock-screen delivery uses the cloud sender when the Expo secret is set.",
+        );
         if (prefs && !prefs.pushEnabled) {
           await savePatch({ pushEnabled: true });
         }

@@ -91,7 +91,8 @@ async function ensureNotificationHandler(
  * Request permission and register an Expo push token with the API.
  * Safe to call on web / Expo Go / simulators — returns a clear reason instead of throwing.
  * Never imports expo-notifications at module top-level (avoids Expo Go native crashes).
- * Live delivery still needs EXPO_ACCESS_TOKEN on the API.
+ * Live delivery needs EXPO_ACCESS_TOKEN on the cloud edge `send-push`
+ * (or the laptop API). The phone only stores the Expo push token.
  */
 export async function registerForPushNotifications(
   accessToken: string,

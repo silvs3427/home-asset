@@ -15,6 +15,7 @@ Mobile Expo specifics live in [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
 
 - Prefer cloud Supabase for phone testing (URL + anon key).
 - `EXPO_PUBLIC_API_URL` / LAN IP is fallback for SQLite demo without Supabase only.
+- Recall lock-screen push on cloud: edge `send-push` + secret `EXPO_ACCESS_TOKEN` (never `EXPO_PUBLIC_*`). Phone still matches fixtures and writes in-app notices via RLS; edge only sends Expo.
 
 ## How to use / Settings copy (do not regress)
 
