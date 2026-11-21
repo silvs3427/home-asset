@@ -13,12 +13,15 @@
  * baked into preview APKs and makes phones try the laptop. Local Metro can
  * fall back to localhost only in config.ts when __DEV__ and not standalone.
  *
- * Android lock-screen push (FCM): set android.googleServicesFile only when
- * GOOGLE_SERVICES_JSON / GOOGLE_SERVICES_FILE (EAS file env) or a local
- * apps/mobile/google-services.json is present AND valid. Missing / invalid
- * files are omitted (soft-fail) so preview APKs still boot without Firebase.
- * Register-for-push fails soft in JS until a good file is baked in. See README
- * “Android lock-screen push (FCM)”.
+ * Android lock-screen push (FCM):
+ * - Expo Go / local Metro: soft-omit android.googleServicesFile when the file
+ *   is missing (push soft-disables in JS).
+ * - EAS Android builds (preview/production/development): REQUIRE a usable
+ *   google-services.json via EAS file env GOOGLE_SERVICES_JSON (visibility
+ *   sensitive — needed for app.config resolution) or a local file. Fail the
+ *   build loudly instead of shipping an APK without Firebase Messaging.
+ * Escape hatch: ALLOW_MISSING_GOOGLE_SERVICES=1 (recovery builds only).
+ * See README “Android lock-screen push (FCM)”.
  */
 const fs = require("fs");
 const path = require("path");
@@ -30,11 +33,26 @@ const ANDROID_PACKAGE =
     appJson.expo.android.package) ||
   "com.homeasset.app";
 
+const LOCAL_GOOGLE_SERVICES_REL = "./google-services.json";
+const LOCAL_GOOGLE_SERVICES_ABS = path.join(__dirname, "google-services.json");
+
+function isEasBuild() {
+  return process.env.EAS_BUILD === "true";
+}
+
+function isEasAndroidBuild() {
+  return isEasBuild() && process.env.EAS_BUILD_PLATFORM === "android";
+}
+
+function allowMissingGoogleServices() {
+  return process.env.ALLOW_MISSING_GOOGLE_SERVICES === "1";
+}
+
 /**
- * Only return a path Expo should bake in. Missing path, unreadable file, or
- * JSON that is not a Firebase Android client config → undefined (omit FCM).
+ * Only return true when Expo should bake this path in. Missing path,
+ * unreadable file, or JSON that is not a Firebase Android client config → false.
  * Never point googleServicesFile at a dangling or garbage path — that can
- * break native startup worse than leaving push unwired.
+ * break native startup worse than leaving push unwired (local/Expo Go only).
  *
  * @param {string} candidatePath
  * @param {{ required?: boolean }} [opts] required=true → warn when missing
@@ -51,7 +69,7 @@ function isUsableGoogleServicesFile(candidatePath, opts = {}) {
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
     if (required) {
       console.warn(
-        `[HomeAsset] google-services file not found (${candidatePath}); omitting android.googleServicesFile so the app can boot without FCM.`,
+        `[HomeAsset] google-services file not found (${candidatePath}).`,
       );
     }
     return false;
@@ -61,14 +79,14 @@ function isUsableGoogleServicesFile(candidatePath, opts = {}) {
     parsed = JSON.parse(fs.readFileSync(resolved, "utf8"));
   } catch (err) {
     console.warn(
-      `[HomeAsset] google-services file is not valid JSON (${candidatePath}); omitting android.googleServicesFile.`,
+      `[HomeAsset] google-services file is not valid JSON (${candidatePath}).`,
       err && err.message ? err.message : err,
     );
     return false;
   }
   if (!parsed || typeof parsed !== "object" || !parsed.project_info) {
     console.warn(
-      `[HomeAsset] google-services file missing project_info (${candidatePath}); omitting android.googleServicesFile.`,
+      `[HomeAsset] google-services file missing project_info (${candidatePath}).`,
     );
     return false;
   }
@@ -89,37 +107,103 @@ function isUsableGoogleServicesFile(candidatePath, opts = {}) {
     console.warn(
       `[HomeAsset] google-services package_name is [${packageNames.join(
         ", ",
-      )}] but app expects ${ANDROID_PACKAGE}; omitting android.googleServicesFile.`,
+      )}] but app expects ${ANDROID_PACKAGE}.`,
     );
     return false;
   }
   return true;
 }
 
+/**
+ * Copy EAS file-env path into the project so prebuild always sees a
+ * project-relative google-services.json (EAS stores file envs outside the repo).
+ * @param {string} sourcePath
+ * @returns {string} relative path for android.googleServicesFile
+ */
+function materializeGoogleServicesFile(sourcePath) {
+  const resolved = path.isAbsolute(sourcePath)
+    ? sourcePath
+    : path.join(__dirname, sourcePath);
+  if (path.resolve(resolved) !== path.resolve(LOCAL_GOOGLE_SERVICES_ABS)) {
+    fs.copyFileSync(resolved, LOCAL_GOOGLE_SERVICES_ABS);
+  }
+  return LOCAL_GOOGLE_SERVICES_REL;
+}
+
+function failEasAndroidMissingGoogleServices(detail) {
+  throw new Error(
+    `[HomeAsset] Android EAS build requires a usable google-services.json so ` +
+      `Firebase Messaging is baked into the APK. ${detail} ` +
+      `Upload EAS file env GOOGLE_SERVICES_JSON with visibility **sensitive** ` +
+      `(not secret — secrets are unavailable when EAS CLI resolves app.config) ` +
+      `for this build's environment (development / preview / production), ` +
+      `package name com.homeasset.app. Or place apps/mobile/google-services.json. ` +
+      `Temporary recovery only: ALLOW_MISSING_GOOGLE_SERVICES=1. ` +
+      `Steps: apps/mobile/README.md → Android lock-screen push (FCM).`,
+  );
+}
+
 function resolveGoogleServicesFile() {
   // Expo docs use GOOGLE_SERVICES_JSON for the EAS file env; keep FILE as alias.
   // EAS file env sets the var to a filesystem path on the build machine.
+  // Visibility must be sensitive (or plain) so EAS CLI can resolve app.config.
   const fromEnv = (
     process.env.GOOGLE_SERVICES_JSON ||
     process.env.GOOGLE_SERVICES_FILE ||
     ""
   ).trim();
+
   if (fromEnv) {
     // Reject accidental paste of raw JSON into a string env (not a file path).
     if (fromEnv.startsWith("{")) {
-      console.warn(
-        "[HomeAsset] GOOGLE_SERVICES_JSON looks like raw JSON, not a file path. Use EAS env type=file (or a local google-services.json). Omitting android.googleServicesFile.",
-      );
+      const msg =
+        "GOOGLE_SERVICES_JSON looks like raw JSON, not a file path. Use EAS env type=file.";
+      if (isEasAndroidBuild() && !allowMissingGoogleServices()) {
+        failEasAndroidMissingGoogleServices(msg);
+      }
+      console.warn(`[HomeAsset] ${msg} Omitting android.googleServicesFile.`);
       return undefined;
     }
-    return isUsableGoogleServicesFile(fromEnv, { required: true })
-      ? fromEnv
-      : undefined;
+    if (isUsableGoogleServicesFile(fromEnv, { required: true })) {
+      try {
+        const rel = materializeGoogleServicesFile(fromEnv);
+        console.log(
+          `[HomeAsset] android.googleServicesFile ← ${rel} (from EAS file env)`,
+        );
+        return rel;
+      } catch (err) {
+        console.warn(
+          "[HomeAsset] Could not copy google-services into project; using env path.",
+          err && err.message ? err.message : err,
+        );
+        return fromEnv;
+      }
+    }
+    if (isEasAndroidBuild() && !allowMissingGoogleServices()) {
+      failEasAndroidMissingGoogleServices(
+        `GOOGLE_SERVICES_JSON is set but the file is missing or invalid (${fromEnv}).`,
+      );
+    }
+    console.warn(
+      "[HomeAsset] GOOGLE_SERVICES_JSON unusable; omitting android.googleServicesFile so local/Expo Go can boot.",
+    );
+    return undefined;
   }
-  const localPath = path.join(__dirname, "google-services.json");
-  if (isUsableGoogleServicesFile(localPath)) {
-    return "./google-services.json";
+
+  if (isUsableGoogleServicesFile(LOCAL_GOOGLE_SERVICES_ABS)) {
+    console.log(
+      `[HomeAsset] android.googleServicesFile ← ${LOCAL_GOOGLE_SERVICES_REL} (local file)`,
+    );
+    return LOCAL_GOOGLE_SERVICES_REL;
   }
+
+  if (isEasAndroidBuild() && !allowMissingGoogleServices()) {
+    failEasAndroidMissingGoogleServices(
+      "Neither GOOGLE_SERVICES_JSON nor apps/mobile/google-services.json was found.",
+    );
+  }
+
+  // Expo Go / local without Firebase: soft-omit (push soft-disables in JS).
   return undefined;
 }
 

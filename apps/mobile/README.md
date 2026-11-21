@@ -67,17 +67,23 @@ See [`.env.example`](./.env.example) and [`../../supabase/README.md`](../../supa
 
 ## Android lock-screen push (FCM)
 
-Android preview installs need a small Firebase config file baked into the APK
-before **Register this phone for push** works. Without it you see:
-“Unable to get Firebase Messaging instance… googleServicesFile…”.
+Android preview / production installs need a small Firebase config file baked
+into the APK before **Register this phone for push** works. Without it you see:
+“This Android install was built without Firebase Messaging… google-services”.
 
-**Missing `google-services.json` does not crash the app on open.** It only
-blocks lock-screen push registration. In-app Notifications still work.
-`app.config.js` soft-skips a missing, unreadable, or wrong-package file so a
-preview build can ship without Firebase until you are ready.
+**Behavior:**
+
+| Where | Missing `google-services.json` |
+| --- | --- |
+| **Expo Go / local Metro** | Soft-skip — app opens; push soft-disables; in-app notices still work |
+| **EAS Android APK/AAB** (`preview` / `production` / `development`) | **Build fails** until a usable file is provided (so we never ship another APK without FCM by accident) |
 
 **New phone install required** after a valid file is baked in (native FCM
 config). In-app Notifications still work on the old install.
+
+Do **not** commit a fake `google-services.json`. Use the real download from
+Firebase (or the EAS file env). The FCM **service-account private key** is a
+different file — never put that in the app or in GitHub.
 
 ### If the preview APK opens then immediately closes
 
@@ -88,21 +94,12 @@ That is a phone install / native crash, not “Register for push.” Try in orde
 2. **Uninstall and reinstall the last APK that worked** — delete HomeAsset,
    install the older preview APK from your Expo builds page (not a brand-new
    build). Confirm it stays open.
-3. **Rebuild without Firebase until ready** — on expo.dev → Project →
-   Environment variables, remove or disable `GOOGLE_SERVICES_JSON` for
-   **preview** (or leave it unset). Then rebuild:
-
-   ```powershell
-   cd apps\mobile
-   npx eas-cli@latest build -p android --profile preview
-   ```
-
-   Install that APK (uninstall the broken one first). The app should open;
-   Register for push stays unavailable until you add a real
-   `google-services.json` and rebuild again.
-
+3. **Temporary no-FCM recovery build only** — set EAS env
+   `ALLOW_MISSING_GOOGLE_SERVICES=1` for **preview**, rebuild, install. App
+   should open; Register for push stays unavailable. Remove that flag before
+   the real FCM rebuild.
 4. Only after the app opens reliably, finish Firebase steps A–D below and
-   rebuild once more for lock-screen push.
+   rebuild once more for lock-screen push (without the allow-missing flag).
 
 There are **two** Firebase pieces (easy to mix up):
 
@@ -113,6 +110,11 @@ There are **two** Firebase pieces (easy to mix up):
 
 Package name for HomeAsset Android: **`com.homeasset.app`**.
 
+`eas.json` already maps profiles → environments (`preview` → preview, etc.).
+`app.config.js` reads `GOOGLE_SERVICES_JSON` (alias `GOOGLE_SERVICES_FILE`),
+copies it to `./google-services.json` on the builder, and sets
+`android.googleServicesFile`.
+
 ### A. Create the Firebase Android app (browser)
 
 1. Open [Firebase Console](https://console.firebase.google.com/) → create or pick a project (name it HomeAsset is fine).
@@ -122,24 +124,39 @@ Package name for HomeAsset Android: **`com.homeasset.app`**.
 
 ### B. Give the phone build `google-services.json` (pick one)
 
-**Option 1 — EAS file secret (preferred; file stays off GitHub)**
+**Option 1 — EAS file env (preferred; file stays off GitHub)**
 
-From PowerShell (replace the path with where the download landed):
+Visibility must be **sensitive** (not **secret**). Secret vars are invisible
+when EAS CLI resolves `app.config.js`, so the APK would still ship without
+Firebase. Sensitive is correct for this client config file.
+
+From PowerShell (replace the path with where the download landed). If you
+already created the var as **secret**, delete it on expo.dev and recreate:
 
 ```powershell
 cd apps\mobile
-npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value "C:\Users\YOU\Downloads\google-services.json" --environment development --visibility secret
-npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value "C:\Users\YOU\Downloads\google-services.json" --environment preview --visibility secret
-npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value "C:\Users\YOU\Downloads\google-services.json" --environment production --visibility secret
+npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value "C:\Users\YOU\Downloads\google-services.json" --environment development --visibility sensitive
+npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value "C:\Users\YOU\Downloads\google-services.json" --environment preview --visibility sensitive
+npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value "C:\Users\YOU\Downloads\google-services.json" --environment production --visibility sensitive
 ```
 
-Or on the Expo website: Project → **Environment variables** → **Add** → type **File**, name `GOOGLE_SERVICES_JSON`, environments `development` / `preview` / `production`, upload the same `google-services.json`.
+Or on the Expo website: Project → **Environment variables** → **Add** → type
+**File**, name `GOOGLE_SERVICES_JSON`, visibility **Sensitive**, environments
+`development` / `preview` / `production`, upload the same `google-services.json`.
 
-`app.config.js` reads `GOOGLE_SERVICES_JSON` (alias `GOOGLE_SERVICES_FILE`) and sets `android.googleServicesFile`.
+Confirm it is present:
+
+```powershell
+cd apps\mobile
+npx eas-cli@latest env:list --environment preview
+```
 
 **Option 2 — Local file next to the app**
 
-Copy the download to `apps/mobile/google-services.json`. That path is gitignored by default. Either keep using Option 1 for cloud builds, or force-add it if you are comfortable committing public Firebase client IDs (`git add -f apps/mobile/google-services.json`).
+Copy the download to `apps/mobile/google-services.json`. That path is gitignored
+by default. Cloud EAS builds still need Option 1 (gitignored files are not
+uploaded) unless you force-add public Firebase client IDs
+(`git add -f apps/mobile/google-services.json`).
 
 ### C. Upload the FCM V1 service account to Expo (delivery)
 
@@ -163,7 +180,12 @@ cd apps\mobile
 npx eas-cli@latest build -p android --profile preview
 ```
 
-When the build finishes, install the **new** APK (uninstall the old HomeAsset preview first if the phone keeps the old one). Then:
+If the build fails with “requires a usable google-services.json”, fix step B
+(sensitive file env for **preview**) and run the build again — do not install
+an older APK expecting push to work.
+
+When the build finishes, install the **new** APK (uninstall the old HomeAsset
+preview first if the phone keeps the old one). Then:
 
 Settings → **Push & in-app** → turn Push on → **Register this phone for push**.
 

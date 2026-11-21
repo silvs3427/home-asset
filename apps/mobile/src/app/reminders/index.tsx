@@ -25,6 +25,7 @@ import {
   type PublicReminder,
   type PublicReminderCompletion,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
@@ -192,17 +193,7 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Notifications</Text>
-        <View style={styles.backSpacer} />
-      </View>
+      <ScreenHeader title="Notifications" />
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>

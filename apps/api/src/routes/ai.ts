@@ -515,6 +515,11 @@ aiRoutes.post("/confirm-email-intake", async (c) => {
             draft.workDate && /^\d{4}-\d{2}-\d{2}$/.test(draft.workDate)
               ? draft.workDate
               : null,
+          lastServicedAt:
+            draft.workDate && /^\d{4}-\d{2}-\d{2}$/.test(draft.workDate)
+              ? draft.workDate
+              : null,
+          confirmedByContractorName: draft.contractorName,
           notes:
             overrides?.notes !== undefined ? overrides.notes : base.notes,
           provenance: "homeowner",

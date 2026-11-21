@@ -22,7 +22,7 @@ export type ContentSection = {
 export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   {
     title: "Home",
-    body: "Shows your current address and six actions, top to bottom: Ask HomeAsset, View Assets, Add or Update an Asset, Contractors, Notifications, and Settings. Switch homes here when you have more than one.",
+    body: "Shows your current address and six actions, top to bottom: Ask HomeAsset, View Assets, Add or Update an Asset, Contractors, Notifications, and Settings. Switch homes here when you have more than one. From any other screen, tap Home (orange, top right) to return here.",
   },
   {
     title: "Homes",
@@ -34,7 +34,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "View Assets",
-    body: "See equipment and installs for this home. Use + to add by hand, or open Add or Update an Asset from Home. Tap an asset to open its record — Documents (photos, files, Find manuals) stay on that screen in both view and Edit, so you can attach without leaving Edit. Recalls and reminders are on the record too. Categories and document types are your own words for this home — type what fits; once you use a value, it stays available to reuse here (not a fixed pre-list).",
+    body: "See equipment and installs for this home. Search by name, category, model, and more. Tap a category chip (for example HVAC) to show only those assets, or turn on Group by category to section the list. Use + to add by hand, or open Add or Update an Asset from Home. Tap an asset to open its record — Documents (photos, files, Find manuals) stay on that screen in both view and Edit. On each record you can set Last serviced and, when a pro certified the work, Confirmed by contractor with their name (home-sale / report confidence). Approving an invite-link draft can fill those from the submission — still only after you approve. Recalls and reminders are on the record too. Categories and document types are your own words for this home — type what fits; once you use a value, it stays available to reuse here (not a fixed pre-list).",
   },
   {
     title: "Add or Update an Asset",
@@ -46,7 +46,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Contractors",
-    body: "From Home → Contractors: Invite a contractor (share a submission link), Review contractor submissions (approve before official), and View past contractors (searchable directory of contact info, work done for this home, and other services they offer). HomeAsset is for homeowners only — pros use LightLift or your invite link in a browser (no HomeAsset contractor login). Invite submitters can add optional phone, email, and services; those land in your directory only after you approve. You can also add a past pro by hand.",
+    body: "From Home → Contractors: Invite a contractor (share a submission link), Review contractor submissions (approve before official), and View past contractors (searchable directory of contact info, work done for this home, and other services they offer). HomeAsset is for homeowners only — pros use LightLift or your invite link in a browser (no HomeAsset contractor login). Invite submitters can add optional phone, email, and services; those land in your directory only after you approve. When you approve an invite draft, selected assets can get Last serviced and Confirmed by contractor from the pro’s name and work date — you can edit those anytime on the asset. You can also add a past pro by hand.",
   },
   {
     title: "Settings",

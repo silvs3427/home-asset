@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>HomeAsset · Contractor submit</title>
+  <style>
+    :root {
+      --bg: #F2F5FA;
+      --surface: #FFFFFF;
+      --brand: #002D72;
+      --brand-muted: #1E4D96;
+      --accent: #FF5910;
+      --ink: #0B1B33;
+      --copy: #3D4F66;
+      --muted: #5C6E84;
+      --border: #C5D0DE;
+      --danger: #B42318;
+      --ok: #0E7A4A;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(180deg, #e8eef8 0%, var(--bg) 40%, #f7f9fc 100%);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+    main {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 28px 18px 48px;
+    }
+    .brand {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--brand-muted);
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: 1.65rem;
+      line-height: 1.2;
+      margin: 0 0 8px;
+      color: var(--brand);
+    }
+    .home {
+      color: var(--copy);
+      font-size: 0.95rem;
+      margin-bottom: 20px;
+    }
+    .note {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--brand-muted);
+      margin: 14px 0 6px;
+    }
+    input[type=text], textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 1rem;
+      background: var(--surface);
+      color: var(--ink);
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 1rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .primary {
+      background: var(--brand);
+      color: #fff;
+      width: 100%;
+      margin-top: 18px;
+    }
+    .primary:disabled { opacity: 0.55; cursor: wait; }
+    .secondary {
+      background: #fff;
+      color: var(--brand);
+      border: 1px solid var(--border);
+    }
+    .accent {
+      background: var(--accent);
+      color: #fff;
+    }
+    .status { margin-top: 10px; color: var(--muted); font-size: 0.9rem; min-height: 1.2em; }
+    .err { color: var(--danger); }
+    .ok { color: var(--ok); }
+    .hint { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+    input[type=file] { width: 100%; margin-top: 4px; }
+    .hidden { display: none !important; }
+    .pill {
+      display: inline-block;
+      background: var(--brand);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 650;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="bootStatus" class="status">Loading invite…</div>
+
+    <section id="errorPanel" class="hidden">
+      <div class="brand">HomeAsset</div>
+      <h1>Invite</h1>
+      <p class="home" id="errorMessage"></p>
+    </section>
+
+    <section id="formPanel" class="hidden">
+      <div class="brand">HomeAsset</div>
+      <h1 id="pageTitle">Submit finished work</h1>
+      <p class="home" id="homeLabel"></p>
+      <div class="note">
+        You are submitting work for the homeowner to review.
+        Nothing becomes official until they approve.
+        No HomeAsset account needed.
+      </div>
+      <form id="submitForm">
+        <input type="hidden" name="token" id="tokenField" value="" />
+        <label for="contractorName">Your name</label>
+        <input id="contractorName" name="contractorName" type="text" maxlength="120" autocomplete="name" />
+        <label for="companyName">Company (optional)</label>
+        <input id="companyName" name="companyName" type="text" maxlength="120" />
+        <label for="phone">Phone (optional)</label>
+        <input id="phone" name="phone" type="tel" maxlength="40" autocomplete="tel" />
+        <label for="email">Email (optional)</label>
+        <input id="email" name="email" type="email" maxlength="120" autocomplete="email" />
+        <label for="servicesOffered">Other services you offer (optional)</label>
+        <input id="servicesOffered" name="servicesOffered" type="text" maxlength="400" placeholder="e.g. HVAC, plumbing, roofing" />
+        <label for="notes">What was done / installed</label>
+        <textarea id="notes" name="notes" maxlength="8000" placeholder="e.g. Replaced furnace filter, installed Carrier Infinity…"></textarea>
+        <label>Voice recording</label>
+        <div class="row">
+          <button type="button" class="secondary" id="recBtn">Record voice</button>
+          <button type="button" class="accent" id="stopBtn" disabled>Stop</button>
+        </div>
+        <p class="status" id="recStatus">Optional — tap Record, describe the work, then Stop.</p>
+        <input type="file" id="audioFile" name="audio" accept="audio/*,video/webm" class="hidden" />
+        <label for="photos">Photos</label>
+        <input id="photos" name="photos" type="file" accept="image/*" multiple capture="environment" />
+        <p class="hint">Up to 8 photos. Add notes, voice, or photos — at least one.</p>
+        <button class="primary" id="sendBtn" type="submit">Send for homeowner review</button>
+        <p class="status" id="formStatus"></p>
+      </form>
+    </section>
+
+    <section id="successPanel" class="hidden">
+      <div class="pill">Sent for review</div>
+      <h1>Thanks — the homeowner got your submit</h1>
+      <p class="home" id="successHome"></p>
+      <p id="successSummary"></p>
+      <p class="hint">Nothing is official until they approve. You can close this page.</p>
+    </section>
+  </main>
+  <script>
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var token = (params.get("t") || "").trim();
+    var apiRaw = (params.get("api") || "").trim().replace(/\/$/, "");
+    var bootStatus = document.getElementById("bootStatus");
+    var errorPanel = document.getElementById("errorPanel");
+    var formPanel = document.getElementById("formPanel");
+    var successPanel = document.getElementById("successPanel");
+    var submitApi = "";
+
+    function showError(message) {
+      bootStatus.classList.add("hidden");
+      formPanel.classList.add("hidden");
+      successPanel.classList.add("hidden");
+      errorPanel.classList.remove("hidden");
+      document.getElementById("errorMessage").textContent = message;
+    }
+
+    function isAllowedApi(url) {
+      try {
+        var u = new URL(url);
+        if (u.protocol !== "https:") return false;
+        var host = u.hostname.toLowerCase();
+        return host.endsWith(".supabase.co");
+      } catch (e) {
+        return false;
+      }
+    }
+
+    if (!token) {
+      showError("Missing invite link. Ask the homeowner to send a new one.");
+      return;
+    }
+    if (!apiRaw || !isAllowedApi(apiRaw)) {
+      showError("This invite link is incomplete. Ask the homeowner to share it again from HomeAsset.");
+      return;
+    }
+    submitApi = apiRaw + "/functions/v1/invite-submit";
+
+    fetch(submitApi + "?t=" + encodeURIComponent(token), {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+    })
+      .then(function (res) {
+        return res.json().then(function (body) {
+          return { res: res, body: body };
+        });
+      })
+      .then(function (out) {
+        if (!out.res.ok || !out.body || !out.body.ok) {
+          var msg =
+            (out.body && (out.body.message || out.body.error)) ||
+            "This invite link is invalid or was removed.";
+          showError(String(msg));
+          return;
+        }
+        bootStatus.classList.add("hidden");
+        formPanel.classList.remove("hidden");
+        document.getElementById("tokenField").value = token;
+        document.getElementById("homeLabel").textContent = out.body.homeLabel || "";
+        if (out.body.inviteLabel) {
+          document.getElementById("pageTitle").textContent = out.body.inviteLabel;
+        }
+        wireForm();
+      })
+      .catch(function () {
+        showError("Could not open this invite. Check your connection and try again.");
+      });
+
+    function wireForm() {
+      var recBtn = document.getElementById("recBtn");
+      var stopBtn = document.getElementById("stopBtn");
+      var recStatus = document.getElementById("recStatus");
+      var audioFile = document.getElementById("audioFile");
+      var form = document.getElementById("submitForm");
+      var sendBtn = document.getElementById("sendBtn");
+      var formStatus = document.getElementById("formStatus");
+      var mediaRecorder = null;
+      var chunks = [];
+      var recordedBlob = null;
+
+      recBtn.addEventListener("click", async function () {
+        formStatus.textContent = "";
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          recStatus.textContent = "Voice recording is not supported in this browser. Type notes or add photos.";
+          recStatus.className = "status err";
+          return;
+        }
+        try {
+          var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          chunks = [];
+          recordedBlob = null;
+          var mime = MediaRecorder.isTypeSupported("audio/webm")
+            ? "audio/webm"
+            : (MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "");
+          mediaRecorder = mime
+            ? new MediaRecorder(stream, { mimeType: mime })
+            : new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = function (e) {
+            if (e.data && e.data.size > 0) chunks.push(e.data);
+          };
+          mediaRecorder.onstop = function () {
+            stream.getTracks().forEach(function (t) { t.stop(); });
+            recordedBlob = new Blob(chunks, { type: mediaRecorder.mimeType || "audio/webm" });
+            var ext = (recordedBlob.type || "").includes("mp4") ? "m4a" : "webm";
+            var file = new File([recordedBlob], "voice." + ext, { type: recordedBlob.type });
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            audioFile.files = dt.files;
+            recStatus.textContent = "Voice recorded (" + Math.round(recordedBlob.size / 1024) + " KB).";
+            recStatus.className = "status";
+            recBtn.disabled = false;
+            stopBtn.disabled = true;
+          };
+          mediaRecorder.start();
+          recBtn.disabled = true;
+          stopBtn.disabled = false;
+          recStatus.textContent = "Recording… tap Stop when finished.";
+          recStatus.className = "status";
+        } catch (err) {
+          recStatus.textContent = "Microphone permission denied. Type notes or add photos instead.";
+          recStatus.className = "status err";
+        }
+      });
+
+      stopBtn.addEventListener("click", function () {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+          mediaRecorder.stop();
+        }
+      });
+
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var notes = (document.getElementById("notes").value || "").trim();
+        var photos = document.getElementById("photos").files;
+        var hasAudio = audioFile.files && audioFile.files.length > 0;
+        if (!notes && (!photos || photos.length === 0) && !hasAudio) {
+          formStatus.textContent = "Add notes, a voice recording, or at least one photo.";
+          formStatus.className = "status err";
+          return;
+        }
+        sendBtn.disabled = true;
+        formStatus.textContent = "Sending…";
+        formStatus.className = "status";
+
+        var fd = new FormData(form);
+        fetch(submitApi, {
+          method: "POST",
+          body: fd,
+          headers: { "Accept": "application/json" },
+        })
+          .then(function (res) {
+            return res.json().then(function (body) {
+              return { res: res, body: body };
+            });
+          })
+          .then(function (out) {
+            if (!out.res.ok || !out.body || !out.body.ok) {
+              var msg =
+                (out.body && (out.body.message || out.body.error)) ||
+                "Could not save submission.";
+              formStatus.textContent = String(msg);
+              formStatus.className = "status err";
+              sendBtn.disabled = false;
+              return;
+            }
+            formPanel.classList.add("hidden");
+            successPanel.classList.remove("hidden");
+            document.getElementById("successHome").textContent =
+              document.getElementById("homeLabel").textContent || "";
+            var summary =
+              (out.body.draft && out.body.draft.summary) ||
+              "Your submit is waiting for the homeowner.";
+            document.getElementById("successSummary").textContent = summary;
+          })
+          .catch(function () {
+            formStatus.textContent = "Network error — try again.";
+            formStatus.className = "status err";
+            sendBtn.disabled = false;
+          });
+      });
+    }
+  })();
+  </script>
+</body>
+</html>
