@@ -79,6 +79,9 @@ export default function AssetDetailScreen() {
   const [purchaseDate, setPurchaseDate] = useState("");
   const [installDate, setInstallDate] = useState("");
   const [installerVendor, setInstallerVendor] = useState("");
+  const [lastServicedAt, setLastServicedAt] = useState("");
+  const [confirmedByContractorName, setConfirmedByContractorName] =
+    useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
   const [warrantyEndDate, setWarrantyEndDate] = useState("");
@@ -99,6 +102,8 @@ export default function AssetDetailScreen() {
     setPurchaseDate(next.purchaseDate ?? "");
     setInstallDate(next.installDate ?? "");
     setInstallerVendor(next.installerVendor ?? "");
+    setLastServicedAt(next.lastServicedAt ?? "");
+    setConfirmedByContractorName(next.confirmedByContractorName ?? "");
     setLocation(next.location ?? "");
     setNotes(next.notes ?? "");
     setWarrantyEndDate(next.warrantyEndDate ?? "");
@@ -208,6 +213,8 @@ export default function AssetDetailScreen() {
         purchaseDate: purchaseDate.trim() || null,
         installDate: installDate.trim() || null,
         installerVendor: installerVendor.trim() || null,
+        lastServicedAt: lastServicedAt.trim() || null,
+        confirmedByContractorName: confirmedByContractorName.trim() || null,
         location: location.trim() || null,
         notes: notes.trim() || null,
         warrantyEndDate: warrantyEndDate.trim() || null,
@@ -388,9 +395,18 @@ export default function AssetDetailScreen() {
               <Fact label="Serial" value={asset.serial} />
               <Fact label="Purchase date" value={asset.purchaseDate} />
               <Fact label="Install date" value={asset.installDate} />
+              <Fact label="Last serviced" value={asset.lastServicedAt} />
               <Fact label="Warranty ends" value={asset.warrantyEndDate} />
               <Fact label="Warranty term" value={asset.warrantyTerm} />
               <Fact label="Installer / vendor" value={asset.installerVendor} />
+              <Fact
+                label="Service confirmation"
+                value={
+                  asset.confirmedByContractorName
+                    ? `Confirmed by contractor: ${asset.confirmedByContractorName}`
+                    : null
+                }
+              />
               <Fact label="Location" value={asset.location} />
               <Fact label="Notes" value={asset.notes} />
               <Fact
@@ -459,6 +475,18 @@ export default function AssetDetailScreen() {
               label="Installer / vendor"
               value={installerVendor}
               onChangeText={setInstallerVendor}
+            />
+            <Field
+              label="Last serviced (YYYY-MM-DD)"
+              value={lastServicedAt}
+              onChangeText={setLastServicedAt}
+              autoCapitalize="none"
+            />
+            <Field
+              label="Confirmed by contractor (name)"
+              value={confirmedByContractorName}
+              onChangeText={setConfirmedByContractorName}
+              placeholder="Pro who confirmed this service"
             />
             <Field
               label="Location"

@@ -20,6 +20,8 @@ type AssetRow = {
   purchase_date: string | null;
   install_date: string | null;
   installer_vendor: string | null;
+  last_serviced_at: string | null;
+  confirmed_by_contractor_name: string | null;
   location: string | null;
   notes: string | null;
   warranty_end_date: string | null;
@@ -38,6 +40,8 @@ export type CreateAssetInput = {
   purchaseDate?: string | null;
   installDate?: string | null;
   installerVendor?: string | null;
+  lastServicedAt?: string | null;
+  confirmedByContractorName?: string | null;
   location?: string | null;
   notes?: string | null;
   warrantyEndDate?: string | null;
@@ -65,6 +69,8 @@ function rowToAsset(row: AssetRow): AssetRecord {
     purchaseDate: row.purchase_date,
     installDate: row.install_date,
     installerVendor: row.installer_vendor,
+    lastServicedAt: row.last_serviced_at,
+    confirmedByContractorName: row.confirmed_by_contractor_name,
     location: row.location,
     notes: row.notes,
     warrantyEndDate: row.warranty_end_date,
@@ -76,7 +82,9 @@ function rowToAsset(row: AssetRow): AssetRecord {
 }
 
 const ASSET_SELECT = `SELECT id, property_id, name, category, manufacturer, model, serial,
-       purchase_date, install_date, installer_vendor, location, notes,
+       purchase_date, install_date, installer_vendor,
+       last_serviced_at, confirmed_by_contractor_name,
+       location, notes,
        warranty_end_date, warranty_term, provenance,
        created_at, updated_at
 FROM assets`;
@@ -145,6 +153,8 @@ export function createAsset(
     purchaseDate: optionalText(input.purchaseDate),
     installDate: optionalText(input.installDate),
     installerVendor: optionalText(input.installerVendor),
+    lastServicedAt: optionalText(input.lastServicedAt),
+    confirmedByContractorName: optionalText(input.confirmedByContractorName),
     location: optionalText(input.location),
     notes: optionalText(input.notes),
     warrantyEndDate: optionalText(input.warrantyEndDate),
@@ -159,9 +169,11 @@ export function createAsset(
     .prepare(
       `INSERT INTO assets
         (id, property_id, name, category, manufacturer, model, serial,
-         purchase_date, install_date, installer_vendor, location, notes,
+         purchase_date, install_date, installer_vendor,
+         last_serviced_at, confirmed_by_contractor_name,
+         location, notes,
          warranty_end_date, warranty_term, provenance, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       asset.id,
@@ -174,6 +186,8 @@ export function createAsset(
       asset.purchaseDate,
       asset.installDate,
       asset.installerVendor,
+      asset.lastServicedAt,
+      asset.confirmedByContractorName,
       asset.location,
       asset.notes,
       asset.warrantyEndDate,
@@ -226,6 +240,14 @@ export function updateAsset(
       input.installerVendor !== undefined
         ? optionalText(input.installerVendor)
         : existing.installerVendor,
+    lastServicedAt:
+      input.lastServicedAt !== undefined
+        ? optionalText(input.lastServicedAt)
+        : existing.lastServicedAt,
+    confirmedByContractorName:
+      input.confirmedByContractorName !== undefined
+        ? optionalText(input.confirmedByContractorName)
+        : existing.confirmedByContractorName,
     location:
       input.location !== undefined
         ? optionalText(input.location)
@@ -249,6 +271,7 @@ export function updateAsset(
       `UPDATE assets SET
          name = ?, category = ?, manufacturer = ?, model = ?, serial = ?,
          purchase_date = ?, install_date = ?, installer_vendor = ?,
+         last_serviced_at = ?, confirmed_by_contractor_name = ?,
          location = ?, notes = ?, warranty_end_date = ?, warranty_term = ?,
          provenance = ?, updated_at = ?
        WHERE id = ? AND property_id = ?`,
@@ -262,6 +285,8 @@ export function updateAsset(
       updated.purchaseDate,
       updated.installDate,
       updated.installerVendor,
+      updated.lastServicedAt,
+      updated.confirmedByContractorName,
       updated.location,
       updated.notes,
       updated.warrantyEndDate,
