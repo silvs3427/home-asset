@@ -221,15 +221,23 @@
       headers: { "Accept": "application/json" },
     })
       .then(function (res) {
-        return res.json().then(function (body) {
-          return { res: res, body: body };
+        return res.text().then(function (text) {
+          var body = null;
+          try {
+            body = text ? JSON.parse(text) : null;
+          } catch (e) {
+            body = null;
+          }
+          return { res: res, body: body, text: text };
         });
       })
       .then(function (out) {
         if (!out.res.ok || !out.body || !out.body.ok) {
           var msg =
             (out.body && (out.body.message || out.body.error)) ||
-            "This invite link is invalid or was removed.";
+            (out.res.status >= 500
+              ? "Invite lookup failed. Ask the homeowner to try again later."
+              : "This invite link is invalid or was removed.");
           showError(String(msg));
           return;
         }

@@ -126,6 +126,8 @@ create policy invite_media_storage_select on storage.objects
 -- ---------------------------------------------------------------------------
 -- Table privileges (RLS still filters). No INSERT on submissions/media for
 -- authenticated — only the invite-submit edge (service role) creates those.
+-- service_role must be granted explicitly — authenticated grants alone are
+-- not enough for the public edge lookup/submit path.
 -- ---------------------------------------------------------------------------
 grant select, insert, update, delete on table public.contractor_invites
   to authenticated;
@@ -135,3 +137,7 @@ revoke insert, delete, truncate, references, trigger
 grant select on table public.contractor_submission_media to authenticated;
 revoke insert, update, delete, truncate, references, trigger
   on table public.contractor_submission_media from authenticated;
+
+grant all on table public.contractor_invites to service_role;
+grant all on table public.contractor_submissions to service_role;
+grant all on table public.contractor_submission_media to service_role;

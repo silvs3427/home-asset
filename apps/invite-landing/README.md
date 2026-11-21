@@ -20,4 +20,9 @@ The phone builds this URL when sharing. Optional override: `EXPO_PUBLIC_INVITE_L
 
 1. Repo **Settings → Pages → Build and deployment → Source: GitHub Actions** (once).
 2. Push to `main` (or run workflow **Deploy invite landing**).
-3. Redeploy edge: `npx supabase functions deploy invite-submit` so browser hits on the old edge URL `302` here.
+3. Paste invite SQL if needed (`20261121180000_…` then `20261121400000_invite_submit_service_role.sql`) so the edge can look up tokens.
+4. Redeploy edge: `npx supabase functions deploy invite-submit` so browser hits on the old edge URL `302` here.
+
+## “Invite lookup failed”
+
+The HTML host is fine when you see that message — the page reached the API. Usual cause: invite tables / **service_role** grants / lookup RPC not applied on the Supabase project yet (or edge not redeployed after the SQL). Not a CORS or GitHub Pages outage.
