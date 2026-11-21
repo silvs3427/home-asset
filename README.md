@@ -13,7 +13,7 @@ This repo includes **Supabase + installable EAS builds** (LightLift-style `app.j
 | Accounts | Email + password → JWT (local API) or **Supabase Auth** when configured | Normal app login; SQLite default for CI/demo; Supabase when env set |
 | Homes + assets + docs + reminders + recalls + notices | SQLite (+ optional Supabase Postgres/Storage) | Durable local backup by default; cloud schema + RLS in `supabase/` |
 | Phone install | EAS preview **APK** (LightLift layout) | Not Expo Go — real native modules |
-| Push | Expo push (stub without token) | Goes live when `EXPO_ACCESS_TOKEN` is set; in-app center works either way |
+| Push | Expo push via edge `send-push` (cloud) or API | Goes live when `EXPO_ACCESS_TOKEN` is set on the edge (or API); stubbed otherwise; in-app center works either way |
 | AI assist | Supabase edge `ai-assist` (LightLift) + local mock | Phone: `GEMINI_API_KEY` (or `OPENAI_API_KEY` / `AI_API_KEY`) on **Edge Function secrets**; laptop API can use the same OpenAI names locally; mock otherwise |
 | Token storage (phone) | Expo SecureStore | Keeps the session off plain device storage |
 
@@ -23,7 +23,7 @@ This repo includes **Supabase + installable EAS builds** (LightLift-style `app.j
 apps/
   mobile/   # Expo app — app.json + app.config.js + eas.json (LightLift layout)
   api/      # Backend API (auth + properties + assets + documents + reminders + recalls + notifications + AI)
-supabase/   # SQL migrations + edge functions (ai-assist) + founder setup README
+supabase/   # SQL migrations + edge functions (ai-assist, send-push) + founder setup README
 ```
 
 ## Prerequisites
@@ -89,6 +89,7 @@ If Expo Go says the project is incompatible, you have the wrong SDK client — u
 3. Restart Expo: `npx expo start --go -c` or `--dev-client` after an installable build.
 4. Sign up / sign in on the phone — cloud Auth + ledger + AI; no `EXPO_PUBLIC_API_URL` needed.
 5. For **live** AI on that phone: set `GEMINI_API_KEY` (or `OPENAI_API_KEY` / `AI_API_KEY`) as a **Supabase Edge Function secret** and deploy `ai-assist` — see [`supabase/functions/ai-assist/README.md`](./supabase/functions/ai-assist/README.md). Never put the key in Expo / `EXPO_PUBLIC_*`.
+6. For **live lock-screen recall push** on that phone: set `EXPO_ACCESS_TOKEN` as an Edge Function secret and deploy `send-push` — see [`supabase/functions/send-push/README.md`](./supabase/functions/send-push/README.md). In-app recall notices work without it.
 
 **Fallback (local SQLite demo without Supabase):** keep `npm run dev:api` running, set `EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:8787` (never `localhost` on a real phone), same Wi‑Fi. Details: [`apps/mobile/README.md`](./apps/mobile/README.md).
 
@@ -125,6 +126,7 @@ Local demo needs **no** Supabase. When you want cloud accounts + file storage on
 3. Copy URL + anon key into **`apps/mobile/.env` only** for signup/login/ledger (see `.env.example`)
 4. Optional: same URL/anon (+ service-role) on `apps/api/.env` for CI or server jobs — never put the service-role key in the phone app
 5. Live AI: Supabase → Edge Functions → Secrets → `GEMINI_API_KEY` (LightLift name) → `supabase functions deploy ai-assist`
+6. Live recall push: Secrets → `EXPO_ACCESS_TOKEN` → `supabase functions deploy send-push` (no phone rebuild for this alone)
 
 With mobile Supabase env set, the phone talks to Auth/Postgres/Storage/AI edge directly (LightLift-style). **No localhost API / LAN IP** for preview signup, core ledger, or AI. `AUTH_BACKEND=auto` on the API still uses Supabase when configured; `DATA_BACKEND=sqlite` stays the CI-safe default.
 
@@ -165,7 +167,7 @@ Required production env:
 - `JOBS_SECRET` — required in production for `/jobs/*`
 - `DATABASE_PATH` — optional (default `/app/data/homeasset.sqlite` in the image)
 - `STORAGE_PATH` — optional (default `./data/files`; set to `/app/data/files` in containers)
-- `EXPO_ACCESS_TOKEN` — optional; enables live Expo push
+- `EXPO_ACCESS_TOKEN` — optional; enables live Expo push (API and/or Supabase edge `send-push`)
 - `AI_API_KEY` or `OPENAI_API_KEY` — optional; enables live AI (mock catalog otherwise)
 - `AI_BASE_URL` / `AI_MODEL` — optional OpenAI-compatible endpoint overrides
 - `AI_FORCE_MOCK=1` — force mock even if a key is present

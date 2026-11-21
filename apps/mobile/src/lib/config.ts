@@ -5,9 +5,9 @@ import { isSupabaseConfiguredOnDevice } from "./supabase";
  * API base URL for the optional Hono backend (local SQLite demo / CI only).
  *
  * When EXPO_PUBLIC_SUPABASE_URL + anon key are set, the phone talks to Supabase
- * Auth / Postgres / Storage / edge `ai-assist` directly — no laptop API or LAN
- * IP is required for signup, login, homes, assets, docs, reminders, recalls,
- * notices, or AI.
+ * Auth / Postgres / Storage / edge (`ai-assist`, `send-push`) directly — no laptop
+ * API or LAN IP is required for signup, login, homes, assets, docs, reminders,
+ * recalls (in-app + lock-screen push), notices, or AI.
  *
  * Set EXPO_PUBLIC_API_URL only for local SQLite demo without Supabase.
  * Never bake localhost into preview/production EAS builds (LightLift pattern).

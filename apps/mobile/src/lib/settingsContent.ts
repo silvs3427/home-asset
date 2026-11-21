@@ -36,7 +36,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Notifications",
-    body: "One place for upcoming reminders and recent notices (due items, safety recalls, and later contractor submissions). Add reminders here. Push and in-app delivery are under Settings → Push & in-app — delivery only, not a second competing home feature.",
+    body: "One place for upcoming reminders and recent notices (due items, safety recalls, and later contractor submissions). Add reminders here. Use Check safety recalls to match your assets to public lists. Push and in-app delivery are under Settings → Push & in-app — turn on Safety recall alerts and Push, then Register this phone for push if you want lock-screen alerts when a match is found.",
   },
   {
     title: "Settings",
@@ -70,6 +70,10 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
     body: "We avoid broad sharing by default. Exports and shares happen when you choose them. Notification delivery preferences are under your control; there is no marketing channel in the app.",
   },
   {
+    title: "Safety recalls",
+    body: "Matching uses assets you already logged (manufacturer and model). It creates alerts and notices only — it never invents assets or documents. You can turn Safety recall alerts and Push off under Settings → Push & in-app. Lock-screen push uses a server sender; the Expo credential never lives on the phone.",
+  },
+  {
     title: "AI and your data",
     body: "How-to answers use manuals and facts already on the home when possible. Asset intake and scans create drafts only. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; add/update and scan wait for your confirm.",
   },
@@ -90,7 +94,7 @@ export const SECURITY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Secrets stay off the phone",
-    body: "AI and other service secrets stay on the edge or API. They are never bundled into the app as public Expo variables.",
+    body: "AI keys, Expo push credentials, and other service secrets stay on the edge or API. They are never bundled into the app as public Expo variables.",
   },
   {
     title: "What you can do",
