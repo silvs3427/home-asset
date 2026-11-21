@@ -40,7 +40,11 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Settings",
-    body: "Add another home, How to use, Privacy, Security, push & in-app delivery prefs, face switch, and sign out.",
+    body: "Add another home, How to use, Privacy, Security (including app lock), push & in-app delivery prefs, face switch, and sign out.",
+  },
+  {
+    title: "App lock",
+    body: "Under Settings → Security, turn on Lock when idle or away. After a quiet stretch (1–5 minutes, your choice) or when you leave the app for a short while, HomeAsset hides the ledger until you unlock with Face ID / fingerprint (when your phone supports it) or your password. Your sign-in session stays on the phone; we never store your biometrics.",
   },
   {
     title: "Contractor face",
@@ -70,6 +74,10 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
     body: "We avoid broad sharing by default. Exports and shares happen when you choose them. Notification delivery preferences are under your control; there is no marketing channel in the app.",
   },
   {
+    title: "Biometrics stay on the phone",
+    body: "App lock may ask for Face ID or fingerprint through the phone’s own unlock. HomeAsset never copies or stores those biometrics — only a yes/no from the operating system.",
+  },
+  {
     title: "AI and your data",
     body: "How-to answers use manuals and facts already on the home when possible. Asset intake and scans create drafts only. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; add/update and scan wait for your confirm.",
   },
@@ -86,7 +94,11 @@ export const SECURITY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Session on the device",
-    body: "Your sign-in session is kept in the phone’s secure storage, not in plain app files, so a casual glance at storage is not enough to steal it.",
+    body: "Your sign-in session is kept in the phone’s secure storage, not in plain app files, so a casual glance at storage is not enough to steal it. App lock hides the ledger after idle or when you leave the app; unlocking does not replace that secure session.",
+  },
+  {
+    title: "App lock and biometrics",
+    body: "When Lock when idle or away is on, the ledger stays covered until you unlock. Face ID / fingerprint run through the phone OS only — HomeAsset never stores biometric data. If biometrics are missing or fail, re-enter your account password (or sign out).",
   },
   {
     title: "Secrets stay off the phone",
@@ -94,6 +106,6 @@ export const SECURITY_SECTIONS: ContentSection[] = [
   },
   {
     title: "What you can do",
-    body: "Use a strong password, sign out on shared devices from Settings, and only confirm drafts you trust. Report anything that looks wrong — we treat privacy and security as product requirements, not afterthoughts.",
+    body: "Keep app lock on for shared or borrowed phones, pick an idle time that fits you, use a strong password, sign out from Settings when needed, and only confirm drafts you trust. Report anything that looks wrong — we treat privacy and security as product requirements, not afterthoughts.",
   },
 ];

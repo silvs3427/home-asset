@@ -42,6 +42,12 @@
       "expo-dev-client",
       "expo-updates",
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "HomeAsset uses Face ID only to unlock your home record on this phone. We never store your face."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "HomeAsset needs photo access to attach manuals, receipts, and warranty paperwork.",
