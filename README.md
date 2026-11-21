@@ -90,6 +90,7 @@ If Expo Go says the project is incompatible, you have the wrong SDK client — u
 4. Sign up / sign in on the phone — cloud Auth + ledger + AI; no `EXPO_PUBLIC_API_URL` needed.
 5. For **live** AI on that phone: set `GEMINI_API_KEY` (or `OPENAI_API_KEY` / `AI_API_KEY`) as a **Supabase Edge Function secret** and deploy `ai-assist` — see [`supabase/functions/ai-assist/README.md`](./supabase/functions/ai-assist/README.md). Never put the key in Expo / `EXPO_PUBLIC_*`.
 6. For **live lock-screen recall push** on that phone: set `EXPO_ACCESS_TOKEN` as an Edge Function secret and deploy `send-push` — see [`supabase/functions/send-push/README.md`](./supabase/functions/send-push/README.md). In-app recall notices work without it.
+7. For **monthly automatic whole-home recall scans** (no Check tap): set `RECALL_SCAN_SECRET`, deploy `monthly-recall-scan`, paste the cron SQL + Vault secrets — see [`supabase/functions/monthly-recall-scan/README.md`](./supabase/functions/monthly-recall-scan/README.md). No phone rebuild for that alone.
 
 **Fallback (local SQLite demo without Supabase):** keep `npm run dev:api` running, set `EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:8787` (never `localhost` on a real phone), same Wi‑Fi. Details: [`apps/mobile/README.md`](./apps/mobile/README.md).
 
@@ -107,10 +108,13 @@ If Expo Go says the project is incompatible, you have the wrong SDK client — u
 
 ### 5. Scheduler (optional)
 
-Cron (or a one-off curl) can hit the due-check job:
+**Cloud phone (preferred):** monthly whole-home recall scan is a Supabase edge cron — see [`supabase/functions/monthly-recall-scan/README.md`](./supabase/functions/monthly-recall-scan/README.md).
+
+**Local API demo:** cron (or a one-off curl) can hit due-check / recalls jobs:
 
 ```bash
 curl -X POST http://localhost:8787/jobs/due-reminders
+curl -X POST http://localhost:8787/jobs/recalls
 ```
 
 In production set `JOBS_SECRET` and send it as `X-Jobs-Secret` (or `Authorization: Bearer …`). Set `EXPO_ACCESS_TOKEN` to deliver live Expo pushes; without it, pushes are stubbed and the in-app center still fills.
@@ -125,6 +129,7 @@ Local demo needs **no** Supabase. When you want cloud accounts + file storage on
 4. Optional: same URL/anon (+ service-role) on `apps/api/.env` for CI or server jobs — never put the service-role key in the phone app
 5. Live AI: Supabase → Edge Functions → Secrets → `GEMINI_API_KEY` (LightLift name) → `supabase functions deploy ai-assist`
 6. Live recall push: Secrets → `EXPO_ACCESS_TOKEN` → `supabase functions deploy send-push` (no phone rebuild for this alone)
+7. Monthly automatic recalls: Secrets → `RECALL_SCAN_SECRET` → `supabase functions deploy monthly-recall-scan` → paste cron SQL + Vault secrets (no phone rebuild for this alone)
 
 With mobile Supabase env set, the phone talks to Auth/Postgres/Storage/AI edge directly (LightLift-style). **No localhost API / LAN IP** for preview signup, core ledger, or AI. `AUTH_BACKEND=auto` on the API still uses Supabase when configured; `DATA_BACKEND=sqlite` stays the CI-safe default.
 
