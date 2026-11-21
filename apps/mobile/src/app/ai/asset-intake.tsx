@@ -1,5 +1,5 @@
-import { Redirect, useRouter } from "expo-router";
-import { useState } from "react";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -21,28 +21,43 @@ import {
   type AssetIntakeSuggested,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { pickFromCamera, pickFromLibrary } from "@/lib/documents";
+import {
+  pickFromCamera,
+  pickFromLibrary,
+  pickPdfFile,
+} from "@/lib/documents";
 import { colors } from "@/lib/theme";
 
-type Mode = "pick" | "paste";
+type Mode = "pick" | "paste" | "pdf";
 
 /**
- * Ask HomeAsset multi-source asset intake.
- * Photo / email / invoice / notes → Add or Update draft → confirm before ledger write.
+ * Multi-source asset intake (photo / PDF / email / notes).
+ * Draft → homeowner confirm — AI never writes the ledger silently.
  */
 export default function AssetIntakeScreen() {
   const router = useRouter();
+  const { mode: modeParam } = useLocalSearchParams<{ mode?: string }>();
   const { user, accessToken, activeProperty } = useAuth();
-  const [mode, setMode] = useState<Mode>("pick");
+  const [mode, setMode] = useState<Mode>(
+    modeParam === "pdf" ? "pdf" : "pick",
+  );
   const [sourceKind, setSourceKind] =
     useState<AssetIntakeSourceKind>("email");
   const [pasteText, setPasteText] = useState("");
   const [photoName, setPhotoName] = useState<string | null>(null);
+  const [pdfName, setPdfName] = useState<string | null>(null);
   const [draft, setDraft] = useState<AssetIntakeDraft | null>(null);
   const [intent, setIntent] = useState<"add" | "update">("add");
   const [fields, setFields] = useState<AssetIntakeSuggested | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (modeParam === "pdf") {
+      setMode("pdf");
+      setSourceKind("invoice");
+    }
+  }, [modeParam]);
 
   if (!user) return <Redirect href="/sign-in" />;
   if (!activeProperty) return <Redirect href="/home" />;
@@ -56,6 +71,7 @@ export default function AssetIntakeScreen() {
   async function runIntake(input: {
     sourceKind: AssetIntakeSourceKind;
     text?: string | null;
+    hint?: string | null;
     filename?: string | null;
   }) {
     if (!accessToken || !activeProperty) return;
@@ -78,6 +94,7 @@ export default function AssetIntakeScreen() {
         source === "camera" ? await pickFromCamera() : await pickFromLibrary();
       if (!picked) return;
       setPhotoName(picked.name);
+      setPdfName(null);
       setMode("pick");
       await runIntake({
         sourceKind: "photo",
@@ -86,6 +103,26 @@ export default function AssetIntakeScreen() {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open camera.");
+    }
+  }
+
+  async function onPdf() {
+    setError(null);
+    try {
+      const picked = await pickPdfFile();
+      if (!picked) return;
+      setPdfName(picked.name);
+      setPhotoName(null);
+      setMode("pdf");
+      setSourceKind("invoice");
+      await runIntake({
+        sourceKind: "invoice",
+        filename: picked.name,
+        text: pasteText.trim() || null,
+        hint: "PDF invoice or paperwork",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open PDF.");
     }
   }
 
@@ -187,8 +224,25 @@ export default function AssetIntakeScreen() {
             >
               <Text style={styles.secondaryLabel}>Photo library</Text>
             </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => {
+                void onPdf();
+              }}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+                busy ? styles.disabled : null,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Upload a PDF</Text>
+            </Pressable>
             {photoName ? (
               <Text style={styles.meta}>Photo: {photoName}</Text>
+            ) : null}
+            {pdfName ? (
+              <Text style={styles.meta}>PDF: {pdfName}</Text>
             ) : null}
 
             <Text style={styles.label}>Or paste</Text>

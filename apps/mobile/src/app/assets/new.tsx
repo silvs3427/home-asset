@@ -12,18 +12,33 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ASSET_CATEGORIES,
+  aiAssetIntake,
   createAsset,
   type AssetCategory,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
+
+const CATEGORY_VALUES = new Set<string>(
+  ASSET_CATEGORIES.map((item) => item.value),
+);
+
+function asCategory(value: string | null | undefined): AssetCategory {
+  if (value && CATEGORY_VALUES.has(value)) {
+    return value as AssetCategory;
+  }
+  return "appliance";
+}
 
 /**
- * Create an asset on the current home. Manufacturer / model / serial are
- * captured now so docs and recalls can hang off them later.
+ * Create an asset on the current home.
+ * Primary path: free-text → Format with Ask HomeAsset → edit draft fields → Save.
+ * AI never writes the ledger; Save is the homeowner confirm.
  */
 export default function NewAssetScreen() {
   const router = useRouter();
   const { user, accessToken, activeProperty } = useAuth();
+  const [freeText, setFreeText] = useState("");
   const [name, setName] = useState("");
   const [category, setCategory] = useState<AssetCategory>("appliance");
   const [manufacturer, setManufacturer] = useState("");
@@ -36,8 +51,10 @@ export default function NewAssetScreen() {
   const [notes, setNotes] = useState("");
   const [warrantyEndDate, setWarrantyEndDate] = useState("");
   const [warrantyTerm, setWarrantyTerm] = useState("");
+  const [formatting, setFormatting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
 
   if (!user) {
     return <Redirect href="/sign-in" />;
@@ -46,8 +63,58 @@ export default function NewAssetScreen() {
     return <Redirect href="/home" />;
   }
 
+  async function onFormat() {
+    if (!accessToken || !activeProperty) return;
+    const text = freeText.trim();
+    if (text.length < 8) {
+      setError("Add a bit more about the asset first.");
+      return;
+    }
+    setError(null);
+    setFormatting(true);
+    try {
+      const res = await aiAssetIntake(accessToken, activeProperty.id, {
+        sourceKind: "notes",
+        text,
+      });
+      // Format-only: drop the held confirm token — Save uses createAsset, not AI confirm.
+      try {
+        const { takeAssetIntakeDraft } = await import("@/lib/aiEdge");
+        takeAssetIntakeDraft(res.draft.draftId);
+      } catch {
+        // Local API path has no in-memory draft map.
+      }
+      const suggested = res.draft.suggestedAsset;
+      setName(suggested.name?.trim() || "");
+      setCategory(asCategory(suggested.category));
+      setManufacturer(suggested.manufacturer?.trim() || "");
+      setModel(suggested.model?.trim() || "");
+      setSerial(suggested.serial?.trim() || "");
+      setPurchaseDate(suggested.purchaseDate?.trim() || "");
+      setInstallDate(suggested.installDate?.trim() || "");
+      setInstallerVendor(suggested.installerVendor?.trim() || "");
+      setLocation(suggested.location?.trim() || "");
+      setNotes(suggested.notes?.trim() || "");
+      setWarrantyEndDate(suggested.warrantyEndDate?.trim() || "");
+      setWarrantyTerm(suggested.warrantyTerm?.trim() || "");
+      setDraftReady(true);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Ask HomeAsset could not format that.",
+      );
+    } finally {
+      setFormatting(false);
+    }
+  }
+
   async function onSubmit() {
     if (!accessToken || !activeProperty) return;
+    if (!name.trim()) {
+      setError("Name is required.");
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
@@ -73,6 +140,9 @@ export default function NewAssetScreen() {
     }
   }
 
+  const formatDisabled = formatting || busy || freeText.trim().length < 8;
+  const saveDisabled = busy || formatting || !name.trim();
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -91,6 +161,45 @@ export default function NewAssetScreen() {
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
       >
+        <Text style={styles.label}>Describe the asset</Text>
+        <TextInput
+          style={[styles.input, styles.inputMultiline]}
+          value={freeText}
+          onChangeText={setFreeText}
+          placeholder="e.g. Carrier furnace in basement, model 59TN6, installed June 2022 by ABC Heating"
+          placeholderTextColor={colors.placeholder}
+          multiline
+          textAlignVertical="top"
+          autoCapitalize="sentences"
+        />
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={formatDisabled}
+          onPress={() => {
+            void onFormat();
+          }}
+          style={({ pressed }) => [
+            styles.secondaryBtn,
+            pressed && styles.pressed,
+            formatDisabled && styles.disabled,
+          ]}
+        >
+          {formatting ? (
+            <ActivityIndicator color={colors.brand} />
+          ) : (
+            <Text style={styles.secondaryLabel}>
+              Format with Ask HomeAsset
+            </Text>
+          )}
+        </Pressable>
+
+        {draftReady ? (
+          <Text style={styles.sectionLabel}>Draft fields</Text>
+        ) : (
+          <Text style={styles.sectionLabel}>Or fill by hand</Text>
+        )}
+
         <Field
           label="Name"
           value={name}
@@ -192,18 +301,18 @@ export default function NewAssetScreen() {
 
         <Pressable
           accessibilityRole="button"
-          disabled={busy}
+          disabled={saveDisabled}
           onPress={() => {
             void onSubmit();
           }}
           style={({ pressed }) => [
             styles.primaryBtn,
             pressed && styles.pressed,
-            busy && styles.disabled,
+            saveDisabled && styles.disabled,
           ]}
         >
           {busy ? (
-            <ActivityIndicator color="#F3F6F4" />
+            <ActivityIndicator color={colors.onBrand} />
           ) : (
             <Text style={styles.primaryLabel}>Save asset</Text>
           )}
@@ -225,11 +334,11 @@ function Field(props: {
     <View style={styles.field}>
       <Text style={styles.label}>{props.label}</Text>
       <TextInput
-        style={[styles.input, props.multiline && styles.inputMultiline]}
+        style={[styles.input, props.multiline && styles.inputMultilineShort]}
         value={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
-        placeholderTextColor="#7A8A82"
+        placeholderTextColor={colors.placeholder}
         autoCapitalize={props.autoCapitalize}
         multiline={props.multiline}
         textAlignVertical={props.multiline ? "top" : "center"}
@@ -241,7 +350,7 @@ function Field(props: {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 24,
@@ -259,47 +368,53 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   body: {
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 40,
   },
-  copy: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#3D5349",
-    marginBottom: 8,
-  },
   field: {
     marginTop: 10,
+  },
+  sectionLabel: {
+    marginTop: 22,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: colors.muted,
   },
   label: {
     marginTop: 12,
     fontSize: 13,
     fontWeight: "600",
-    color: "#1B3A2F",
+    color: colors.brand,
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: "#14241D",
+    color: colors.ink,
   },
   inputMultiline: {
+    minHeight: 120,
+    paddingTop: 12,
+  },
+  inputMultilineShort: {
     minHeight: 96,
     paddingTop: 12,
   },
@@ -310,38 +425,52 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   chipSelected: {
-    borderColor: "#1B3A2F",
-    backgroundColor: "#1B3A2F",
+    borderColor: colors.brand,
+    backgroundColor: colors.brand,
   },
   chipLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#2F5B4A",
+    color: colors.brandMuted,
   },
   chipLabelSelected: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
   },
   error: {
     marginTop: 14,
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
+  },
+  secondaryBtn: {
+    marginTop: 14,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.brand,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  secondaryLabel: {
+    color: colors.brand,
+    fontSize: 16,
+    fontWeight: "600",
   },
   primaryBtn: {
     marginTop: 24,
-    backgroundColor: "#1B3A2F",
+    backgroundColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "600",
   },

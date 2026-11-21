@@ -86,6 +86,45 @@ export async function pickDocumentFile(): Promise<PickedUpload | null> {
   };
 }
 
+/** PDF-only pick for Ask HomeAsset invoice / paperwork intake. */
+export async function pickPdfFile(): Promise<PickedUpload | null> {
+  const result = await DocumentPicker.getDocumentAsync({
+    copyToCacheDirectory: true,
+    multiple: false,
+    type: ["application/pdf"],
+  });
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  return {
+    uri: asset.uri,
+    name: asset.name || `invoice-${Date.now()}.pdf`,
+    mimeType: asset.mimeType ?? "application/pdf",
+    suggestedType: "receipt",
+  };
+}
+
+/**
+ * Voice note / audio attach (Talk path without a new native mic module).
+ * Homeowner can record in Voice Memos / Files, then attach here — JS-only.
+ */
+export async function pickAudioFile(): Promise<PickedUpload | null> {
+  const result = await DocumentPicker.getDocumentAsync({
+    copyToCacheDirectory: true,
+    multiple: false,
+    type: ["audio/*"],
+  });
+  if (result.canceled || !result.assets[0]) return null;
+
+  const asset = result.assets[0];
+  return {
+    uri: asset.uri,
+    name: asset.name || `voice-${Date.now()}.m4a`,
+    mimeType: asset.mimeType ?? "audio/mpeg",
+    suggestedType: "other",
+  };
+}
+
 /** Download with auth (or signed Supabase URL), then open the share sheet. */
 export async function downloadAndShareDocument(
   accessToken: string,

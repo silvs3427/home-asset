@@ -7,7 +7,8 @@
  *
  * Product UI: keep screens clean — put explanations here, not as in-app
  * commentary on feature screens. Use `lib/theme.ts` colors everywhere.
- * Home CTAs: Ask HomeAsset → View Assets → Notifications → Settings.
+ * Home CTAs: Ask HomeAsset → View Assets → Add or Update an Asset →
+ * Notifications → Settings.
  * Suggest-from-permits is not a primary CTA.
  * HomeAsset is homeowner-only — no contractor face in the app.
  */
@@ -21,7 +22,7 @@ export type ContentSection = {
 export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   {
     title: "Home",
-    body: "Shows your current address and four actions, top to bottom: Ask HomeAsset, View Assets, Notifications, and Settings. Switch homes here when you have more than one.",
+    body: "Shows your current address and five actions, top to bottom: Ask HomeAsset, View Assets, Add or Update an Asset, Notifications, and Settings. Switch homes here when you have more than one.",
   },
   {
     title: "Homes",
@@ -29,11 +30,15 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Ask HomeAsset",
-    body: "The AI feature for this home — not a general coding or chat assistant. From Home, open Ask HomeAsset to: Add or update asset (photo of a label, contractor email, invoice, or notes → draft → you confirm), Scan a picture (product + manuals; confirm before save), or Ask how-to (answers from manuals and facts on this home; asking never writes the ledger). Fair-use limits apply: about 10 asks per minute and 40 per day per signed-in account, enforced on the server. If you hit a limit or ask something off-topic, the app explains clearly.",
+    body: "Talk or Text — type what you need or attach a voice note. Ask HomeAsset answers home and ledger questions (equipment, manuals, maintenance, recalls). It is not a general coding or chat assistant. Fair-use limits apply: about 10 asks per minute and 40 per day per signed-in account, enforced on the server. Asking never writes the ledger.",
   },
   {
     title: "View Assets",
-    body: "See equipment and installs for this home. Use + to add an asset; tap Edit on a row to change it. Documents and recalls for an asset live on that asset’s record.",
+    body: "See equipment and installs for this home. Use + to add by hand, or open Add or Update an Asset from Home. Documents and recalls for an asset live on that asset’s record.",
+  },
+  {
+    title: "Add or Update an Asset",
+    body: "From Home: Scan a picture (camera or photo library), Upload a PDF (invoice or paperwork), or Free text (describe the item and tap Format with Ask HomeAsset). Review the draft, edit if needed, then Save / Confirm — nothing is official until you approve.",
   },
   {
     title: "Notifications",
@@ -64,7 +69,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Approve before official",
-    body: "Ask HomeAsset drafts (add/update from photo, email, or invoice; scans; and similar helpers) wait for your review. Future contractor submissions — including invite-link voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Nothing is auto-added as official without your confirm.",
+    body: "Ask HomeAsset drafts (scan a picture, PDF upload, free-text format, photo/email/invoice intake, and similar helpers) wait for your review. Future contractor submissions — including invite-link voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Nothing is auto-added as official without your confirm.",
   },
   {
     title: "Signed-in and home-scoped",

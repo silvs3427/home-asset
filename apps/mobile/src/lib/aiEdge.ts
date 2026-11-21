@@ -325,10 +325,26 @@ function formatEdgeErrorBody(payload: EdgeErrorBody | null | undefined): string 
   ) {
     return friendly || "Ask HomeAsset could not complete that ask.";
   }
+  const reason = payload.reason?.trim() ?? "";
+  // Stale edge deploy: phone sends asset-intake but old ai-assist schema rejects it.
+  if (
+    code === "invalid_request_body" &&
+    (reason.includes("asset-intake") ||
+      reason.includes("sourceKind") ||
+      reason.includes("existingAssets") ||
+      (payload.hint?.includes("Redeploy") ?? false))
+  ) {
+    const hint =
+      payload.hint?.trim() ||
+      "Ask HomeAsset on the server is out of date. Redeploy ai-assist from the latest app code (no new phone install).";
+    return friendly
+      ? `${friendly} — ${hint}`
+      : hint;
+  }
   const parts: string[] = [];
   if (friendly) parts.push(friendly);
   if (code) parts.push(`code=${code}`);
-  if (payload.reason?.trim()) parts.push(payload.reason.trim());
+  if (reason) parts.push(reason);
   if (payload.hint?.trim()) parts.push(payload.hint.trim());
   return parts.join(" — ");
 }
