@@ -71,8 +71,38 @@ Android preview installs need a small Firebase config file baked into the APK
 before **Register this phone for push** works. Without it you see:
 “Unable to get Firebase Messaging instance… googleServicesFile…”.
 
-**New phone install required** after this is set up (native FCM config).
-In-app Notifications still work on the old install.
+**Missing `google-services.json` does not crash the app on open.** It only
+blocks lock-screen push registration. In-app Notifications still work.
+`app.config.js` soft-skips a missing, unreadable, or wrong-package file so a
+preview build can ship without Firebase until you are ready.
+
+**New phone install required** after a valid file is baked in (native FCM
+config). In-app Notifications still work on the old install.
+
+### If the preview APK opens then immediately closes
+
+That is a phone install / native crash, not “Register for push.” Try in order:
+
+1. **Clear app data** — Android Settings → Apps → HomeAsset → Storage →
+   Clear data (or Clear storage), then open again.
+2. **Uninstall and reinstall the last APK that worked** — delete HomeAsset,
+   install the older preview APK from your Expo builds page (not a brand-new
+   build). Confirm it stays open.
+3. **Rebuild without Firebase until ready** — on expo.dev → Project →
+   Environment variables, remove or disable `GOOGLE_SERVICES_JSON` for
+   **preview** (or leave it unset). Then rebuild:
+
+   ```powershell
+   cd apps\mobile
+   npx eas-cli@latest build -p android --profile preview
+   ```
+
+   Install that APK (uninstall the broken one first). The app should open;
+   Register for push stays unavailable until you add a real
+   `google-services.json` and rebuild again.
+
+4. Only after the app opens reliably, finish Firebase steps A–D below and
+   rebuild once more for lock-screen push.
 
 There are **two** Firebase pieces (easy to mix up):
 
