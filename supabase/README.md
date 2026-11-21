@@ -21,9 +21,11 @@ HomeAsset’s cloud project ref (from project docs): `iiyhogiwqqotlrsjlqud` → 
 | 5 | `migrations/20261121140000_ai_assist_rate_limits.sql` | Ask HomeAsset rate / daily caps (server-side) |
 | 6 | `migrations/20261121160000_property_custom_labels.sql` | **Custom reusable categories + document types per home** — open lists (no fixed enums); seeds from existing assets/docs; RLS via `owns_property` |
 | 7 | `migrations/20261121180000_contractor_invite_submissions.sql` | **Contractor invite links** — invites, pending submissions, media bucket (required for Home → Contractors → Invite) |
-| 8 | `migrations/20261121200000_home_contractor_directory.sql` | **Past-contractor directory** — contact + services + work history; optional phone/email/services on submissions (after approve) |
+| 8 | `migrations/20261121200000_asset_service_confirmation.sql` | **Last serviced + Confirmed by contractor** on assets |
+| 9 | `migrations/20261121200000_home_contractor_directory.sql` | **Past-contractor directory** — contact + services + work history; optional phone/email/services on submissions (after approve) |
+| 10 | `migrations/20261121300000_monthly_recall_scan_cron.sql` | **Monthly automatic recall scan** — `pg_cron` + helper that calls edge `monthly-recall-scan` (after epic7 + deploy + Vault secrets) |
 
-That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, and adds private Storage buckets for manuals / photos and invite media. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message. **Custom category / document-type reuse needs migration #6.** **Invite links need migration #7** plus deploying the `invite-submit` edge function. **Past contractors directory needs migration #8** (and re-deploy `invite-submit` if you want phone/email/services on the public form).
+That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, and adds private Storage buckets for manuals / photos and invite media. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message. **Custom category / document-type reuse needs migration #6.** **Invite links need migration #7** plus deploying the `invite-submit` edge function. **Past contractors directory needs migration #9** (and re-deploy `invite-submit` if you want phone/email/services on the public form). **Monthly automatic scans need migration #10** plus deploying `monthly-recall-scan` and Vault secrets (see below).
 
 ### Exact clicks (first-time)
 
@@ -107,6 +109,24 @@ supabase functions deploy send-push
 ```
 
 See `functions/send-push/README.md`. **No phone rebuild** for this alone if the install already can register push tokens.
+
+## Monthly automatic recall scan (`monthly-recall-scan`)
+
+Edge cron scans **all** homes’ assets with manufacturer + model once a month (same match path as **Check safety recalls**). Creates alerts + in-app notices for new matches; push when prefs + devices allow. Idempotent — no duplicate open-alert spam.
+
+| Secret | Notes |
+| --- | --- |
+| `RECALL_SCAN_SECRET` | **Required** — cron and manual curl send this as Bearer / `apikey` |
+| `EXPO_ACCESS_TOKEN` | Same as `send-push` for live lock-screen |
+
+```bash
+supabase secrets set RECALL_SCAN_SECRET=pick-a-long-random-string
+supabase functions deploy monthly-recall-scan
+```
+
+Then paste migration #8, store Vault secrets (`project_url`, `recall_scan_secret` matching the edge secret), and optionally run `select public.invoke_monthly_recall_scan();`. Full steps: `functions/monthly-recall-scan/README.md`.
+
+**Phone rebuild?** No for this edge + SQL work alone.
 
 **Windows:** name the file exactly `.env` (not `.env.txt`). After changes, restart with `npx expo start -c` (or `npm run start:dev-client` for an installable build).
 

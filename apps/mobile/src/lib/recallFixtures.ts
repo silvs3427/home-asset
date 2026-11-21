@@ -1,6 +1,8 @@
 /**
  * Phone-side fixture catalog for cloud (Supabase-direct) recall checks.
- * Mirrors apps/api/src/lib/recalls/catalog.ts so demos work without a LAN API.
+ * Mirrors apps/api/src/lib/recalls/catalog.ts and
+ * supabase/functions/_shared/recallCatalog.ts (same external ids + match rules)
+ * so demos work without a LAN API and stay aligned with monthly cron scans.
  */
 
 export type MobileRecallFixture = {

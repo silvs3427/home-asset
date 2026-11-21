@@ -9,3 +9,7 @@ verify_jwt = true
 
 [functions.send-push]
 verify_jwt = true
+
+# Cron / ops secret (RECALL_SCAN_SECRET) — not a user JWT.
+[functions.monthly-recall-scan]
+verify_jwt = false

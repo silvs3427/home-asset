@@ -42,7 +42,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Notifications",
-    body: "One place for upcoming reminders and recent notices (due items, safety recalls, and contractor submissions). Add reminders here. Tap a contractor notice to review the draft. Use Check safety recalls to match your assets to public lists. Push and in-app delivery are under Settings → Push & in-app — turn on Safety recall alerts, Contractor submissions, and Push, then Register this phone for push if you want lock-screen alerts.",
+    body: "One place for upcoming reminders and recent notices (due items, safety recalls, and contractor submissions). Add reminders here. Tap a contractor notice to review the draft. Use Check safety recalls anytime to match your assets to public lists — HomeAsset also runs an automatic monthly scan of your logged equipment so new matches can show up without tapping Check. Push and in-app delivery are under Settings → Push & in-app — turn on Safety recall alerts, Contractor submissions, and Push, then Register this phone for push if you want lock-screen alerts.",
   },
   {
     title: "Contractors",
@@ -81,7 +81,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Safety recalls",
-    body: "Matching uses assets you already logged (manufacturer and model). It creates alerts and notices only — it never invents assets or documents. You can turn Safety recall alerts and Push off under Settings → Push & in-app. Lock-screen push uses a server sender; the Expo credential never lives on the phone.",
+    body: "Matching uses assets you already logged (manufacturer and model), including the automatic monthly whole-home scan. It creates alerts and notices only — it never invents assets or documents. You can turn Safety recall alerts and Push off under Settings → Push & in-app. Lock-screen push uses a server sender; the Expo credential never lives on the phone. Acknowledge or dismiss stays on the asset.",
   },
   {
     title: "Biometrics stay on the phone",
