@@ -44,9 +44,22 @@ npm run dev:mobile
 
 | Env | Purpose |
 | --- | --- |
-| `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` | **Preferred.** Cloud signup/login + core ledger; no LAN IP |
+| `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` | **Preferred.** Cloud signup/login + ledger + AI edge; no LAN IP |
 | `SUPABASE_URL` / `SUPABASE_ANON_KEY` | Same values via Cursor/Cloud secrets (`app.config.js` maps them) |
-| `EXPO_PUBLIC_API_URL` | Optional — local SQLite demo without Supabase, or hosted AI/jobs |
+| `EXPO_PUBLIC_API_URL` | Optional — **local SQLite demo only**. Never set to `localhost` for preview |
+| `GEMINI_API_KEY` (Supabase Edge secret) | Live AI — **not** an Expo env; same LightLift pattern |
+
+### EAS preview environment (standalone APK)
+
+Preview builds do **not** read your PC `apps/mobile/.env`. Set Supabase on Expo’s **preview** env, then rebuild:
+
+```powershell
+cd apps/mobile
+npx eas-cli@latest env:set --name EXPO_PUBLIC_SUPABASE_URL --value "https://YOUR_PROJECT.supabase.co" --environment preview --visibility plaintext
+npx eas-cli@latest env:set --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "YOUR_ANON_KEY" --environment preview --visibility sensitive
+```
+
+Do **not** set `EXPO_PUBLIC_API_URL` for preview (that caused phones to try `localhost:8787`).
 
 Dev/test: turn **Confirm email OFF** in Supabase Auth so sign-up returns a session immediately.
 

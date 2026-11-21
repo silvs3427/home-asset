@@ -46,9 +46,29 @@ Copy `apps/mobile/.env.example` to `apps/mobile/.env` (never commit a real `.env
 - `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (local Expo)
 - `SUPABASE_URL` / `SUPABASE_ANON_KEY` (Cursor/Cloud secrets; `EXPO_PUBLIC_` is reserved in bind-app-secrets)
 
-With those two set, the phone uses **Supabase Auth + Postgres (+ Storage) directly** — no laptop API and **no `EXPO_PUBLIC_API_URL` / LAN IP** for signup, login, homes, and the core ledger.
+With those two set, the phone uses **Supabase Auth + Postgres (+ Storage) directly** — no laptop API and **no `EXPO_PUBLIC_API_URL` / LAN IP** for signup, login, homes, the core ledger, **and AI assist**.
 
-`EXPO_PUBLIC_API_URL` is optional: only for the local SQLite demo without Supabase, or a hosted API for AI / cron jobs.
+`EXPO_PUBLIC_API_URL` is optional: only for the local SQLite demo without Supabase, or a hosted API for cron / jobs.
+
+## AI assist edge function (LightLift pattern)
+
+`functions/ai-assist` holds the AI key server-side — same idea as LightLift `parse-voice-invoice` / `find-truck-part`.
+
+**Never** put these in the Expo app, EAS env, or any `EXPO_PUBLIC_*` variable:
+
+| Secret | Notes |
+| --- | --- |
+| `GEMINI_API_KEY` | Preferred — **same name LightLift uses** |
+| `OPENAI_API_KEY` or `AI_API_KEY` | Alternate OpenAI-compatible live path |
+| `GEMINI_MODEL` | Optional (default `gemini-2.5-flash`) |
+| `AI_ASSIST_LIVE` | Optional; default on when a key is set |
+
+```bash
+supabase secrets set GEMINI_API_KEY=your-gemini-key
+supabase functions deploy ai-assist
+```
+
+Without a key, the function returns **mock** catalog drafts so demos still work. Confirm / approve writes stay on the phone via RLS (homeowner must tap confirm). See `functions/ai-assist/README.md`.
 
 **Windows:** name the file exactly `.env` (not `.env.txt`). After changes, restart with `npx expo start -c` (or `npm run start:dev-client` for an installable build).
 

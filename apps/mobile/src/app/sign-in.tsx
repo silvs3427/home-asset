@@ -185,8 +185,10 @@ export default function SignInScreen() {
 
         <Text style={styles.apiHint}>
           {SUPABASE_CONFIGURED
-            ? "Cloud account (Supabase). No laptop API or Wi‑Fi IP needed for sign-up / sign-in. For testing, Confirm email should be OFF in the Supabase Auth settings."
-            : `Local SQLite API (no Supabase). Target: ${API_BASE_URL}\nPhysical phone without Supabase? Set EXPO_PUBLIC_API_URL to your PC's LAN IP in apps/mobile/.env, then restart Expo with npx expo start --go -c. Or add Supabase URL + anon key for cloud-only login.`}
+            ? "Cloud account (Supabase). No laptop API or Wi‑Fi IP needed for sign-up / sign-in / AI. For testing, Confirm email should be OFF in the Supabase Auth settings."
+            : API_BASE_URL
+              ? `Local demo API (no Supabase on this install). Target: ${API_BASE_URL}\nPhone preview should use Supabase instead — set EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY in Expo preview env and rebuild. Never use localhost on a phone.`
+              : "No cloud connection on this install. Add EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY to the Expo preview environment and rebuild the preview APK."}
         </Text>
 
         <Text style={styles.privacyNote}>

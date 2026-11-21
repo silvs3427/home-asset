@@ -1,4 +1,10 @@
-import { API_BASE_URL, SUPABASE_CONFIGURED } from "./config";
+import {
+  API_BASE_URL,
+  SUPABASE_CONFIGURED,
+  assertReachableBackend,
+  isLoopbackApiUrl,
+} from "./config";
+import Constants from "expo-constants";
 
 export type AppFace = "homeowner" | "contractor";
 
@@ -301,10 +307,41 @@ async function parseJson<T>(res: Response): Promise<T> {
 }
 
 /**
- * fetch() that turns connection failures into a clear network ApiError
- * (common when the phone still points at localhost instead of the PC LAN IP).
+ * fetch() for the optional local Hono API only.
+ * Cloud / preview path must use Supabase (useCloud) — never this localhost default.
  */
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  if (useCloud()) {
+    throw new ApiError(
+      "Cloud path is active — this request should not hit the laptop API.",
+      "network",
+    );
+  }
+  try {
+    assertReachableBackend();
+  } catch (err) {
+    throw new ApiError(
+      err instanceof Error ? err.message : "Backend not configured.",
+      "network",
+    );
+  }
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      "No API URL configured. Prefer Supabase (EXPO_PUBLIC_SUPABASE_URL + anon key) for phone installs.",
+      "network",
+    );
+  }
+  const standalone =
+    Constants.executionEnvironment === "standalone" ||
+    Constants.executionEnvironment === "storeClient";
+  if (standalone && isLoopbackApiUrl(API_BASE_URL)) {
+    throw new ApiError(
+      `Cannot use ${API_BASE_URL} on a preview / store install. ` +
+        `Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to the Expo preview environment and rebuild. ` +
+        `Do not set EXPO_PUBLIC_API_URL to localhost for preview.`,
+      "network",
+    );
+  }
   const url = `${API_BASE_URL}${path}`;
   try {
     return await fetch(url, init);
@@ -312,9 +349,8 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     const detail = err instanceof Error ? err.message : "network error";
     throw new ApiError(
       `Cannot reach the HomeAsset API at ${API_BASE_URL}. ` +
-        `This is a network/reachability problem (not a bad password). ` +
-        `On a physical phone set EXPO_PUBLIC_API_URL to your computer's LAN IP ` +
-        `(example http://192.168.1.10:8787) in apps/mobile/.env, keep npm run dev:api running, ` +
+        `Prefer Supabase cloud (no laptop). For local SQLite demo only, set EXPO_PUBLIC_API_URL ` +
+        `to your PC LAN IP (example http://192.168.1.10:8787), keep npm run dev:api running, ` +
         `then restart Expo with npx expo start --go -c. (${detail})`,
       "network",
     );
@@ -1303,21 +1339,38 @@ export type ContractorFormatResponse = {
   };
 };
 
-function requireHostedApiForAi(): void {
-  if (useCloud() && !process.env.EXPO_PUBLIC_API_URL?.trim()) {
-    throw new ApiError(
-      "AI assist still needs a hosted HomeAsset API (set EXPO_PUBLIC_API_URL). Signup, homes, assets, docs, and reminders already work on Supabase alone.",
-      "network",
-    );
-  }
-}
+/**
+ * Cloud phone path (LightLift): AI runs on Supabase edge `ai-assist`.
+ * Keys stay in Edge Function secrets — never EXPO_PUBLIC / EAS / laptop LAN.
+ * Local SQLite demo still uses the Node API when Supabase is not configured.
+ */
 
 export async function aiScanProduct(
   accessToken: string,
   propertyId: string,
   input: { hint?: string | null; filename?: string | null },
 ): Promise<{ draft: AiScanDraft; aiMode: "mock" | "live" }> {
-  requireHostedApiForAi();
+  if (useCloud()) {
+    const { invokeAiAssist, rememberScanDraft } = await import("./aiEdge");
+    const res = await invokeAiAssist<{
+      draft: AiScanDraft;
+      aiMode: "mock" | "live";
+      manualContents?: Record<string, string>;
+    }>("scan", {
+      propertyId,
+      hint: input.hint ?? null,
+      filename: input.filename ?? null,
+    });
+    rememberScanDraft(
+      res.draft.draftId,
+      {
+        suggestedAsset: res.draft.suggestedAsset,
+        manuals: res.draft.manuals.map((m) => ({ id: m.id, title: m.title })),
+      },
+      res.manualContents ?? {},
+    );
+    return { draft: res.draft, aiMode: res.aiMode };
+  }
   const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/ai/scan`, {
     method: "POST",
     headers: authHeaders(accessToken),
@@ -1349,7 +1402,84 @@ export async function aiConfirmScan(
   storedManualCount: number;
   privacy: { writes: boolean; confirmedByUser: boolean; note: string };
 }> {
-  requireHostedApiForAi();
+  if (useCloud()) {
+    const { takeScanDraft } = await import("./aiEdge");
+    const {
+      cloudCreateAsset,
+      cloudUpdateAsset,
+      cloudCreateDocumentFromBytes,
+    } = await import("./cloud");
+    const held = takeScanDraft(input.draftId);
+    if (!held) {
+      throw new ApiError(
+        "That AI draft expired or was already used. Scan again.",
+        "client",
+        404,
+      );
+    }
+    const overrides = input.assetOverrides ?? {};
+    const base = {
+      name: overrides.name ?? held.suggestedAsset.name,
+      category: (overrides.category ??
+        held.suggestedAsset.category) as AssetCategory,
+      manufacturer:
+        overrides.manufacturer !== undefined
+          ? overrides.manufacturer
+          : held.suggestedAsset.manufacturer,
+      model:
+        overrides.model !== undefined
+          ? overrides.model
+          : held.suggestedAsset.model,
+      serial:
+        overrides.serial !== undefined
+          ? overrides.serial
+          : held.suggestedAsset.serial,
+      notes:
+        overrides.notes !== undefined
+          ? overrides.notes
+          : held.suggestedAsset.notes,
+    };
+    let asset: PublicAsset;
+    if (input.assetId) {
+      const updated = await cloudUpdateAsset(
+        accessToken,
+        propertyId,
+        input.assetId,
+        base,
+      );
+      asset = updated.asset;
+    } else {
+      const created = await cloudCreateAsset(accessToken, propertyId, base);
+      asset = created.asset;
+    }
+    const titleById = new Map(held.manuals.map((m) => [m.id, m.title]));
+    const documents: PublicDocument[] = [];
+    for (const manualId of input.selectedManualIds) {
+      const content = held.manualContents[manualId];
+      if (!content) continue;
+      const bytes = new TextEncoder().encode(content);
+      const { document } = await cloudCreateDocumentFromBytes(propertyId, {
+        title: titleById.get(manualId) || manualId,
+        docType: "manual",
+        assetId: asset.id,
+        source: "ai_fetched",
+        mimeType: "text/plain",
+        originalFilename: `${manualId}.txt`,
+        bytes,
+      });
+      documents.push(document);
+    }
+    return {
+      asset,
+      documents,
+      storedManualCount: documents.length,
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Saved only because you confirmed. AI never auto-adds to your ledger.",
+      },
+    };
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/ai/confirm-scan`,
     {
@@ -1366,7 +1496,14 @@ export async function aiAskHowto(
   propertyId: string,
   input: { question: string; assetId?: string | null },
 ): Promise<AiHowToResponse> {
-  requireHostedApiForAi();
+  if (useCloud()) {
+    const { invokeAiAssist } = await import("./aiEdge");
+    return invokeAiAssist<AiHowToResponse>("howto", {
+      propertyId,
+      question: input.question,
+      assetId: input.assetId ?? null,
+    });
+  }
   const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/ai/howto`, {
     method: "POST",
     headers: authHeaders(accessToken),
@@ -1382,7 +1519,13 @@ export async function aiContractorFormat(
     inputKind?: "typed" | "voice" | "upload";
   },
 ): Promise<ContractorFormatResponse> {
-  requireHostedApiForAi();
+  if (useCloud()) {
+    const { invokeAiAssist } = await import("./aiEdge");
+    return invokeAiAssist<ContractorFormatResponse>("contractor-format", {
+      inputText: input.inputText,
+      inputKind: input.inputKind ?? "typed",
+    });
+  }
   const res = await fetch(`${API_BASE_URL}/ai/contractor/format`, {
     method: "POST",
     headers: authHeaders(accessToken),
@@ -1391,7 +1534,7 @@ export async function aiContractorFormat(
   return parseJson(res);
 }
 
-export async function aiContractorStatus(accessToken: string): Promise<{
+export async function aiContractorStatus(_accessToken: string): Promise<{
   aiMode: "mock" | "live";
   capabilities: {
     formatTyped: boolean;
@@ -1406,9 +1549,35 @@ export async function aiContractorStatus(accessToken: string): Promise<{
     homeownerApproveRequired: boolean;
   };
 }> {
-  requireHostedApiForAi();
+  if (useCloud()) {
+    const { invokeAiAssist } = await import("./aiEdge");
+    const res = await invokeAiAssist<{
+      aiMode: "mock" | "live";
+      capabilities?: {
+        note?: string;
+      };
+      privacy: {
+        writes: boolean;
+        confirmRequired: boolean;
+        homeownerApproveRequired: boolean;
+      };
+    }>("status");
+    return {
+      aiMode: res.aiMode,
+      capabilities: {
+        formatTyped: true,
+        formatVoiceTranscript: true,
+        formatUploadText: true,
+        submitToLedger: false,
+        note:
+          res.capabilities?.note ||
+          "Format → confirm hooks are ready; full submit / approve is EPIC 8.",
+      },
+      privacy: res.privacy,
+    };
+  }
   const res = await fetch(`${API_BASE_URL}/ai/contractor/status`, {
-    headers: { authorization: `Bearer ${accessToken}` },
+    headers: { authorization: `Bearer ${_accessToken}` },
   });
   return parseJson(res);
 }
@@ -1472,7 +1641,29 @@ export async function aiEmailIntake(
   propertyId: string,
   input: { emailText: string },
 ): Promise<{ draft: EmailIntakeDraft; aiMode: "mock" | "live" }> {
-  requireHostedApiForAi();
+  if (useCloud()) {
+    const { invokeAiAssist, rememberEmailIntakeDraft } = await import(
+      "./aiEdge"
+    );
+    const res = await invokeAiAssist<{
+      draft: EmailIntakeDraft;
+      aiMode: "mock" | "live";
+      rawEmailText?: string;
+    }>("email-intake", {
+      propertyId,
+      emailText: input.emailText,
+    });
+    rememberEmailIntakeDraft(res.draft.draftId, {
+      propertyId,
+      summary: res.draft.summary,
+      workPerformed: res.draft.workPerformed,
+      contractorName: res.draft.contractorName,
+      workDate: res.draft.workDate,
+      assetsSuggested: res.draft.assetsSuggested,
+      rawEmailText: res.rawEmailText ?? input.emailText,
+    });
+    return { draft: res.draft, aiMode: res.aiMode };
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/ai/email-intake`,
     {
@@ -1497,7 +1688,89 @@ export async function aiConfirmEmailIntake(
   summaryDocument: PublicDocument | null;
   privacy: { writes: boolean; confirmedByUser: boolean; note: string };
 }> {
-  requireHostedApiForAi();
+  if (useCloud()) {
+    const { takeEmailIntakeDraft } = await import("./aiEdge");
+    const { cloudCreateAsset, cloudCreateDocumentFromBytes } = await import(
+      "./cloud"
+    );
+    const held = takeEmailIntakeDraft(input.draftId);
+    if (!held || held.propertyId !== propertyId) {
+      throw new ApiError(
+        "That AI draft expired or was already used. Paste the email again.",
+        "client",
+        404,
+      );
+    }
+    const assets: PublicAsset[] = [];
+    for (const index of [...new Set(input.selectedAssetIndexes)].sort(
+      (a, b) => a - b,
+    )) {
+      const base = held.assetsSuggested[index];
+      if (!base) continue;
+      const created = await cloudCreateAsset(accessToken, propertyId, {
+        name: base.name,
+        category: base.category as AssetCategory,
+        manufacturer: base.manufacturer,
+        model: base.model,
+        serial: base.serial,
+        installerVendor: held.contractorName,
+        installDate:
+          held.workDate && /^\d{4}-\d{2}-\d{2}$/.test(held.workDate)
+            ? held.workDate
+            : null,
+        notes: base.notes,
+      });
+      assets.push(created.asset);
+    }
+
+    let summaryDocument: PublicDocument | null = null;
+    if (input.storeSummaryDocument !== false) {
+      const bodyText = [
+        "HomeAsset email intake summary",
+        "",
+        `Summary: ${held.summary}`,
+        "",
+        "Work performed:",
+        held.workPerformed,
+        "",
+        held.contractorName
+          ? `Contractor: ${held.contractorName}`
+          : "Contractor: (not detected)",
+        held.workDate ? `Date hint: ${held.workDate}` : null,
+        "",
+        "---",
+        "Original pasted email (homeowner-provided):",
+        held.rawEmailText,
+      ]
+        .filter((line) => line != null)
+        .join("\n");
+      const docDate =
+        held.workDate && /^\d{4}-\d{2}-\d{2}$/.test(held.workDate)
+          ? held.workDate
+          : null;
+      const { document } = await cloudCreateDocumentFromBytes(propertyId, {
+        title: `Email intake: ${held.summary.slice(0, 80)}`,
+        docType: "install_paperwork",
+        documentDate: docDate,
+        assetId: assets[0]?.id ?? null,
+        source: "ai_fetched",
+        mimeType: "text/plain",
+        originalFilename: "email-intake-summary.txt",
+        bytes: new TextEncoder().encode(bodyText),
+      });
+      summaryDocument = document;
+    }
+
+    return {
+      assets,
+      summaryDocument,
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Saved only because you approved. Pasted emails never auto-add to your ledger.",
+      },
+    };
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/ai/confirm-email-intake`,
     {
@@ -1513,7 +1786,22 @@ export async function aiSuggestPermits(
   accessToken: string,
   propertyId: string,
 ): Promise<{ draft: PermitSuggestDraft; sourceMode: "stub" | "live" }> {
-  requireHostedApiForAi();
+  if (useCloud()) {
+    const { invokeAiAssist, rememberPermitDraft } = await import("./aiEdge");
+    const res = await invokeAiAssist<{
+      draft: PermitSuggestDraft;
+      sourceMode: "stub" | "live";
+    }>("permits-suggest", { propertyId });
+    rememberPermitDraft(res.draft.draftId, {
+      propertyId,
+      permits: res.draft.permits.map((p) => ({
+        id: p.id,
+        suggestedAsset: p.suggestedAsset,
+      })),
+      sourceMode: res.sourceMode,
+    });
+    return res;
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/ai/permits/suggest`,
     {
@@ -1537,7 +1825,42 @@ export async function aiConfirmPermits(
   sourceMode: "stub" | "live";
   privacy: { writes: boolean; confirmedByUser: boolean; note: string };
 }> {
-  requireHostedApiForAi();
+  if (useCloud()) {
+    const { takePermitDraft } = await import("./aiEdge");
+    const { cloudCreateAsset } = await import("./cloud");
+    const held = takePermitDraft(input.draftId);
+    if (!held || held.propertyId !== propertyId) {
+      throw new ApiError(
+        "That permit draft expired or was already used. Suggest again.",
+        "client",
+        404,
+      );
+    }
+    const selected = new Set(input.selectedPermitIds);
+    const assets: PublicAsset[] = [];
+    for (const permit of held.permits) {
+      if (!selected.has(permit.id)) continue;
+      const base = permit.suggestedAsset;
+      const created = await cloudCreateAsset(accessToken, propertyId, {
+        name: base.name,
+        category: base.category as AssetCategory,
+        manufacturer: base.manufacturer,
+        model: base.model,
+        serial: base.serial,
+        notes: base.notes,
+      });
+      assets.push(created.asset);
+    }
+    return {
+      assets,
+      sourceMode: held.sourceMode,
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Saved only because you approved. Permit hints never auto-add to your ledger.",
+      },
+    };
+  }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/ai/permits/confirm`,
     {
