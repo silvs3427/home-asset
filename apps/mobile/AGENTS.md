@@ -30,14 +30,14 @@ Run lint and typecheck before declaring any task done.
 - Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
 - Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
 - Docs: https://docs.expo.dev/router/introduction.md
-- **Settings / How to use:** when shipping user-facing features, update `src/lib/settingsContent.ts`. Home: Ask HomeAsset → View Assets → Add or Update an Asset → Notifications → Settings. Ask HomeAsset is Talk or Text; Add or Update is scan / PDF / free-text. Colors from `src/lib/theme.ts` only. No long instructional copy on feature screens.
+- **Settings / How to use:** when shipping user-facing features, update `src/lib/settingsContent.ts`. Home: Ask HomeAsset → View Assets → Add or Update an Asset → Contractors → Notifications → Settings. Ask HomeAsset is Talk or Text; Add or Update is scan / PDF / free-text. Contractors: invite, review, past directory. Colors from `src/lib/theme.ts` only. No long instructional copy on feature screens.
 
 ## Building with EAS
 
 Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
 Docs: https://docs.expo.dev/eas/index.md
 
-**Android FCM:** `app.config.js` sets `android.googleServicesFile` from EAS file env `GOOGLE_SERVICES_JSON` (or local `google-services.json`) only when the file exists and looks valid; otherwise it omits the key so preview still boots. Without it, Register for push fails soft on Android preview — not a launch crash. Founder steps: [README.md](./README.md#android-lock-screen-push-fcm). Never put the FCM service-account private key in the app.
+**Android FCM:** `app.config.js` sets `android.googleServicesFile` from EAS file env `GOOGLE_SERVICES_JSON` (visibility **sensitive**, not secret) or local `google-services.json`. Expo Go / local Metro soft-omits when missing. EAS Android builds **hard-require** a usable file (escape: `ALLOW_MISSING_GOOGLE_SERVICES=1`). Founder steps: [README.md](./README.md#android-lock-screen-push-fcm). Never put the FCM service-account private key in the app. Do not invent or commit a fake `google-services.json`.
 
 ## Rules
 

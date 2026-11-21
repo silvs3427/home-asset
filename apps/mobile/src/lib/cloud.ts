@@ -184,6 +184,8 @@ type AssetRow = {
   purchase_date: string | null;
   install_date: string | null;
   installer_vendor: string | null;
+  last_serviced_at: string | null;
+  confirmed_by_contractor_name: string | null;
   location: string | null;
   notes: string | null;
   warranty_end_date: string | null;
@@ -269,6 +271,8 @@ function assetFromRow(row: AssetRow): PublicAsset {
     purchaseDate: row.purchase_date,
     installDate: row.install_date,
     installerVendor: row.installer_vendor,
+    lastServicedAt: row.last_serviced_at ?? null,
+    confirmedByContractorName: row.confirmed_by_contractor_name ?? null,
     location: row.location,
     notes: row.notes,
     warrantyEndDate: row.warranty_end_date,
@@ -782,6 +786,9 @@ export async function cloudCreateAsset(
         purchase_date: input.purchaseDate || null,
         install_date: input.installDate || null,
         installer_vendor: input.installerVendor?.trim() || null,
+        last_serviced_at: input.lastServicedAt || null,
+        confirmed_by_contractor_name:
+          input.confirmedByContractorName?.trim() || null,
         location: input.location?.trim() || null,
         notes: input.notes?.trim() || null,
         warranty_end_date: input.warrantyEndDate || null,
@@ -833,6 +840,11 @@ export async function cloudUpdateAsset(
       patch.install_date = input.installDate || null;
     if (input.installerVendor !== undefined)
       patch.installer_vendor = input.installerVendor?.trim() || null;
+    if (input.lastServicedAt !== undefined)
+      patch.last_serviced_at = input.lastServicedAt || null;
+    if (input.confirmedByContractorName !== undefined)
+      patch.confirmed_by_contractor_name =
+        input.confirmedByContractorName?.trim() || null;
     if (input.location !== undefined)
       patch.location = input.location?.trim() || null;
     if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
@@ -2138,12 +2150,42 @@ export type PublicContractorSubmission = {
   status: "pending" | "approved" | "declined";
   contractorName: string | null;
   companyName: string | null;
+  phone: string | null;
+  email: string | null;
+  servicesOffered: string[];
   notesText: string | null;
   draft: ContractorInviteDraft;
   aiMode: "mock" | "live";
   reviewedAt: string | null;
   createdAt: string;
   media: PublicContractorSubmissionMedia[];
+};
+
+export type PublicHomeContractorWork = {
+  id: string;
+  contractorId: string;
+  propertyId: string;
+  submissionId: string | null;
+  summary: string;
+  workPerformed: string | null;
+  workDate: string | null;
+  createdAt: string;
+};
+
+export type PublicHomeContractor = {
+  id: string;
+  propertyId: string;
+  displayName: string;
+  companyName: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  servicesOffered: string[];
+  notes: string | null;
+  lastWorkedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  work: PublicHomeContractorWork[];
 };
 
 type InviteRow = {
@@ -2163,10 +2205,39 @@ type SubmissionRow = {
   status: "pending" | "approved" | "declined";
   contractor_name: string | null;
   company_name: string | null;
+  phone: string | null;
+  email: string | null;
+  services_offered: string[] | null;
   notes_text: string | null;
   draft_json: ContractorInviteDraft | Record<string, unknown>;
   ai_mode: "mock" | "live";
   reviewed_at: string | null;
+  created_at: string;
+};
+
+type HomeContractorRow = {
+  id: string;
+  property_id: string;
+  display_name: string;
+  company_name: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  services_offered: string[] | null;
+  notes: string | null;
+  last_worked_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type HomeContractorWorkRow = {
+  id: string;
+  contractor_id: string;
+  property_id: string;
+  submission_id: string | null;
+  summary: string;
+  work_performed: string | null;
+  work_date: string | null;
   created_at: string;
 };
 
@@ -2180,8 +2251,25 @@ type MediaRow = {
   created_at: string;
 };
 
+/**
+ * Contractor-facing HTML is on GitHub Pages (not the edge URL).
+ * Supabase project hosts rewrite GET text/html → text/plain, so opening
+ * /functions/v1/invite-submit in a browser shows source instead of a page.
+ * Override with EXPO_PUBLIC_INVITE_LANDING_URL if the Pages URL changes.
+ */
+const DEFAULT_INVITE_LANDING_BASE = "https://silvs3427.github.io/home-asset/";
+
+function inviteLandingBaseUrl(): string {
+  const fromEnv = process.env.EXPO_PUBLIC_INVITE_LANDING_URL?.trim();
+  const raw = fromEnv || DEFAULT_INVITE_LANDING_BASE;
+  return raw.endsWith("/") ? raw : `${raw}/`;
+}
+
 function inviteUrlForToken(token: string): string {
-  return `${getSupabasePublicUrl()}/functions/v1/invite-submit?t=${encodeURIComponent(token)}`;
+  const landing = new URL(inviteLandingBaseUrl());
+  landing.searchParams.set("t", token);
+  landing.searchParams.set("api", getSupabasePublicUrl());
+  return landing.toString();
 }
 
 function inviteFromRow(row: InviteRow): PublicContractorInvite {
@@ -2355,6 +2443,11 @@ function submissionFromRow(
     status: row.status,
     contractorName: row.contractor_name,
     companyName: row.company_name,
+    phone: row.phone ?? null,
+    email: row.email ?? null,
+    servicesOffered: Array.isArray(row.services_offered)
+      ? row.services_offered.map((s) => String(s))
+      : [],
     notesText: row.notes_text,
     draft: normalizeDraft(row.draft_json),
     aiMode: row.ai_mode,
@@ -2362,6 +2455,74 @@ function submissionFromRow(
     createdAt: row.created_at,
     media,
   };
+}
+
+function workFromRow(row: HomeContractorWorkRow): PublicHomeContractorWork {
+  return {
+    id: row.id,
+    contractorId: row.contractor_id,
+    propertyId: row.property_id,
+    submissionId: row.submission_id,
+    summary: row.summary,
+    workPerformed: row.work_performed,
+    workDate: row.work_date,
+    createdAt: row.created_at,
+  };
+}
+
+function contractorFromRow(
+  row: HomeContractorRow,
+  work: PublicHomeContractorWork[] = [],
+): PublicHomeContractor {
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    displayName: row.display_name,
+    companyName: row.company_name,
+    phone: row.phone,
+    email: row.email,
+    website: row.website,
+    servicesOffered: Array.isArray(row.services_offered)
+      ? row.services_offered.map((s) => String(s))
+      : [],
+    notes: row.notes,
+    lastWorkedAt: row.last_worked_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    work,
+  };
+}
+
+function normalizeServices(raw: string[] | string | null | undefined): string[] {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((s) => String(s).trim())
+      .filter(Boolean)
+      .slice(0, 20)
+      .map((s) => s.slice(0, 80));
+  }
+  if (typeof raw === "string") {
+    return raw
+      .split(/[,;\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 20)
+      .map((s) => s.slice(0, 80));
+  }
+  return [];
+}
+
+function mergeServices(a: string[], b: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of [...a, ...b]) {
+    const key = item.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+    if (out.length >= 20) break;
+  }
+  return out;
 }
 
 export async function cloudListContractorSubmissions(
@@ -2497,34 +2658,27 @@ export async function cloudApproveContractorSubmission(
     )) {
       const base = submission.draft.assetsSuggested[index];
       if (!base) continue;
-      const category = (base.category || "other") as AssetCategory;
+      const contractorName =
+        submission.contractorName ||
+        submission.companyName ||
+        submission.draft.contractorName ||
+        null;
+      const workDate =
+        submission.draft.workDate &&
+        /^\d{4}-\d{2}-\d{2}$/.test(submission.draft.workDate)
+          ? submission.draft.workDate
+          : null;
+      // Keep homeowner open categories (e.g. "Pool gear"); do not coerce to legacy enum.
+      const categoryRaw = (base.category || "Other").trim() || "Other";
       const created = await cloudCreateAsset(accessToken, propertyId, {
         name: base.name,
-        category: [
-          "hvac",
-          "roof",
-          "appliance",
-          "generator",
-          "water_heater",
-          "plumbing",
-          "electrical",
-          "kids_gear",
-          "vehicle",
-          "other",
-        ].includes(category)
-          ? category
-          : "other",
+        category: categoryRaw.slice(0, 80),
         manufacturer: base.manufacturer,
         model: base.model,
-        installerVendor:
-          submission.contractorName ||
-          submission.companyName ||
-          submission.draft.contractorName,
-        installDate:
-          submission.draft.workDate &&
-          /^\d{4}-\d{2}-\d{2}$/.test(submission.draft.workDate)
-            ? submission.draft.workDate
-            : null,
+        installerVendor: contractorName,
+        installDate: workDate,
+        lastServicedAt: workDate,
+        confirmedByContractorName: contractorName,
         notes: base.notes,
         provenance: "contractor",
       });
@@ -2597,6 +2751,26 @@ export async function cloudApproveContractorSubmission(
         404,
       );
     }
+
+    // Directory upsert only after homeowner approve (privacy: no silent add).
+    try {
+      await upsertDirectoryFromApprovedSubmission(
+        supabase,
+        session.user.id,
+        propertyId,
+        submissionFromRow(data as SubmissionRow, []),
+      );
+    } catch (dirErr) {
+      console.warn(
+        JSON.stringify({
+          msg: "home_contractor_directory_upsert_failed",
+          propertyId,
+          submissionId,
+          error: dirErr instanceof Error ? dirErr.message : String(dirErr),
+        }),
+      );
+    }
+
     const media = await loadSubmissionMedia(supabase, submissionId);
     return {
       submission: submissionFromRow(data as SubmissionRow, media),
@@ -2611,5 +2785,348 @@ export async function cloudApproveContractorSubmission(
   } catch (err) {
     if (err instanceof ApiError) throw err;
     mapCloudError(err, "Could not approve submission.");
+  }
+}
+
+async function upsertDirectoryFromApprovedSubmission(
+  supabase: ReturnType<typeof requireSupabaseClient>,
+  userId: string,
+  propertyId: string,
+  submission: PublicContractorSubmission,
+): Promise<void> {
+  const displayName = (
+    submission.contractorName ||
+    submission.draft.contractorName ||
+    submission.companyName ||
+    "Contractor"
+  ).trim();
+  const companyName = submission.companyName?.trim() || null;
+  const workDate =
+    submission.draft.workDate &&
+    /^\d{4}-\d{2}-\d{2}$/.test(submission.draft.workDate)
+      ? submission.draft.workDate
+      : null;
+
+  const { data: existingRows, error: listErr } = await supabase
+    .from("home_contractors")
+    .select("*")
+    .eq("property_id", propertyId);
+  if (listErr) mapCloudError(listErr, "Could not load contractor directory.");
+
+  const rows = (existingRows as HomeContractorRow[]) ?? [];
+  const match = rows.find((row) => {
+    const sameCompany =
+      companyName &&
+      row.company_name &&
+      row.company_name.trim().toLowerCase() === companyName.toLowerCase();
+    const sameName =
+      row.display_name.trim().toLowerCase() === displayName.toLowerCase();
+    return sameCompany || sameName;
+  });
+
+  const now = new Date().toISOString();
+  let contractorId: string;
+
+  if (match) {
+    const mergedServices = mergeServices(
+      Array.isArray(match.services_offered)
+        ? match.services_offered.map(String)
+        : [],
+      submission.servicesOffered,
+    );
+    const { data: updated, error: updErr } = await supabase
+      .from("home_contractors")
+      .update({
+        phone: submission.phone || match.phone,
+        email: submission.email || match.email,
+        company_name: companyName || match.company_name,
+        services_offered: mergedServices,
+        last_worked_at: workDate || match.last_worked_at,
+        updated_at: now,
+      })
+      .eq("id", match.id)
+      .eq("property_id", propertyId)
+      .select("*")
+      .single();
+    if (updErr) mapCloudError(updErr, "Could not update contractor directory.");
+    contractorId = (updated as HomeContractorRow).id;
+  } else {
+    const { data: inserted, error: insErr } = await supabase
+      .from("home_contractors")
+      .insert({
+        property_id: propertyId,
+        display_name: displayName.slice(0, 120),
+        company_name: companyName,
+        phone: submission.phone,
+        email: submission.email,
+        services_offered: submission.servicesOffered,
+        last_worked_at: workDate,
+        created_by: userId,
+        created_at: now,
+        updated_at: now,
+      })
+      .select("*")
+      .single();
+    if (insErr) mapCloudError(insErr, "Could not save contractor to directory.");
+    contractorId = (inserted as HomeContractorRow).id;
+  }
+
+  const { error: workErr } = await supabase.from("home_contractor_work").insert({
+    contractor_id: contractorId,
+    property_id: propertyId,
+    submission_id: submission.id,
+    summary: submission.draft.summary.slice(0, 200),
+    work_performed: submission.draft.workPerformed || null,
+    work_date: workDate,
+    created_at: now,
+  });
+  if (workErr) mapCloudError(workErr, "Could not save contractor work history.");
+}
+
+export async function cloudListHomeContractors(
+  _accessToken: string,
+  propertyId: string,
+): Promise<{ contractors: PublicHomeContractor[] }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const { data, error } = await supabase
+      .from("home_contractors")
+      .select("*")
+      .eq("property_id", propertyId)
+      .order("display_name", { ascending: true });
+    if (error) mapCloudError(error, "Could not load contractors.");
+    const rows = (data as HomeContractorRow[]) ?? [];
+    if (rows.length === 0) return { contractors: [] };
+
+    const ids = rows.map((r) => r.id);
+    const { data: workData, error: workErr } = await supabase
+      .from("home_contractor_work")
+      .select("*")
+      .eq("property_id", propertyId)
+      .in("contractor_id", ids)
+      .order("work_date", { ascending: false, nullsFirst: false });
+    if (workErr) mapCloudError(workErr, "Could not load contractor work.");
+    const workRows = (workData as HomeContractorWorkRow[]) ?? [];
+    const byContractor = new Map<string, PublicHomeContractorWork[]>();
+    for (const row of workRows) {
+      const list = byContractor.get(row.contractor_id) ?? [];
+      list.push(workFromRow(row));
+      byContractor.set(row.contractor_id, list);
+    }
+    return {
+      contractors: rows.map((row) =>
+        contractorFromRow(row, byContractor.get(row.id) ?? []),
+      ),
+    };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not load contractors.");
+  }
+}
+
+export async function cloudGetHomeContractor(
+  _accessToken: string,
+  propertyId: string,
+  contractorId: string,
+): Promise<{ contractor: PublicHomeContractor }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const { data, error } = await supabase
+      .from("home_contractors")
+      .select("*")
+      .eq("id", contractorId)
+      .eq("property_id", propertyId)
+      .maybeSingle();
+    if (error) mapCloudError(error, "Could not load contractor.");
+    if (!data) throw new ApiError("Contractor not found.", "client", 404);
+    const { data: workData, error: workErr } = await supabase
+      .from("home_contractor_work")
+      .select("*")
+      .eq("contractor_id", contractorId)
+      .eq("property_id", propertyId)
+      .order("work_date", { ascending: false, nullsFirst: false });
+    if (workErr) mapCloudError(workErr, "Could not load contractor work.");
+    return {
+      contractor: contractorFromRow(
+        data as HomeContractorRow,
+        ((workData as HomeContractorWorkRow[]) ?? []).map(workFromRow),
+      ),
+    };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not load contractor.");
+  }
+}
+
+export type HomeContractorInput = {
+  displayName: string;
+  companyName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  servicesOffered?: string[] | string | null;
+  notes?: string | null;
+  lastWorkedAt?: string | null;
+};
+
+export async function cloudCreateHomeContractor(
+  _accessToken: string,
+  propertyId: string,
+  input: HomeContractorInput,
+): Promise<{ contractor: PublicHomeContractor }> {
+  try {
+    const session = await requireSession();
+    const supabase = requireSupabaseClient();
+    const displayName = input.displayName.trim();
+    if (!displayName) {
+      throw new ApiError("Name is required.", "client", 400);
+    }
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("home_contractors")
+      .insert({
+        property_id: propertyId,
+        display_name: displayName.slice(0, 120),
+        company_name: input.companyName?.trim() || null,
+        phone: input.phone?.trim() || null,
+        email: input.email?.trim() || null,
+        website: input.website?.trim() || null,
+        services_offered: normalizeServices(input.servicesOffered),
+        notes: input.notes?.trim() || null,
+        last_worked_at:
+          input.lastWorkedAt && /^\d{4}-\d{2}-\d{2}$/.test(input.lastWorkedAt)
+            ? input.lastWorkedAt
+            : null,
+        created_by: session.user.id,
+        created_at: now,
+        updated_at: now,
+      })
+      .select("*")
+      .single();
+    if (error) mapCloudError(error, "Could not add contractor.");
+    return { contractor: contractorFromRow(data as HomeContractorRow, []) };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not add contractor.");
+  }
+}
+
+export async function cloudUpdateHomeContractor(
+  _accessToken: string,
+  propertyId: string,
+  contractorId: string,
+  input: HomeContractorInput,
+): Promise<{ contractor: PublicHomeContractor }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const displayName = input.displayName.trim();
+    if (!displayName) {
+      throw new ApiError("Name is required.", "client", 400);
+    }
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("home_contractors")
+      .update({
+        display_name: displayName.slice(0, 120),
+        company_name: input.companyName?.trim() || null,
+        phone: input.phone?.trim() || null,
+        email: input.email?.trim() || null,
+        website: input.website?.trim() || null,
+        services_offered: normalizeServices(input.servicesOffered),
+        notes: input.notes?.trim() || null,
+        last_worked_at:
+          input.lastWorkedAt && /^\d{4}-\d{2}-\d{2}$/.test(input.lastWorkedAt)
+            ? input.lastWorkedAt
+            : null,
+        updated_at: now,
+      })
+      .eq("id", contractorId)
+      .eq("property_id", propertyId)
+      .select("*")
+      .maybeSingle();
+    if (error) mapCloudError(error, "Could not update contractor.");
+    if (!data) throw new ApiError("Contractor not found.", "client", 404);
+    const { contractor } = await cloudGetHomeContractor(
+      _accessToken,
+      propertyId,
+      contractorId,
+    );
+    return { contractor };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not update contractor.");
+  }
+}
+
+export async function cloudDeleteHomeContractor(
+  _accessToken: string,
+  propertyId: string,
+  contractorId: string,
+): Promise<{ ok: true }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const { error } = await supabase
+      .from("home_contractors")
+      .delete()
+      .eq("id", contractorId)
+      .eq("property_id", propertyId);
+    if (error) mapCloudError(error, "Could not remove contractor.");
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not remove contractor.");
+  }
+}
+
+export async function cloudAddHomeContractorWork(
+  _accessToken: string,
+  propertyId: string,
+  contractorId: string,
+  input: {
+    summary: string;
+    workPerformed?: string | null;
+    workDate?: string | null;
+  },
+): Promise<{ work: PublicHomeContractorWork }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const summary = input.summary.trim();
+    if (!summary) {
+      throw new ApiError("Work summary is required.", "client", 400);
+    }
+    const workDate =
+      input.workDate && /^\d{4}-\d{2}-\d{2}$/.test(input.workDate)
+        ? input.workDate
+        : null;
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("home_contractor_work")
+      .insert({
+        contractor_id: contractorId,
+        property_id: propertyId,
+        summary: summary.slice(0, 200),
+        work_performed: input.workPerformed?.trim() || null,
+        work_date: workDate,
+        created_at: now,
+      })
+      .select("*")
+      .single();
+    if (error) mapCloudError(error, "Could not add work history.");
+    if (workDate) {
+      await supabase
+        .from("home_contractors")
+        .update({ last_worked_at: workDate, updated_at: now })
+        .eq("id", contractorId)
+        .eq("property_id", propertyId);
+    }
+    return { work: workFromRow(data as HomeContractorWorkRow) };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not add work history.");
   }
 }

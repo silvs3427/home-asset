@@ -29,7 +29,7 @@ supabase functions deploy monthly-recall-scan
 ## Founder steps (plain)
 
 1. Deploy this function (command above).
-2. Paste SQL migration `20261121200000_monthly_recall_scan_cron.sql` in Supabase **SQL Editor** (after epic7 recalls SQL).
+2. Paste SQL migration `20261121300000_monthly_recall_scan_cron.sql` in Supabase **SQL Editor** (after epic7 recalls SQL).
 3. In SQL Editor, store two Vault secrets (use your real project URL and the **same** `RECALL_SCAN_SECRET` value):
 
 ```sql

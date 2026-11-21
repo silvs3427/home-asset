@@ -16,6 +16,7 @@ import {
   formatPropertyAddress,
   type PermitSuggestDraft,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 
 /**
@@ -87,13 +88,7 @@ export default function PermitSuggestionsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button">
-          <Text style={styles.back}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Permit hints</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader title="Permit hints" />
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.address}>

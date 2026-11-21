@@ -1,16 +1,19 @@
-import { Redirect, useFocusEffect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
+import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   deleteDocument,
   documentSourceLabel,
@@ -22,8 +25,8 @@ import {
   type DocumentType,
   type PublicDocument,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
-import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   downloadAndShareDocument,
   pickDocumentFile,
@@ -37,7 +40,6 @@ import {
  * Camera-first attach path for phone capture.
  */
 export default function PropertyDocumentsScreen() {
-  const router = useRouter();
   const { user, accessToken, activeProperty } = useAuth();
   const [documents, setDocuments] = useState<PublicDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,22 +188,9 @@ export default function PropertyDocumentsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Documents</Text>
-        <View style={styles.backSpacer} />
-      </View>
+      <ScreenHeader title="Documents" />
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        keyboardShouldPersistTaps="handled"
-      >
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>
         <Text style={styles.title}>Documents</Text>
 
@@ -252,7 +241,7 @@ export default function PropertyDocumentsScreen() {
             <Text style={styles.sectionLabel}>Ready to save</Text>
             <Text style={styles.pendingName}>{pending.name}</Text>
             <Text style={styles.label}>Title</Text>
-            <TextInput
+            <KeyboardAwareTextInput
               style={styles.input}
               value={title}
               onChangeText={setTitle}
@@ -270,7 +259,7 @@ export default function PropertyDocumentsScreen() {
               />
             ) : null}
             <Text style={styles.label}>Document date (YYYY-MM-DD)</Text>
-            <TextInput
+            <KeyboardAwareTextInput
               style={styles.input}
               value={documentDate}
               onChangeText={setDocumentDate}
@@ -365,7 +354,7 @@ export default function PropertyDocumentsScreen() {
           ))}
         </View>
 
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }

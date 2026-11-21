@@ -15,7 +15,8 @@ import { colors } from "@/lib/theme";
 
 /**
  * Homeowner home:
- * Ask HomeAsset → View Assets → Add or Update an Asset → Notifications → Settings.
+ * Ask HomeAsset → View Assets → Add or Update an Asset → Contractors →
+ * Notifications → Settings.
  * HomeAsset is homeowner-only — no contractor face / mode on this screen.
  */
 export default function HomeShellScreen() {
@@ -86,6 +87,16 @@ export default function HomeShellScreen() {
               ]}
             >
               <Text style={styles.secondaryLabel}>Add or Update an Asset</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/contractors")}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Contractors</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"

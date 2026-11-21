@@ -1,15 +1,18 @@
-import { Redirect, useRouter } from "expo-router";
+import { Redirect } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { aiAskHowto, type AiHowToResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { pickAudioFile } from "@/lib/documents";
@@ -21,7 +24,6 @@ import { colors } from "@/lib/theme";
  * Add/update assets live on Home → Add or Update an Asset.
  */
 export default function AskHomeAssetScreen() {
-  const router = useRouter();
   const { user, accessToken, activeProperty } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [voiceName, setVoiceName] = useState<string | null>(null);
@@ -80,29 +82,16 @@ export default function AskHomeAssetScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Close</Text>
-        </Pressable>
-        <Text style={styles.brand}>Ask HomeAsset</Text>
-        <View style={styles.spacer} />
-      </View>
+      <ScreenHeader title="Ask HomeAsset" backLabel="Close" />
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        keyboardShouldPersistTaps="handled"
-      >
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {!canUseHomeTools ? (
           <Text style={styles.empty}>Add a home first to use Ask HomeAsset.</Text>
         ) : (
           <>
             <Text style={styles.title}>Talk or Text</Text>
 
-            <TextInput
+            <KeyboardAwareTextInput
               value={prompt}
               onChangeText={setPrompt}
               placeholder="What are you looking for? How can we help with this home?"
@@ -187,7 +176,7 @@ export default function AskHomeAssetScreen() {
             ) : null}
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }

@@ -20,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { KeyboardAwareScroll } from "@/components/KeyboardAwareScroll";
 import { useAuth } from "./auth";
 import {
   BACKGROUND_GRACE_MS,
@@ -425,100 +426,102 @@ function LockOverlay(props: {
   return (
     <View style={styles.overlay} accessibilityViewIsModal>
       <SafeAreaView style={styles.overlaySafe}>
-        <Text style={styles.brand}>HomeAsset</Text>
-        <Text style={styles.title}>App locked</Text>
-        <Text style={styles.copy}>
-          Unlock to see your home record again. We never store your face or
-          fingerprint — only the phone’s built-in unlock is used.
-        </Text>
+        <KeyboardAwareScroll contentContainerStyle={styles.overlayBody}>
+          <Text style={styles.brand}>HomeAsset</Text>
+          <Text style={styles.title}>App locked</Text>
+          <Text style={styles.copy}>
+            Unlock to see your home record again. We never store your face or
+            fingerprint — only the phone’s built-in unlock is used.
+          </Text>
 
-        {canBiometric ? (
+          {canBiometric ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => {
+                void tryBio();
+              }}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              {busy && !showPassword ? (
+                <ActivityIndicator color={colors.onBrand} />
+              ) : (
+                <Text style={styles.primaryLabel}>
+                  Unlock with {props.biometric.label}
+                </Text>
+              )}
+            </Pressable>
+          ) : (
+            <Text style={styles.hint}>
+              Biometrics aren’t available on this device. Use your account
+              password.
+            </Text>
+          )}
+
+          {!showPassword ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => setShowPassword(true)}
+              style={styles.linkBtn}
+            >
+              <Text style={styles.linkLabel}>Use password instead</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.passwordBlock}>
+              <Text style={styles.emailLabel}>{props.email}</Text>
+              <TextInput
+                accessibilityLabel="Password"
+                autoCapitalize="none"
+                autoComplete="password"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Password"
+                placeholderTextColor={colors.placeholder}
+                style={styles.input}
+                editable={!busy}
+                onSubmitEditing={() => {
+                  void tryPassword();
+                }}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy || password.length === 0}
+                onPress={() => {
+                  void tryPassword();
+                }}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  (busy || password.length === 0) && styles.disabled,
+                  pressed && styles.pressed,
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator color={colors.onBrand} />
+                ) : (
+                  <Text style={styles.primaryLabel}>Unlock with password</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
           <Pressable
             accessibilityRole="button"
             disabled={busy}
             onPress={() => {
-              void tryBio();
+              void props.onSignOut();
             }}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed && styles.pressed,
-            ]}
-          >
-            {busy && !showPassword ? (
-              <ActivityIndicator color={colors.onBrand} />
-            ) : (
-              <Text style={styles.primaryLabel}>
-                Unlock with {props.biometric.label}
-              </Text>
-            )}
-          </Pressable>
-        ) : (
-          <Text style={styles.hint}>
-            Biometrics aren’t available on this device. Use your account
-            password.
-          </Text>
-        )}
-
-        {!showPassword ? (
-          <Pressable
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={() => setShowPassword(true)}
             style={styles.linkBtn}
           >
-            <Text style={styles.linkLabel}>Use password instead</Text>
+            <Text style={styles.linkLabel}>Sign out</Text>
           </Pressable>
-        ) : (
-          <View style={styles.passwordBlock}>
-            <Text style={styles.emailLabel}>{props.email}</Text>
-            <TextInput
-              accessibilityLabel="Password"
-              autoCapitalize="none"
-              autoComplete="password"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Password"
-              placeholderTextColor={colors.placeholder}
-              style={styles.input}
-              editable={!busy}
-              onSubmitEditing={() => {
-                void tryPassword();
-              }}
-            />
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy || password.length === 0}
-              onPress={() => {
-                void tryPassword();
-              }}
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                (busy || password.length === 0) && styles.disabled,
-                pressed && styles.pressed,
-              ]}
-            >
-              {busy ? (
-                <ActivityIndicator color={colors.onBrand} />
-              ) : (
-                <Text style={styles.primaryLabel}>Unlock with password</Text>
-              )}
-            </Pressable>
-          </View>
-        )}
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy}
-          onPress={() => {
-            void props.onSignOut();
-          }}
-          style={styles.linkBtn}
-        >
-          <Text style={styles.linkLabel}>Sign out</Text>
-        </Pressable>
+        </KeyboardAwareScroll>
       </SafeAreaView>
     </View>
   );
@@ -536,8 +539,12 @@ const styles = StyleSheet.create({
   },
   overlaySafe: {
     flex: 1,
+  },
+  overlayBody: {
+    flexGrow: 1,
     paddingHorizontal: 28,
     paddingTop: 48,
+    paddingBottom: 32,
     justifyContent: "center",
   },
   brand: {

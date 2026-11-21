@@ -1,6 +1,7 @@
 import { Redirect, useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
@@ -21,17 +22,7 @@ export default function AddOrUpdateAssetScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Add or Update</Text>
-        <View style={styles.spacer} />
-      </View>
+      <ScreenHeader title="Add or Update" />
 
       <View style={styles.body}>
         <Pressable

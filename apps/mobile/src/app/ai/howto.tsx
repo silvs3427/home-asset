@@ -1,4 +1,4 @@
-import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -6,16 +6,20 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import {
   aiAskHowto,
   listAssets,
   type AiHowToResponse,
   type PublicAsset,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 
 /**
@@ -23,7 +27,6 @@ import { useAuth } from "@/lib/auth";
  * Read-only — never writes the ledger.
  */
 export default function AiHowtoScreen() {
-  const router = useRouter();
   const { assetId: assetIdParam } = useLocalSearchParams<{
     assetId?: string;
   }>();
@@ -90,15 +93,9 @@ export default function AiHowtoScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button">
-          <Text style={styles.back}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Ask how-to</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader title="Ask how-to" />
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {loadingAssets ? (
           <ActivityIndicator color="#002D72" />
         ) : (
@@ -136,7 +133,7 @@ export default function AiHowtoScreen() {
         )}
 
         <Text style={styles.label}>Your question</Text>
-        <TextInput
+        <KeyboardAwareTextInput
           value={question}
           onChangeText={setQuestion}
           placeholder="e.g. How do I start this safely outdoors?"
@@ -189,7 +186,7 @@ export default function AiHowtoScreen() {
             ) : null}
           </View>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }

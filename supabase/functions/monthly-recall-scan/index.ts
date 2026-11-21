@@ -16,7 +16,7 @@
  *   supabase secrets set RECALL_SCAN_SECRET=...
  *   supabase functions deploy monthly-recall-scan
  *
- * Schedule: see migrations/20261121200000_monthly_recall_scan_cron.sql
+ * Schedule: see migrations/20261121300000_monthly_recall_scan_cron.sql
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";

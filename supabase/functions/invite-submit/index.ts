@@ -1,11 +1,16 @@
 /**
  * Public invite-link submit (non-LightLift contractors).
  *
- * GET  ?t=TOKEN  → phone-friendly HTML form (voice + photos + text)
+ * GET  ?t=TOKEN
+ *   - Browser navigation (Accept: text/html) → 302 to GitHub Pages landing
+ *     (Supabase project hosts rewrite GET text/html → text/plain, so HTML
+ *     cannot be served from *.supabase.co — see invite-landing app.)
+ *   - Accept: application/json → invite metadata for the landing page
  * POST multipart/JSON with token → pending submission + AI draft
  *
  * Deploy with verify_jwt=false (see supabase/config.toml).
  * Secrets: GEMINI_API_KEY (preferred) — same as ai-assist / LightLift.
+ * Optional: INVITE_LANDING_BASE_URL (default GitHub Pages invite site).
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -19,6 +24,8 @@ import { HOME_SCOPE_SYSTEM_BLURB } from "../_shared/topicGuard.ts";
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 const DEFAULT_OPENAI_BASE = "https://api.openai.com/v1";
+const DEFAULT_INVITE_LANDING_BASE =
+  "https://silvs3427.github.io/home-asset/";
 const MAX_PHOTOS = 8;
 const MAX_AUDIO_BYTES = 12 * 1024 * 1024;
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
@@ -72,20 +79,48 @@ Deno.serve(async (req) => {
   const tokenFromQuery = (url.searchParams.get("t") || "").trim();
 
   if (req.method === "GET") {
+    const accept = (req.headers.get("accept") || "").toLowerCase();
+    const fetchDest = (req.headers.get("sec-fetch-dest") || "").toLowerCase();
+    const wantsJson =
+      accept.includes("application/json") && !accept.includes("text/html");
+    const isBrowserDocument =
+      fetchDest === "document" ||
+      (accept.includes("text/html") && !accept.includes("application/json"));
+
+    // Browsers opening the old edge URL: redirect to the real HTML host.
+    // (GET text/html on *.supabase.co is rewritten to text/plain.)
+    if (isBrowserDocument) {
+      const landing = buildLandingRedirectUrl(tokenFromQuery);
+      return Response.redirect(landing, 302);
+    }
+
     if (!tokenFromQuery) {
+      if (wantsJson || !isBrowserDocument) {
+        return jsonError(400, "missing_token", "Missing invite link.");
+      }
       return htmlResponse(errorPage("Missing invite link."), 400);
     }
+
     const invite = await loadInvite(tokenFromQuery);
     if (!invite.ok) {
+      if (wantsJson || !isBrowserDocument) {
+        return jsonError(invite.status, "invite_unavailable", invite.message);
+      }
       return htmlResponse(errorPage(invite.message), invite.status);
     }
-    return htmlResponse(
-      formPage({
-        token: tokenFromQuery,
-        homeLabel: invite.homeLabel,
-        inviteLabel: invite.label,
-      }),
-    );
+
+    // Landing page bootstrap (JSON). HTML form lives on GitHub Pages.
+    return jsonResponse({
+      ok: true,
+      token: tokenFromQuery,
+      homeLabel: invite.homeLabel,
+      inviteLabel: invite.label,
+      submitPath: "/functions/v1/invite-submit",
+      privacy: {
+        writesOfficial: false,
+        note: "Pending only. Homeowner must approve before anything is official.",
+      },
+    });
   }
 
   if (req.method !== "POST") {
@@ -95,7 +130,10 @@ Deno.serve(async (req) => {
   try {
     const parsed = await parseSubmitBody(req, tokenFromQuery);
     if (!parsed.ok) {
-      const accept = req.headers.get("accept") || "";
+      const accept = (req.headers.get("accept") || "").toLowerCase();
+      if (accept.includes("application/json")) {
+        return jsonError(parsed.status, parsed.code, parsed.message);
+      }
       if (accept.includes("text/html")) {
         return htmlResponse(errorPage(parsed.message), parsed.status);
       }
@@ -103,7 +141,21 @@ Deno.serve(async (req) => {
     }
 
     const result = await processSubmission(parsed);
-    const accept = req.headers.get("accept") || "";
+    const accept = (req.headers.get("accept") || "").toLowerCase();
+    // Prefer JSON when the landing page asks for it (fetch + FormData).
+    if (accept.includes("application/json")) {
+      return jsonResponse({
+        ok: true,
+        submissionId: result.submissionId,
+        status: "pending",
+        draft: result.draft,
+        aiMode: result.aiMode,
+        privacy: {
+          writesOfficial: false,
+          note: "Pending only. Homeowner must approve before anything is official.",
+        },
+      });
+    }
     if (accept.includes("text/html") || parsed.fromForm) {
       return htmlResponse(
         successPage({
@@ -130,9 +182,12 @@ Deno.serve(async (req) => {
         error: err instanceof Error ? err.message : String(err),
       }),
     );
-    const accept = req.headers.get("accept") || "";
+    const accept = (req.headers.get("accept") || "").toLowerCase();
     const message =
       err instanceof Error ? err.message : "Could not save submission.";
+    if (accept.includes("application/json")) {
+      return jsonError(500, "submit_failed", message);
+    }
     if (accept.includes("text/html")) {
       return htmlResponse(errorPage(message), 500);
     }
@@ -234,6 +289,9 @@ type ParsedSubmit = {
   notes: string;
   contractorName: string;
   companyName: string;
+  phone: string;
+  email: string;
+  servicesOffered: string[];
   photos: FilePart[];
   audio: FilePart | null;
 } | {
@@ -242,6 +300,18 @@ type ParsedSubmit = {
   code: string;
   message: string;
 };
+
+function parseServicesOffered(raw: unknown): string[] {
+  const text = Array.isArray(raw)
+    ? raw.map((s) => String(s)).join(",")
+    : String(raw ?? "");
+  return text
+    .split(/[,;\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20)
+    .map((s) => s.slice(0, 80));
+}
 
 type FilePart = {
   bytes: Uint8Array;
@@ -272,6 +342,9 @@ async function parseSubmitBody(
     const notes = String(body.notes ?? "").trim();
     const contractorName = String(body.contractorName ?? "").trim();
     const companyName = String(body.companyName ?? "").trim();
+    const phone = String(body.phone ?? "").trim().slice(0, 40);
+    const email = String(body.email ?? "").trim().slice(0, 120);
+    const servicesOffered = parseServicesOffered(body.servicesOffered);
     if (!token) {
       return {
         ok: false,
@@ -295,6 +368,9 @@ async function parseSubmitBody(
       notes,
       contractorName,
       companyName,
+      phone,
+      email,
+      servicesOffered,
       photos: [],
       audio: null,
     };
@@ -317,6 +393,9 @@ async function parseSubmitBody(
   const notes = String(form.get("notes") ?? "").trim();
   const contractorName = String(form.get("contractorName") ?? "").trim();
   const companyName = String(form.get("companyName") ?? "").trim();
+  const phone = String(form.get("phone") ?? "").trim().slice(0, 40);
+  const email = String(form.get("email") ?? "").trim().slice(0, 120);
+  const servicesOffered = parseServicesOffered(form.get("servicesOffered"));
   if (!token) {
     return {
       ok: false,
@@ -400,6 +479,9 @@ async function parseSubmitBody(
     notes,
     contractorName,
     companyName,
+    phone,
+    email,
+    servicesOffered,
     photos,
     audio,
   };
@@ -444,6 +526,9 @@ async function processSubmission(input: Extract<ParsedSubmit, { ok: true }>) {
     status: "pending",
     contractor_name: input.contractorName || formatted.draft.contractorName,
     company_name: input.companyName || null,
+    phone: input.phone || null,
+    email: input.email || null,
+    services_offered: input.servicesOffered,
     notes_text: input.notes || null,
     draft_json: formatted.draft,
     ai_mode: formatted.mode,
@@ -872,6 +957,22 @@ function corsHeaders(): HeadersInit {
   };
 }
 
+function inviteLandingBaseUrl(): string {
+  const raw =
+    Deno.env.get("INVITE_LANDING_BASE_URL")?.trim() ||
+    DEFAULT_INVITE_LANDING_BASE;
+  return raw.endsWith("/") ? raw : `${raw}/`;
+}
+
+/** Browser-safe landing URL (HTML hosted outside *.supabase.co). */
+function buildLandingRedirectUrl(token: string): string {
+  const landing = new URL(inviteLandingBaseUrl());
+  if (token) landing.searchParams.set("t", token);
+  const supabaseUrl = (Deno.env.get("SUPABASE_URL") || "").replace(/\/$/, "");
+  if (supabaseUrl) landing.searchParams.set("api", supabaseUrl);
+  return landing.toString();
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -895,238 +996,6 @@ function htmlResponse(html: string, status = 200): Response {
       "cache-control": "no-store",
     },
   });
-}
-
-function formPage(input: {
-  token: string;
-  homeLabel: string;
-  inviteLabel: string | null;
-}): string {
-  const title = input.inviteLabel
-    ? escapeHtml(input.inviteLabel)
-    : "Submit finished work";
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>HomeAsset · Contractor submit</title>
-  <style>
-    :root {
-      --bg: #F2F5FA;
-      --surface: #FFFFFF;
-      --brand: #002D72;
-      --brand-muted: #1E4D96;
-      --accent: #FF5910;
-      --ink: #0B1B33;
-      --copy: #3D4F66;
-      --muted: #5C6E84;
-      --border: #C5D0DE;
-      --danger: #B42318;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-      background: linear-gradient(180deg, #e8eef8 0%, var(--bg) 40%, #f7f9fc 100%);
-      color: var(--ink);
-      min-height: 100vh;
-    }
-    main {
-      max-width: 520px;
-      margin: 0 auto;
-      padding: 28px 18px 48px;
-    }
-    .brand {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--brand-muted);
-      margin-bottom: 8px;
-    }
-    h1 {
-      font-size: 1.65rem;
-      line-height: 1.2;
-      margin: 0 0 8px;
-      color: var(--brand);
-    }
-    .home {
-      color: var(--copy);
-      font-size: 0.95rem;
-      margin-bottom: 20px;
-    }
-    .note {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 12px 14px;
-      color: var(--muted);
-      font-size: 0.9rem;
-      margin-bottom: 18px;
-    }
-    label {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--brand-muted);
-      margin: 14px 0 6px;
-    }
-    input[type=text], textarea {
-      width: 100%;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px;
-      font-size: 1rem;
-      background: var(--surface);
-      color: var(--ink);
-    }
-    textarea { min-height: 120px; resize: vertical; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    button, .file-btn {
-      appearance: none;
-      border: none;
-      border-radius: 10px;
-      padding: 12px 16px;
-      font-size: 1rem;
-      font-weight: 650;
-      cursor: pointer;
-    }
-    .primary {
-      background: var(--brand);
-      color: #fff;
-      width: 100%;
-      margin-top: 18px;
-    }
-    .primary:disabled { opacity: 0.55; cursor: wait; }
-    .secondary {
-      background: #fff;
-      color: var(--brand);
-      border: 1px solid var(--border);
-    }
-    .accent {
-      background: var(--accent);
-      color: #fff;
-    }
-    .status { margin-top: 10px; color: var(--muted); font-size: 0.9rem; min-height: 1.2em; }
-    .err { color: var(--danger); }
-    .hint { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
-    input[type=file] { width: 100%; margin-top: 4px; }
-  </style>
-</head>
-<body>
-  <main>
-    <div class="brand">HomeAsset</div>
-    <h1>${title}</h1>
-    <p class="home">${escapeHtml(input.homeLabel)}</p>
-    <div class="note">
-      You are submitting work for the homeowner to review.
-      Nothing becomes official until they approve.
-      No HomeAsset account needed.
-    </div>
-    <form id="submitForm" method="POST" enctype="multipart/form-data" accept="text/html">
-      <input type="hidden" name="token" value="${escapeHtml(input.token)}" />
-      <label for="contractorName">Your name</label>
-      <input id="contractorName" name="contractorName" type="text" maxlength="120" autocomplete="name" />
-      <label for="companyName">Company (optional)</label>
-      <input id="companyName" name="companyName" type="text" maxlength="120" />
-      <label for="notes">What was done / installed</label>
-      <textarea id="notes" name="notes" maxlength="8000" placeholder="e.g. Replaced furnace filter, installed Carrier Infinity…">${""}</textarea>
-      <label>Voice recording</label>
-      <div class="row">
-        <button type="button" class="secondary" id="recBtn">Record voice</button>
-        <button type="button" class="accent" id="stopBtn" disabled>Stop</button>
-      </div>
-      <p class="status" id="recStatus">Optional — tap Record, describe the work, then Stop.</p>
-      <input type="file" id="audioFile" name="audio" accept="audio/*,video/webm" style="display:none" />
-      <label for="photos">Photos</label>
-      <input id="photos" name="photos" type="file" accept="image/*" multiple capture="environment" />
-      <p class="hint">Up to 8 photos. Add notes, voice, or photos — at least one.</p>
-      <button class="primary" id="sendBtn" type="submit">Send for homeowner review</button>
-      <p class="status" id="formStatus"></p>
-    </form>
-  </main>
-  <script>
-    (function () {
-      const recBtn = document.getElementById("recBtn");
-      const stopBtn = document.getElementById("stopBtn");
-      const recStatus = document.getElementById("recStatus");
-      const audioFile = document.getElementById("audioFile");
-      const form = document.getElementById("submitForm");
-      const sendBtn = document.getElementById("sendBtn");
-      const formStatus = document.getElementById("formStatus");
-      let mediaRecorder = null;
-      let chunks = [];
-      let recordedBlob = null;
-
-      recBtn.addEventListener("click", async function () {
-        formStatus.textContent = "";
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          recStatus.textContent = "Voice recording is not supported in this browser. Type notes or add photos.";
-          recStatus.className = "status err";
-          return;
-        }
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          chunks = [];
-          recordedBlob = null;
-          const mime = MediaRecorder.isTypeSupported("audio/webm")
-            ? "audio/webm"
-            : (MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "");
-          mediaRecorder = mime
-            ? new MediaRecorder(stream, { mimeType: mime })
-            : new MediaRecorder(stream);
-          mediaRecorder.ondataavailable = function (e) {
-            if (e.data && e.data.size > 0) chunks.push(e.data);
-          };
-          mediaRecorder.onstop = function () {
-            stream.getTracks().forEach(function (t) { t.stop(); });
-            recordedBlob = new Blob(chunks, { type: mediaRecorder.mimeType || "audio/webm" });
-            const ext = (recordedBlob.type || "").includes("mp4") ? "m4a" : "webm";
-            const file = new File([recordedBlob], "voice." + ext, { type: recordedBlob.type });
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            audioFile.files = dt.files;
-            recStatus.textContent = "Voice recorded (" + Math.round(recordedBlob.size / 1024) + " KB).";
-            recStatus.className = "status";
-            recBtn.disabled = false;
-            stopBtn.disabled = true;
-          };
-          mediaRecorder.start();
-          recBtn.disabled = true;
-          stopBtn.disabled = false;
-          recStatus.textContent = "Recording… tap Stop when finished.";
-          recStatus.className = "status";
-        } catch (err) {
-          recStatus.textContent = "Microphone permission denied. Type notes or add photos instead.";
-          recStatus.className = "status err";
-        }
-      });
-
-      stopBtn.addEventListener("click", function () {
-        if (mediaRecorder && mediaRecorder.state !== "inactive") {
-          mediaRecorder.stop();
-        }
-      });
-
-      form.addEventListener("submit", function (ev) {
-        const notes = (document.getElementById("notes").value || "").trim();
-        const photos = document.getElementById("photos").files;
-        const hasAudio = audioFile.files && audioFile.files.length > 0;
-        if (!notes && (!photos || photos.length === 0) && !hasAudio) {
-          formStatus.textContent = "Add notes, a voice recording, or at least one photo.";
-          formStatus.className = "status err";
-          ev.preventDefault();
-          return;
-        }
-        sendBtn.disabled = true;
-        formStatus.textContent = "Sending…";
-        formStatus.className = "status";
-      });
-    })();
-  </script>
-</body>
-</html>`;
 }
 
 function successPage(input: { homeLabel: string; summary: string }): string {

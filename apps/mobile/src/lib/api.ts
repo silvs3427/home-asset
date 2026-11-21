@@ -88,6 +88,13 @@ export type PublicAsset = {
   purchaseDate: string | null;
   installDate: string | null;
   installerVendor: string | null;
+  /** Most recent service date (YYYY-MM-DD). */
+  lastServicedAt: string | null;
+  /**
+   * Audit mark: named contractor who confirmed the work (home-sale confidence).
+   * Homeowner records or fills from an approved invite draft — no contractor login.
+   */
+  confirmedByContractorName: string | null;
   location: string | null;
   notes: string | null;
   warrantyEndDate: string | null;
@@ -106,6 +113,8 @@ export type CreateAssetInput = {
   purchaseDate?: string | null;
   installDate?: string | null;
   installerVendor?: string | null;
+  lastServicedAt?: string | null;
+  confirmedByContractorName?: string | null;
   location?: string | null;
   notes?: string | null;
   warrantyEndDate?: string | null;
@@ -1841,6 +1850,10 @@ export async function aiConfirmEmailIntake(
     )) {
       const base = held.assetsSuggested[index];
       if (!base) continue;
+      const workDate =
+        held.workDate && /^\d{4}-\d{2}-\d{2}$/.test(held.workDate)
+          ? held.workDate
+          : null;
       const created = await cloudCreateAsset(accessToken, propertyId, {
         name: base.name,
         category: base.category as AssetCategory,
@@ -1848,10 +1861,9 @@ export async function aiConfirmEmailIntake(
         model: base.model,
         serial: base.serial,
         installerVendor: held.contractorName,
-        installDate:
-          held.workDate && /^\d{4}-\d{2}-\d{2}$/.test(held.workDate)
-            ? held.workDate
-            : null,
+        installDate: workDate,
+        lastServicedAt: workDate,
+        confirmedByContractorName: held.contractorName,
         notes: base.notes,
       });
       assets.push(created.asset);
@@ -2330,12 +2342,53 @@ export type PublicContractorSubmission = {
   status: "pending" | "approved" | "declined";
   contractorName: string | null;
   companyName: string | null;
+  phone: string | null;
+  email: string | null;
+  servicesOffered: string[];
   notesText: string | null;
   draft: ContractorInviteDraft;
   aiMode: "mock" | "live";
   reviewedAt: string | null;
   createdAt: string;
   media: PublicContractorSubmissionMedia[];
+};
+
+export type PublicHomeContractorWork = {
+  id: string;
+  contractorId: string;
+  propertyId: string;
+  submissionId: string | null;
+  summary: string;
+  workPerformed: string | null;
+  workDate: string | null;
+  createdAt: string;
+};
+
+export type PublicHomeContractor = {
+  id: string;
+  propertyId: string;
+  displayName: string;
+  companyName: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  servicesOffered: string[];
+  notes: string | null;
+  lastWorkedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  work: PublicHomeContractorWork[];
+};
+
+export type HomeContractorInput = {
+  displayName: string;
+  companyName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  servicesOffered?: string[] | string | null;
+  notes?: string | null;
+  lastWorkedAt?: string | null;
 };
 
 const INVITE_CLOUD_ONLY =
@@ -2456,4 +2509,131 @@ export async function approveContractorSubmission(
     submissionId,
     input,
   );
+}
+
+const DIRECTORY_CLOUD_ONLY =
+  "Contractor directory needs Supabase cloud on this phone (URL + anon key).";
+
+export async function listHomeContractors(
+  accessToken: string,
+  propertyId: string,
+): Promise<{ contractors: PublicHomeContractor[] }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudListHomeContractors(accessToken, propertyId);
+}
+
+export async function getHomeContractor(
+  accessToken: string,
+  propertyId: string,
+  contractorId: string,
+): Promise<{ contractor: PublicHomeContractor }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudGetHomeContractor(
+    accessToken,
+    propertyId,
+    contractorId,
+  );
+}
+
+export async function createHomeContractor(
+  accessToken: string,
+  propertyId: string,
+  input: HomeContractorInput,
+): Promise<{ contractor: PublicHomeContractor }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudCreateHomeContractor(
+    accessToken,
+    propertyId,
+    input,
+  );
+}
+
+export async function updateHomeContractor(
+  accessToken: string,
+  propertyId: string,
+  contractorId: string,
+  input: HomeContractorInput,
+): Promise<{ contractor: PublicHomeContractor }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudUpdateHomeContractor(
+    accessToken,
+    propertyId,
+    contractorId,
+    input,
+  );
+}
+
+export async function deleteHomeContractor(
+  accessToken: string,
+  propertyId: string,
+  contractorId: string,
+): Promise<{ ok: true }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudDeleteHomeContractor(
+    accessToken,
+    propertyId,
+    contractorId,
+  );
+}
+
+export async function addHomeContractorWork(
+  accessToken: string,
+  propertyId: string,
+  contractorId: string,
+  input: {
+    summary: string;
+    workPerformed?: string | null;
+    workDate?: string | null;
+  },
+): Promise<{ work: PublicHomeContractorWork }> {
+  if (!useCloud()) {
+    throw new ApiError(DIRECTORY_CLOUD_ONLY, "client", 503);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("./cloud").cloudAddHomeContractorWork(
+    accessToken,
+    propertyId,
+    contractorId,
+    input,
+  );
+}
+
+/** Client-side directory search across contact, work, and services. */
+export function filterHomeContractors(
+  contractors: PublicHomeContractor[],
+  query: string,
+): PublicHomeContractor[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return contractors;
+  return contractors.filter((c) => {
+    const hay = [
+      c.displayName,
+      c.companyName,
+      c.phone,
+      c.email,
+      c.website,
+      c.notes,
+      ...c.servicesOffered,
+      ...c.work.flatMap((w) => [w.summary, w.workPerformed]),
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .toLowerCase();
+    return hay.includes(q);
+  });
 }

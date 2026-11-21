@@ -1,44 +1,73 @@
 import { Redirect, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import {
   categoryLabel,
   listAssets,
+  listPropertyLabels,
   type PublicAsset,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
 /**
- * View Assets for the current home. Header + adds; each row opens the
- * asset record (documents, recalls, reminders) — Edit is on that screen.
+ * View Assets for the current home. Search + category filter + optional
+ * group-by-category. Categories are the homeowner's own tags (not a fixed list).
  */
 export default function AssetsListScreen() {
   const router = useRouter();
   const { user, accessToken, activeProperty } = useAuth();
   const [assets, setAssets] = useState<PublicAsset[]>([]);
+  const [knownCategories, setKnownCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [groupByCategory, setGroupByCategory] = useState(false);
 
   const load = useCallback(async () => {
     if (!accessToken || !activeProperty) {
       setAssets([]);
+      setKnownCategories([]);
       setLoading(false);
       return;
     }
     setError(null);
     setLoading(true);
     try {
-      const res = await listAssets(accessToken, activeProperty.id);
+      const [res, labels] = await Promise.all([
+        listAssets(accessToken, activeProperty.id),
+        listPropertyLabels(
+          accessToken,
+          activeProperty.id,
+          "asset_category",
+        ).catch(() => ({ labels: [] as { value: string }[] })),
+      ]);
       setAssets(res.assets);
+      const fromAssets = res.assets.map((a) => a.category.trim()).filter(Boolean);
+      const fromLabels = labels.labels.map((l) => l.value.trim()).filter(Boolean);
+      const merged = new Map<string, string>();
+      for (const raw of [...fromLabels, ...fromAssets]) {
+        const key = raw.toLowerCase();
+        if (!merged.has(key)) merged.set(key, raw);
+      }
+      setKnownCategories(
+        [...merged.values()].sort((a, b) =>
+          categoryLabel(a).localeCompare(categoryLabel(b), undefined, {
+            sensitivity: "base",
+          }),
+        ),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load assets.");
     } finally {
@@ -52,6 +81,49 @@ export default function AssetsListScreen() {
     }, [load]),
   );
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return assets.filter((asset) => {
+      if (categoryFilter) {
+        if (asset.category.trim().toLowerCase() !== categoryFilter.toLowerCase()) {
+          return false;
+        }
+      }
+      if (!q) return true;
+      const hay = [
+        asset.name,
+        categoryLabel(asset.category),
+        asset.category,
+        asset.manufacturer,
+        asset.model,
+        asset.serial,
+        asset.location,
+        asset.installerVendor,
+        asset.notes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [assets, categoryFilter, query]);
+
+  const grouped = useMemo(() => {
+    if (!groupByCategory) return null;
+    const map = new Map<string, PublicAsset[]>();
+    for (const asset of filtered) {
+      const key = asset.category.trim() || "Uncategorized";
+      const list = map.get(key) ?? [];
+      list.push(asset);
+      map.set(key, list);
+    }
+    return [...map.entries()].sort(([a], [b]) =>
+      categoryLabel(a).localeCompare(categoryLabel(b), undefined, {
+        sensitivity: "base",
+      }),
+    );
+  }, [filtered, groupByCategory]);
+
   if (!user) {
     return <Redirect href="/sign-in" />;
   }
@@ -60,29 +132,123 @@ export default function AssetsListScreen() {
     return <Redirect href="/home" />;
   }
 
+  const hasActiveFilters = Boolean(query.trim() || categoryFilter);
+
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>View Assets</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add asset"
-          onPress={() => router.push("/assets/new")}
-          style={styles.addBtn}
-        >
-          <Text style={styles.addLabel}>+</Text>
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="View Assets"
+        right={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add asset"
+            onPress={() => router.push("/assets/new")}
+            style={styles.addBtn}
+          >
+            <Text style={styles.addLabel}>+</Text>
+          </Pressable>
+        }
+      />
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>
+
+        <TextInput
+          accessibilityLabel="Search assets"
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search name, category, model…"
+          placeholderTextColor={colors.placeholder}
+          style={styles.search}
+          autoCapitalize="none"
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+        />
+
+        {knownCategories.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chips}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: categoryFilter == null }}
+              onPress={() => setCategoryFilter(null)}
+              style={[
+                styles.chip,
+                categoryFilter == null && styles.chipOn,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.chipLabel,
+                  categoryFilter == null && styles.chipLabelOn,
+                ]}
+              >
+                All
+              </Text>
+            </Pressable>
+            {knownCategories.map((cat) => {
+              const on =
+                categoryFilter != null &&
+                categoryFilter.toLowerCase() === cat.toLowerCase();
+              return (
+                <Pressable
+                  key={cat.toLowerCase()}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  onPress={() =>
+                    setCategoryFilter(on ? null : cat)
+                  }
+                  style={[styles.chip, on && styles.chipOn]}
+                >
+                  <Text
+                    style={[styles.chipLabel, on && styles.chipLabelOn]}
+                  >
+                    {categoryLabel(cat)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
+
+        <View style={styles.toolbar}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: groupByCategory }}
+            onPress={() => setGroupByCategory((v) => !v)}
+            style={[
+              styles.groupToggle,
+              groupByCategory && styles.groupToggleOn,
+            ]}
+          >
+            <Text
+              style={[
+                styles.groupToggleLabel,
+                groupByCategory && styles.groupToggleLabelOn,
+              ]}
+            >
+              {groupByCategory ? "Grouped by category" : "Group by category"}
+            </Text>
+          </Pressable>
+          {hasActiveFilters ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setQuery("");
+                setCategoryFilter(null);
+              }}
+              style={styles.clearBtn}
+            >
+              <Text style={styles.clearLabel}>Clear</Text>
+            </Pressable>
+          ) : null}
+        </View>
 
         {loading ? (
           <ActivityIndicator style={styles.loader} color={colors.brand} />
@@ -94,38 +260,91 @@ export default function AssetsListScreen() {
           <Text style={styles.empty}>No assets yet.</Text>
         ) : null}
 
-        <View style={styles.list}>
-          {assets.map((asset) => (
-            <Pressable
-              key={asset.id}
-              accessibilityRole="button"
-              onPress={() =>
-                router.push({
-                  pathname: "/assets/[id]",
-                  params: { id: asset.id },
-                })
-              }
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-            >
-              <View style={styles.rowText}>
-                <Text style={styles.rowName}>{asset.name}</Text>
-                <Text style={styles.rowMeta}>
-                  {categoryLabel(asset.category)}
-                  {asset.manufacturer ? ` · ${asset.manufacturer}` : ""}
-                  {asset.warrantyEndDate
-                    ? ` · Warranty ends ${asset.warrantyEndDate}`
-                    : asset.warrantyTerm
-                      ? ` · ${asset.warrantyTerm}`
-                      : ""}
-                  {asset.location ? ` · ${asset.location}` : ""}
+        {!loading && assets.length > 0 && filtered.length === 0 ? (
+          <Text style={styles.empty}>No assets match this search.</Text>
+        ) : null}
+
+        {!loading && filtered.length > 0 && !groupByCategory ? (
+          <View style={styles.list}>
+            {filtered.map((asset) => (
+              <AssetRow
+                key={asset.id}
+                asset={asset}
+                onPress={() =>
+                  router.push({
+                    pathname: "/assets/[id]",
+                    params: { id: asset.id },
+                  })
+                }
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {!loading && grouped
+          ? grouped.map(([cat, items]) => (
+              <View key={cat.toLowerCase()} style={styles.group}>
+                <Text style={styles.groupHeading}>
+                  {categoryLabel(cat)}
+                  <Text style={styles.groupCount}> · {items.length}</Text>
                 </Text>
+                <View style={styles.list}>
+                  {items.map((asset) => (
+                    <AssetRow
+                      key={asset.id}
+                      asset={asset}
+                      hideCategory
+                      onPress={() =>
+                        router.push({
+                          pathname: "/assets/[id]",
+                          params: { id: asset.id },
+                        })
+                      }
+                    />
+                  ))}
+                </View>
               </View>
-              <Text style={styles.rowAction}>Open</Text>
-            </Pressable>
-          ))}
-        </View>
+            ))
+          : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function AssetRow({
+  asset,
+  onPress,
+  hideCategory = false,
+}: {
+  asset: PublicAsset;
+  onPress: () => void;
+  hideCategory?: boolean;
+}) {
+  const metaParts = [
+    hideCategory ? null : categoryLabel(asset.category),
+    asset.manufacturer || null,
+    asset.lastServicedAt ? `Serviced ${asset.lastServicedAt}` : null,
+    asset.confirmedByContractorName ? "Confirmed by contractor" : null,
+    asset.warrantyEndDate
+      ? `Warranty ends ${asset.warrantyEndDate}`
+      : asset.warrantyTerm || null,
+    asset.location || null,
+  ].filter(Boolean);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    >
+      <View style={styles.rowText}>
+        <Text style={styles.rowName}>{asset.name}</Text>
+        {metaParts.length > 0 ? (
+          <Text style={styles.rowMeta}>{metaParts.join(" · ")}</Text>
+        ) : null}
+      </View>
+      <Text style={styles.rowAction}>Open</Text>
+    </Pressable>
   );
 }
 
@@ -157,8 +376,6 @@ const styles = StyleSheet.create({
     color: colors.brand,
   },
   addBtn: {
-    minWidth: 56,
-    alignItems: "flex-end",
     paddingVertical: 4,
     paddingHorizontal: 4,
   },
@@ -180,6 +397,79 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: colors.muted,
   },
+  search: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.ink,
+  },
+  chips: {
+    marginTop: 12,
+    gap: 8,
+    paddingRight: 8,
+    alignItems: "center",
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.surface,
+  },
+  chipOn: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  chipLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.accent,
+  },
+  chipLabelOn: {
+    color: colors.onAccent,
+  },
+  toolbar: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  groupToggle: {
+    borderWidth: 1,
+    borderColor: colors.brand,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.surface,
+  },
+  groupToggleOn: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  groupToggleLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.brand,
+  },
+  groupToggleLabelOn: {
+    color: colors.onBrand,
+  },
+  clearBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  clearLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.brandMuted,
+  },
   pressed: {
     opacity: 0.9,
   },
@@ -198,8 +488,21 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   list: {
-    marginTop: 20,
+    marginTop: 16,
     gap: 10,
+  },
+  group: {
+    marginTop: 20,
+  },
+  groupHeading: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.brand,
+    marginBottom: 4,
+  },
+  groupCount: {
+    fontWeight: "600",
+    color: colors.muted,
   },
   row: {
     borderWidth: 1,
