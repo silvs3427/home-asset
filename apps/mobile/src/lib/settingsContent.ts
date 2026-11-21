@@ -34,7 +34,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "View Assets",
-    body: "See equipment and installs for this home. Use + to add by hand, or open Add or Update an Asset from Home. Tap an asset to open its record — Documents (photos, files, Find manuals) stay on that screen in both view and Edit, so you can attach without leaving Edit. Recalls and reminders are on the record too.",
+    body: "See equipment and installs for this home. Use + to add by hand, or open Add or Update an Asset from Home. Tap an asset to open its record — Documents (photos, files, Find manuals) stay on that screen in both view and Edit, so you can attach without leaving Edit. Recalls and reminders are on the record too. Categories and document types are your own words for this home — type what fits; once you use a value, it stays available to reuse here (not a fixed pre-list).",
   },
   {
     title: "Add or Update an Asset",

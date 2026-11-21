@@ -85,7 +85,7 @@ function finalizeAiPhotoPick(
     uri: asset.uri,
     name: asset.fileName ?? `photo-${Date.now()}.jpg`,
     mimeType,
-    suggestedType: "photo",
+    suggestedType: "Photo",
     base64,
   };
 }
@@ -104,8 +104,8 @@ export async function pickDocumentFile(
   const asset = result.assets[0];
   const mime = asset.mimeType ?? "application/octet-stream";
   const suggestedType: DocumentType = mime.startsWith("image/")
-    ? "photo"
-    : "manual";
+    ? "Photo"
+    : "Manual";
 
   let base64: string | null = null;
   if (options.forAi) {
@@ -144,7 +144,7 @@ export async function pickPdfFile(
     uri: asset.uri,
     name: asset.name || `invoice-${Date.now()}.pdf`,
     mimeType: asset.mimeType ?? "application/pdf",
-    suggestedType: "receipt",
+    suggestedType: "Receipt",
     base64,
   };
 }
@@ -166,7 +166,7 @@ export async function pickAudioFile(): Promise<PickedUpload | null> {
     uri: asset.uri,
     name: asset.name || `voice-${Date.now()}.m4a`,
     mimeType: asset.mimeType ?? "audio/mpeg",
-    suggestedType: "other",
+    suggestedType: "Other",
   };
 }
 

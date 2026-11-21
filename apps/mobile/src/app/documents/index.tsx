@@ -12,17 +12,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  DOCUMENT_TYPES,
   deleteDocument,
   documentSourceLabel,
   documentTypeLabel,
   exportHomePacket,
   listDocuments,
+  normalizeLabelValue,
   uploadDocument,
   type DocumentType,
   type PublicDocument,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   downloadAndShareDocument,
   pickDocumentFile,
@@ -44,7 +45,7 @@ export default function PropertyDocumentsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PickedUpload | null>(null);
   const [title, setTitle] = useState("");
-  const [docType, setDocType] = useState<DocumentType>("photo");
+  const [docType, setDocType] = useState<DocumentType>("");
   const [documentDate, setDocumentDate] = useState("");
   const [exportSummary, setExportSummary] = useState<string | null>(null);
 
@@ -101,12 +102,18 @@ export default function PropertyDocumentsScreen() {
     setBusy(true);
     setError(null);
     try {
+      const typed = normalizeLabelValue(docType);
+      if (!typed) {
+        setError("Add a document type (your own words).");
+        setBusy(false);
+        return;
+      }
       await uploadDocument(accessToken, activeProperty.id, {
         uri: pending.uri,
         name: pending.name,
         mimeType: pending.mimeType,
         title: title.trim() || pending.name,
-        docType,
+        docType: typed,
         documentDate: documentDate.trim() || null,
         assetId: null,
       });
@@ -251,29 +258,17 @@ export default function PropertyDocumentsScreen() {
               onChangeText={setTitle}
               placeholderTextColor="#8A9BB0"
             />
-            <Text style={styles.label}>Type</Text>
-            <View style={styles.chips}>
-              {DOCUMENT_TYPES.map((item) => {
-                const selected = item.value === docType;
-                return (
-                  <Pressable
-                    key={item.value}
-                    accessibilityRole="button"
-                    onPress={() => setDocType(item.value)}
-                    style={[styles.chip, selected && styles.chipSelected]}
-                  >
-                    <Text
-                      style={[
-                        styles.chipLabel,
-                        selected && styles.chipLabelSelected,
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {accessToken && activeProperty ? (
+              <OpenLabelField
+                accessToken={accessToken}
+                propertyId={activeProperty.id}
+                kind="document_type"
+                label="Type"
+                value={docType}
+                onChange={setDocType}
+                placeholder="e.g. Photo, Manual, Invoice"
+              />
+            ) : null}
             <Text style={styles.label}>Document date (YYYY-MM-DD)</Text>
             <TextInput
               style={styles.input}

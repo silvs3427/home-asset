@@ -11,7 +11,6 @@ import {
   updateReminder,
 } from "../lib/reminders.js";
 import {
-  ASSET_CATEGORIES,
   REMINDER_RECURRENCES,
   toPublicReminder,
   toPublicReminderCompletion,
@@ -82,19 +81,19 @@ function mapReminderError(
 
 reminderRoutes.get("/templates", (c) => {
   // Auth already applied; templates are static starters (no home data).
-  const categoryParam = c.req.query("category");
+  const categoryParam = c.req.query("category")?.trim();
   let category: AssetCategory | null = null;
   if (categoryParam) {
-    if (!(ASSET_CATEGORIES as string[]).includes(categoryParam)) {
+    if (categoryParam.length > 80) {
       return c.json(
         {
           error: "invalid_input",
-          message: "Unknown asset category for templates.",
+          message: "Category is too long for templates.",
         },
         400,
       );
     }
-    category = categoryParam as AssetCategory;
+    category = categoryParam;
   }
   return c.json({ templates: listReminderTemplates(category) });
 });

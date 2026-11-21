@@ -13,6 +13,7 @@ import { requireAuth, type AuthVariables } from "../middleware/requireAuth.js";
 import { aiRoutes } from "./ai.js";
 import { assetRoutes } from "./assets.js";
 import { documentRoutes } from "./documents.js";
+import { labelRoutes } from "./labels.js";
 import { recallRoutes } from "./recalls.js";
 import { reminderRoutes } from "./reminders.js";
 
@@ -132,6 +133,7 @@ propertyRoutes.get("/:id/export", (c) => {
 // Auth already applied above; asset/document/reminder/recall/AI handlers re-check ownership.
 propertyRoutes.route("/:propertyId/assets", assetRoutes);
 propertyRoutes.route("/:propertyId/documents", documentRoutes);
+propertyRoutes.route("/:propertyId/labels", labelRoutes);
 propertyRoutes.route("/:propertyId/reminders", reminderRoutes);
 propertyRoutes.route("/:propertyId/recalls", recallRoutes);
 propertyRoutes.route("/:propertyId/ai", aiRoutes);

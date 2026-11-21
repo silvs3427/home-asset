@@ -7,7 +7,8 @@ import {
   listAssetsForProperty,
   updateAsset,
 } from "../lib/assets.js";
-import { ASSET_CATEGORIES, toPublicAsset } from "../lib/types.js";
+import { normalizeLabelValue } from "../lib/propertyLabels.js";
+import { toPublicAsset } from "../lib/types.js";
 import { requireAuth, type AuthVariables } from "../middleware/requireAuth.js";
 
 const optionalDate = z
@@ -19,9 +20,17 @@ const optionalDate = z
 
 const optionalText = z.string().trim().max(500).optional().nullable();
 
+/** Open category — homeowner-defined, reusable per home after first use. */
+const categorySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .transform((v) => normalizeLabelValue(v));
+
 const createSchema = z.object({
   name: z.string().trim().min(1).max(160),
-  category: z.enum(ASSET_CATEGORIES as [string, ...string[]]),
+  category: categorySchema,
   manufacturer: optionalText,
   model: optionalText,
   serial: optionalText,
@@ -98,7 +107,7 @@ assetRoutes.post("/", async (c) => {
   try {
     const asset = createAsset(propertyId, claims.sub, {
       ...parsed.data,
-      category: parsed.data.category as (typeof ASSET_CATEGORIES)[number],
+      category: parsed.data.category,
       provenance: "homeowner",
     });
     return c.json({ asset: toPublicAsset(asset) }, 201);
@@ -148,9 +157,7 @@ assetRoutes.patch("/:assetId", async (c) => {
   try {
     const asset = updateAsset(assetId, propertyId, claims.sub, {
       ...parsed.data,
-      category: parsed.data.category as
-        | (typeof ASSET_CATEGORIES)[number]
-        | undefined,
+      category: parsed.data.category,
     });
     return c.json({ asset: toPublicAsset(asset) });
   } catch (err) {

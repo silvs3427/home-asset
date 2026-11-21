@@ -60,18 +60,11 @@ export type PublicProperty = {
  */
 export type AssetProvenance = "homeowner" | "contractor";
 
-/** Categories optimized for warranty / maintenance / safety matching. */
-export type AssetCategory =
-  | "hvac"
-  | "roof"
-  | "appliance"
-  | "generator"
-  | "water_heater"
-  | "plumbing"
-  | "electrical"
-  | "kids_gear"
-  | "vehicle"
-  | "other";
+/**
+ * Open homeowner-defined category label (per home).
+ * Legacy snake_case values still appear on older rows; new entries are free text.
+ */
+export type AssetCategory = string;
 
 /**
  * Property-scoped asset. manufacturer/model/serial are first-class for
@@ -118,14 +111,11 @@ export type PublicAsset = {
   updatedAt: string;
 };
 
-/** Document kinds homeowners attach to an asset or home. */
-export type DocumentType =
-  | "manual"
-  | "receipt"
-  | "warranty"
-  | "install_paperwork"
-  | "photo"
-  | "other";
+/**
+ * Open homeowner-defined document type label (per home).
+ * Legacy snake_case values still appear on older rows; new entries are free text.
+ */
+export type DocumentType = string;
 
 /**
  * Provenance of a file. Homeowner uploads are "user"; AI-fetched manuals and
@@ -252,7 +242,8 @@ export function toPublicDocument(doc: DocumentRecord): PublicDocument {
   };
 }
 
-export const ASSET_CATEGORIES: AssetCategory[] = [
+/** Legacy category slugs kept for reminder templates + label display only. */
+export const LEGACY_ASSET_CATEGORIES = [
   "hvac",
   "roof",
   "appliance",
@@ -263,16 +254,55 @@ export const ASSET_CATEGORIES: AssetCategory[] = [
   "kids_gear",
   "vehicle",
   "other",
-];
+] as const;
 
-export const DOCUMENT_TYPES: DocumentType[] = [
+/** @deprecated Prefer open string categories; kept for older call sites. */
+export const ASSET_CATEGORIES: AssetCategory[] = [...LEGACY_ASSET_CATEGORIES];
+
+/** Legacy document-type slugs for label display only. */
+export const LEGACY_DOCUMENT_TYPES = [
   "manual",
   "receipt",
   "warranty",
   "install_paperwork",
   "photo",
   "other",
-];
+] as const;
+
+/** @deprecated Prefer open string doc types; kept for older call sites. */
+export const DOCUMENT_TYPES: DocumentType[] = [...LEGACY_DOCUMENT_TYPES];
+
+export const LEGACY_CATEGORY_LABELS: Record<string, string> = {
+  hvac: "HVAC",
+  roof: "Roof",
+  appliance: "Appliance",
+  generator: "Generator",
+  water_heater: "Water heater",
+  plumbing: "Plumbing",
+  electrical: "Electrical",
+  kids_gear: "Kids' gear",
+  vehicle: "Vehicle / parts",
+  other: "Other",
+};
+
+export const LEGACY_DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  photo: "Photo",
+  manual: "Manual",
+  receipt: "Receipt",
+  warranty: "Warranty",
+  install_paperwork: "Install paperwork",
+  other: "Other",
+};
+
+export function categoryLabel(category: string): string {
+  const key = category.trim().toLowerCase();
+  return LEGACY_CATEGORY_LABELS[key] ?? category.trim();
+}
+
+export function documentTypeLabel(docType: string): string {
+  const key = docType.trim().toLowerCase();
+  return LEGACY_DOCUMENT_TYPE_LABELS[key] ?? docType.trim();
+}
 
 export const DOCUMENT_SOURCES: DocumentSource[] = [
   "user",

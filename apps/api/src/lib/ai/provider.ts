@@ -6,7 +6,7 @@ import {
 } from "./catalog.js";
 import type { SuggestedAssetDraft, SuggestedManualDraft } from "./drafts.js";
 import { HOME_SCOPE_SYSTEM_BLURB } from "./topicGuard.js";
-import { ASSET_CATEGORIES, type AssetCategory } from "../types.js";
+import type { AssetCategory } from "../types.js";
 
 export type AiMode = "mock" | "live";
 
@@ -103,14 +103,11 @@ export type ExistingAssetLite = {
   serial?: string | null;
 };
 
+/** Accept free-text categories; keep short. Legacy slugs still pass through. */
 function coerceCategory(value: unknown): AssetCategory {
-  if (
-    typeof value === "string" &&
-    (ASSET_CATEGORIES as string[]).includes(value)
-  ) {
-    return value as AssetCategory;
-  }
-  return "other";
+  if (typeof value !== "string") return "other";
+  const trimmed = value.trim().replace(/\s+/g, " ").slice(0, 80);
+  return trimmed || "other";
 }
 
 export function resolveAiMode(): AiMode {
@@ -173,7 +170,7 @@ async function liveIdentifyHint(query: string): Promise<string | null> {
             content:
               `${HOME_SCOPE_SYSTEM_BLURB} ` +
               "You identify home equipment from short user hints. Reply with JSON only: " +
-              '{"manufacturer":"...","model":"...","category":"generator|hvac|water_heater|appliance|other","name":"..."}',
+              '{"manufacturer":"...","model":"...","category":"short free-text label","name":"..."}',
           },
           {
             role: "user",
@@ -393,7 +390,7 @@ export async function formatEmailIntake(input: {
                 "You turn a homeowner's forwarded contractor email into JSON only with keys: " +
                 "summary (short), workPerformed, contractorName (string|null), workDate (string|null), " +
                 "assetsSuggested (array of {name,category,manufacturer,model,notes}). " +
-                "category must be one of: hvac,roof,appliance,generator,water_heater,plumbing,electrical,kids_gear,vehicle,other. " +
+                "category is a short free-text label the homeowner would recognize (e.g. HVAC, Roof, Dishwasher) — not a fixed enum. " +
                 "Do not invent serial numbers. Keep facts grounded in the email.",
             },
             { role: "user", content: text },
@@ -646,7 +643,7 @@ const ASSET_INTAKE_LIVE_SYSTEM =
   "capacity:string|null, " +
   "suggestedAsset:{name,category,manufacturer,model,serial,purchaseDate,installDate,installerVendor,location,notes,warrantyEndDate,warrantyTerm}, " +
   "missingFields:string[]}. " +
-  "category must be one of: hvac,roof,appliance,generator,water_heater,plumbing,electrical,kids_gear,vehicle,other. " +
+  "category is a short free-text label the homeowner would recognize (e.g. HVAC, Roof, Dishwasher) — not a fixed enum. " +
   "matchedAssetId must be one of the provided existing asset ids or null. Prefer update when the same equipment already exists. " +
   "Do not invent serial numbers, model numbers, or capacity. Dates YYYY-MM-DD or null. " +
   "Fill only facts grounded in the input or attached media.";

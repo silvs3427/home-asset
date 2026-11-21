@@ -206,8 +206,9 @@ export function listReminderTemplates(
   category?: AssetCategory | null,
 ): ReminderTemplate[] {
   if (!category) return REMINDER_TEMPLATES;
+  const key = category.trim().toLowerCase();
   return REMINDER_TEMPLATES.filter(
-    (t) => t.category === category || t.category === "any",
+    (t) => t.category === "any" || t.category.toLowerCase() === key,
   );
 }
 

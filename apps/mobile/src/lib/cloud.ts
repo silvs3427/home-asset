@@ -5,6 +5,7 @@
 import type { Session } from "@supabase/supabase-js";
 import {
   ApiError,
+  normalizeLabelValue,
   type AppFace,
   type AuthResponse,
   type CreateAssetInput,
@@ -12,9 +13,11 @@ import {
   type CreateReminderInput,
   type DocumentType,
   type MeResponse,
+  type PropertyLabelKind,
   type PublicAsset,
   type PublicDocument,
   type PublicProperty,
+  type PublicPropertyLabel,
   type PublicReminder,
   type PublicReminderCompletion,
   type PublicUser,
@@ -25,6 +28,127 @@ import {
 } from "./api";
 import { getSupabasePublicUrl, requireSupabaseClient } from "./supabase";
 import { newUuid } from "./uuid";
+
+type PropertyLabelRow = {
+  id: string;
+  property_id: string;
+  kind: PropertyLabelKind;
+  value: string;
+  created_at: string;
+  updated_at: string;
+};
+
+async function cloudRememberLabelQuiet(
+  propertyId: string,
+  kind: PropertyLabelKind,
+  rawValue: string,
+): Promise<void> {
+  try {
+    await cloudRememberPropertyLabel("", propertyId, kind, rawValue);
+  } catch (err) {
+    console.warn("[cloud] remember property label failed", {
+      propertyId,
+      kind,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+export async function cloudListPropertyLabels(
+  _accessToken: string,
+  propertyId: string,
+  kind: PropertyLabelKind,
+): Promise<{
+  propertyId: string;
+  kind: PropertyLabelKind;
+  labels: PublicPropertyLabel[];
+}> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const { data, error } = await supabase
+      .from("property_labels")
+      .select("id, value, created_at, updated_at")
+      .eq("property_id", propertyId)
+      .eq("kind", kind)
+      .order("value", { ascending: true });
+    if (error) mapCloudError(error, "Could not load labels.");
+    const labels = ((data as PropertyLabelRow[]) ?? []).map((row) => ({
+      id: row.id,
+      value: row.value,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+    return { propertyId, kind, labels };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not load labels.");
+  }
+}
+
+export async function cloudRememberPropertyLabel(
+  _accessToken: string,
+  propertyId: string,
+  kind: PropertyLabelKind,
+  rawValue: string,
+): Promise<{ label: PublicPropertyLabel & { kind: PropertyLabelKind } }> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const value = normalizeLabelValue(rawValue);
+    if (!value) {
+      throw new ApiError("Value cannot be empty.", "client", 400);
+    }
+    const valueKey = value.toLowerCase();
+    const now = new Date().toISOString();
+    const { data: existing, error: lookupError } = await supabase
+      .from("property_labels")
+      .select("id, value, created_at, updated_at, kind")
+      .eq("property_id", propertyId)
+      .eq("kind", kind)
+      .eq("value_key", valueKey)
+      .maybeSingle();
+    if (lookupError) mapCloudError(lookupError, "Could not save label.");
+
+    let row: PropertyLabelRow;
+    if (existing) {
+      const { data, error } = await supabase
+        .from("property_labels")
+        .update({ value, updated_at: now })
+        .eq("id", (existing as PropertyLabelRow).id)
+        .select("id, value, created_at, updated_at, kind")
+        .single();
+      if (error) mapCloudError(error, "Could not save label.");
+      row = data as PropertyLabelRow;
+    } else {
+      const { data, error } = await supabase
+        .from("property_labels")
+        .insert({
+          property_id: propertyId,
+          kind,
+          value,
+          created_at: now,
+          updated_at: now,
+        })
+        .select("id, value, created_at, updated_at, kind")
+        .single();
+      if (error) mapCloudError(error, "Could not save label.");
+      row = data as PropertyLabelRow;
+    }
+    return {
+      label: {
+        id: row.id,
+        value: row.value,
+        kind,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      },
+    };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not save label.");
+  }
+}
 
 type ProfileRow = {
   id: string;
@@ -670,6 +794,11 @@ export async function cloudCreateAsset(
       .single();
     if (error) mapCloudError(error, "Could not add asset.");
     const asset = assetFromRow(data as AssetRow);
+    await cloudRememberLabelQuiet(
+      propertyId,
+      "asset_category",
+      asset.category,
+    );
     // Best-effort safety match after the homeowner saved identifiers — not a
     // silent ledger invent. Failures must not block the asset create.
     await maybeCloudRecallCheckAfterAssetSave(propertyId, asset);
@@ -721,6 +850,13 @@ export async function cloudUpdateAsset(
       .single();
     if (error) mapCloudError(error, "Could not update asset.");
     const asset = assetFromRow(data as AssetRow);
+    if (input.category !== undefined) {
+      await cloudRememberLabelQuiet(
+        propertyId,
+        "asset_category",
+        asset.category,
+      );
+    }
     await maybeCloudRecallCheckAfterAssetSave(propertyId, asset);
     return { asset };
   } catch (err) {
@@ -835,7 +971,13 @@ export async function cloudUploadDocument(
       await supabase.storage.from("documents").remove([storageKey]);
       mapCloudError(error, "Could not save document.");
     }
-    return { document: documentFromRow(data as DocumentRow) };
+    const document = documentFromRow(data as DocumentRow);
+    await cloudRememberLabelQuiet(
+      propertyId,
+      "document_type",
+      document.docType,
+    );
+    return { document };
   } catch (err) {
     if (err instanceof ApiError) throw err;
     mapCloudError(err, "Could not upload document.");
@@ -1933,7 +2075,13 @@ export async function cloudCreateDocumentFromBytes(
       await supabase.storage.from("documents").remove([storageKey]);
       mapCloudError(error, "Could not save document.");
     }
-    return { document: documentFromRow(data as DocumentRow) };
+    const document = documentFromRow(data as DocumentRow);
+    await cloudRememberLabelQuiet(
+      propertyId,
+      "document_type",
+      document.docType,
+    );
+    return { document };
   } catch (err) {
     if (err instanceof ApiError) throw err;
     mapCloudError(err, "Could not save document.");

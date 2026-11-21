@@ -11,17 +11,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  ASSET_CATEGORIES,
   aiAssetIntake,
   aiConfirmAssetIntake,
   categoryLabel,
   manualsSuggestPath,
+  normalizeLabelValue,
   type AssetCategory,
   type AssetIntakeDraft,
   type AssetIntakeSourceKind,
   type AssetIntakeSuggested,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   pickFromCamera,
   pickFromLibrary,
@@ -169,6 +170,10 @@ export default function AssetIntakeScreen() {
       setError("Name is required.");
       return;
     }
+    if (!normalizeLabelValue(fields.category)) {
+      setError("Add a category (your own words).");
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
@@ -179,6 +184,7 @@ export default function AssetIntakeScreen() {
         assetOverrides: {
           ...fields,
           name: fields.name.trim(),
+          category: normalizeLabelValue(fields.category),
           manufacturer: fields.manufacturer?.trim() || null,
           model: fields.model?.trim() || null,
           serial: fields.serial?.trim() || null,
@@ -411,31 +417,17 @@ export default function AssetIntakeScreen() {
               highlight={missingKeys.has("name")}
             />
 
-            <Text style={styles.label}>Category</Text>
-            <View style={styles.chips}>
-              {ASSET_CATEGORIES.map((item) => {
-                const selected = item.value === fields.category;
-                return (
-                  <Pressable
-                    key={item.value}
-                    accessibilityRole="button"
-                    onPress={() =>
-                      patchField("category", item.value as AssetCategory)
-                    }
-                    style={[styles.chip, selected && styles.chipOn]}
-                  >
-                    <Text
-                      style={[
-                        styles.chipLabel,
-                        selected && styles.chipLabelOn,
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {accessToken && activeProperty ? (
+              <OpenLabelField
+                accessToken={accessToken}
+                propertyId={activeProperty.id}
+                kind="asset_category"
+                label="Category"
+                value={fields.category}
+                onChange={(v) => patchField("category", v)}
+                placeholder="e.g. Furnace, Roof, Kids gear"
+              />
+            ) : null}
 
             <Field
               label="Manufacturer"

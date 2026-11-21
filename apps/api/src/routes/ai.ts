@@ -28,8 +28,8 @@ import {
 import { consumeAiAssistQuota } from "../lib/ai/rateLimit.js";
 import { assessAskHomeAssetTopic } from "../lib/ai/topicGuard.js";
 import { getPropertyForUser } from "../lib/properties.js";
+import { normalizeLabelValue } from "../lib/propertyLabels.js";
 import {
-  ASSET_CATEGORIES,
   formatPropertyAddress,
   toPublicAsset,
   toPublicDocument,
@@ -39,6 +39,14 @@ import {
   assertPropertyOwnedByUser,
   listAssetsForProperty,
 } from "../lib/assets.js";
+
+/** Open category — homeowner-defined free text. */
+const openCategorySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .transform((v) => normalizeLabelValue(v));
 
 /**
  * Property-scoped AI assist (EPIC 6).
@@ -168,7 +176,7 @@ const confirmSchema = z.object({
   assetOverrides: z
     .object({
       name: z.string().trim().min(1).max(120).optional(),
-      category: z.enum(ASSET_CATEGORIES as [string, ...string[]]).optional(),
+      category: openCategorySchema.optional(),
       manufacturer: z.string().trim().max(120).optional().nullable(),
       model: z.string().trim().max(120).optional().nullable(),
       serial: z.string().trim().max(120).optional().nullable(),
@@ -213,8 +221,7 @@ aiRoutes.post("/confirm-scan", async (c) => {
     const base = {
       name: overrides.name ?? draft.suggestedAsset.name,
       category:
-        (overrides.category as (typeof ASSET_CATEGORIES)[number]) ??
-        draft.suggestedAsset.category,
+        overrides.category ?? draft.suggestedAsset.category,
       manufacturer:
         overrides.manufacturer !== undefined
           ? overrides.manufacturer
@@ -437,7 +444,7 @@ const confirmEmailSchema = z.object({
       z.object({
         index: z.number().int().min(0).max(20),
         name: z.string().trim().min(1).max(120).optional(),
-        category: z.enum(ASSET_CATEGORIES as [string, ...string[]]).optional(),
+        category: openCategorySchema.optional(),
         manufacturer: z.string().trim().max(120).optional().nullable(),
         model: z.string().trim().max(120).optional().nullable(),
         notes: z.string().trim().max(2000).optional().nullable(),
@@ -494,7 +501,7 @@ aiRoutes.post("/confirm-email-intake", async (c) => {
         createAsset(propertyId, claims.sub, {
           name: overrides?.name ?? base.name,
           category:
-            (overrides?.category as (typeof ASSET_CATEGORIES)[number]) ??
+            overrides?.category ??
             base.category,
           manufacturer:
             overrides?.manufacturer !== undefined
@@ -679,7 +686,7 @@ const confirmAssetIntakeSchema = z.object({
   matchedAssetId: z.string().uuid().optional().nullable(),
   assetOverrides: z.object({
     name: z.string().trim().min(1).max(120),
-    category: z.enum(ASSET_CATEGORIES as [string, ...string[]]),
+    category: openCategorySchema,
     manufacturer: z.string().trim().max(120).optional().nullable(),
     model: z.string().trim().max(120).optional().nullable(),
     serial: z.string().trim().max(120).optional().nullable(),
@@ -728,7 +735,7 @@ aiRoutes.post("/confirm-asset-intake", async (c) => {
     const overrides = parsed.data.assetOverrides;
     const payload = {
       name: overrides.name,
-      category: overrides.category as (typeof ASSET_CATEGORIES)[number],
+      category: overrides.category,
       manufacturer: overrides.manufacturer ?? null,
       model: overrides.model ?? null,
       serial: overrides.serial ?? null,
@@ -826,7 +833,7 @@ const confirmPermitsSchema = z.object({
       z.object({
         permitId: z.string().min(1).max(80),
         name: z.string().trim().min(1).max(120).optional(),
-        category: z.enum(ASSET_CATEGORIES as [string, ...string[]]).optional(),
+        category: openCategorySchema.optional(),
         notes: z.string().trim().max(2000).optional().nullable(),
       }),
     )
@@ -879,7 +886,7 @@ aiRoutes.post("/permits/confirm", async (c) => {
         createAsset(propertyId, claims.sub, {
           name: overrides?.name ?? base.name,
           category:
-            (overrides?.category as (typeof ASSET_CATEGORIES)[number]) ??
+            overrides?.category ??
             base.category,
           manufacturer: base.manufacturer,
           model: base.model,

@@ -11,24 +11,19 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  ASSET_CATEGORIES,
   aiAssetIntake,
   createAsset,
   manualsSuggestPath,
+  normalizeLabelValue,
   type AssetCategory,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
-
-const CATEGORY_VALUES = new Set<string>(
-  ASSET_CATEGORIES.map((item) => item.value),
-);
+import { OpenLabelField } from "@/components/OpenLabelField";
 
 function asCategory(value: string | null | undefined): AssetCategory {
-  if (value && CATEGORY_VALUES.has(value)) {
-    return value as AssetCategory;
-  }
-  return "appliance";
+  const next = normalizeLabelValue(value ?? "");
+  return next || "";
 }
 
 /**
@@ -41,7 +36,7 @@ export default function NewAssetScreen() {
   const { user, accessToken, activeProperty } = useAuth();
   const [freeText, setFreeText] = useState("");
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<AssetCategory>("appliance");
+  const [category, setCategory] = useState<AssetCategory>("");
   const [manufacturer, setManufacturer] = useState("");
   const [model, setModel] = useState("");
   const [serial, setSerial] = useState("");
@@ -116,12 +111,16 @@ export default function NewAssetScreen() {
       setError("Name is required.");
       return;
     }
+    if (!normalizeLabelValue(category)) {
+      setError("Add a category (your own words).");
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
       const res = await createAsset(accessToken, activeProperty.id, {
         name: name.trim(),
-        category,
+        category: normalizeLabelValue(category),
         manufacturer: manufacturer.trim() || null,
         model: model.trim() || null,
         serial: serial.trim() || null,
@@ -217,29 +216,16 @@ export default function NewAssetScreen() {
           placeholder="e.g. Furnace, Roof, Dishwasher"
         />
 
-        <Text style={styles.label}>Category</Text>
-        <View style={styles.chips}>
-          {ASSET_CATEGORIES.map((item) => {
-            const selected = item.value === category;
-            return (
-              <Pressable
-                key={item.value}
-                accessibilityRole="button"
-                onPress={() => setCategory(item.value)}
-                style={[styles.chip, selected && styles.chipSelected]}
-              >
-                <Text
-                  style={[
-                    styles.chipLabel,
-                    selected && styles.chipLabelSelected,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <OpenLabelField
+          accessToken={accessToken}
+          propertyId={activeProperty.id}
+          kind="asset_category"
+          label="Category"
+          value={category}
+          onChange={setCategory}
+          placeholder="e.g. Furnace, Roof, Kids gear"
+          emptyHint="Type a category — once saved for this home, it shows up again."
+        />
 
         <Field
           label="Manufacturer"

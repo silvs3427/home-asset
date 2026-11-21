@@ -224,6 +224,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_recall_alerts_unique
 
 CREATE INDEX IF NOT EXISTS idx_asset_recall_alerts_property
   ON asset_recall_alerts(property_id, status);
+
+-- Per-home reusable custom asset categories + document types (open lists).
+CREATE TABLE IF NOT EXISTS property_labels (
+  id TEXT PRIMARY KEY NOT NULL,
+  property_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  value TEXT NOT NULL,
+  value_key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
+  UNIQUE (property_id, kind, value_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_property_labels_property_kind
+  ON property_labels(property_id, kind);
 `;
 
 type ColumnInfo = { name: string };
