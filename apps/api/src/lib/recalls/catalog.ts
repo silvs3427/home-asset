@@ -4,6 +4,10 @@
  * MVP uses a deterministic fixture list shaped like CPSC / NHTSA notices
  * (kids’ gear, home equipment, vehicle parts). Live SaferProducts lookup
  * plugs in via source.ts without changing match or ack behavior.
+ *
+ * Keep external ids + match rules aligned with
+ * apps/mobile/src/lib/recallFixtures.ts and
+ * supabase/functions/_shared/recallCatalog.ts (monthly cron).
  */
 
 export type RecallCatalogEntry = {
