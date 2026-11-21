@@ -4,9 +4,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import { KeyboardAwareTextInput } from "@/components/KeyboardAwareScroll";
 import {
   categoryLabel,
   documentTypeLabel,
@@ -164,7 +164,7 @@ export function OpenLabelField(props: Props) {
         </Text>
       ) : null}
       <View style={styles.addRow}>
-        <TextInput
+        <KeyboardAwareTextInput
           style={styles.input}
           value={draft}
           onChangeText={setDraft}

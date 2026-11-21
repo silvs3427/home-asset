@@ -6,10 +6,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import {
   aiAskHowto,
   listAssets,
@@ -92,7 +95,7 @@ export default function AiHowtoScreen() {
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="Ask how-to" />
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {loadingAssets ? (
           <ActivityIndicator color="#002D72" />
         ) : (
@@ -130,7 +133,7 @@ export default function AiHowtoScreen() {
         )}
 
         <Text style={styles.label}>Your question</Text>
-        <TextInput
+        <KeyboardAwareTextInput
           value={question}
           onChangeText={setQuestion}
           placeholder="e.g. How do I start this safely outdoors?"
@@ -183,7 +186,7 @@ export default function AiHowtoScreen() {
             ) : null}
           </View>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }

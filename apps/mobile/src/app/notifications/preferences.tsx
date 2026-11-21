@@ -3,14 +3,16 @@ import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import {
   fetchNotificationPreferences,
   updateNotificationPreferences,
@@ -136,7 +138,7 @@ export default function NotificationPreferencesScreen() {
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="Push & in-app" />
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {loading || !prefs ? (
           <ActivityIndicator color={colors.brand} style={styles.spinner} />
         ) : (
@@ -175,7 +177,7 @@ export default function NotificationPreferencesScreen() {
                 Days before a reminder is due (0 = due day only, max 30)
               </Text>
               <View style={styles.leadRow}>
-                <TextInput
+                <KeyboardAwareTextInput
                   accessibilityLabel="Reminder lead days"
                   keyboardType="number-pad"
                   value={leadDaysText}
@@ -243,7 +245,7 @@ export default function NotificationPreferencesScreen() {
 
         {note ? <Text style={styles.status}>{note}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }
