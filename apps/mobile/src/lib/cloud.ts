@@ -191,12 +191,33 @@ function reminderFromRow(
   };
 }
 
+/** PostgREST / Auth errors are often plain `{ message }` objects, not Error. */
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (typeof err === "string" && err.trim()) return err.trim();
+  if (err && typeof err === "object" && "message" in err) {
+    const raw = (err as { message?: unknown }).message;
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+  }
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  return fallback;
+}
+
 function mapCloudError(err: unknown, fallback: string): never {
-  const message =
-    err instanceof Error && err.message.trim()
-      ? err.message
-      : fallback;
+  const message = extractErrorMessage(err, fallback);
   const lower = message.toLowerCase();
+  if (
+    lower.includes("schema cache") ||
+    lower.includes("could not find the table") ||
+    lower.includes("could not find the function") ||
+    lower.includes("function public.bootstrap_new_user") ||
+    (lower.includes("relation") && lower.includes("does not exist")) ||
+    (lower.includes("profiles") && lower.includes("does not exist"))
+  ) {
+    throw new ApiError(
+      "HomeAsset cloud setup is incomplete. In Supabase SQL Editor, run supabase/migrations/20261118000000_init_schema.sql, then 20261121000000_bootstrap_new_user.sql (LightLift-style Auth bootstrap).",
+      "server",
+    );
+  }
   if (
     lower.includes("invalid login") ||
     lower.includes("invalid credentials") ||
@@ -253,19 +274,55 @@ async function fetchProfile(userId: string): Promise<ProfileRow | null> {
   return (data as ProfileRow | null) ?? null;
 }
 
-async function waitForProfile(
-  userId: string,
-  attempts = 8,
+function startingFaceFromSession(
+  session: Session,
+  fallback: AppFace = "homeowner",
+): AppFace {
+  const meta = session.user.user_metadata?.starting_face;
+  if (meta === "homeowner" || meta === "contractor") return meta;
+  return fallback;
+}
+
+/**
+ * LightLift pattern: after Auth signup/sign-in (session required), call
+ * security-definer RPC bootstrap_new_user. No Auth trigger dependency;
+ * no client insert of another user's profile.
+ */
+async function bootstrapNewUser(
+  email: string,
+  startingFace: AppFace,
 ): Promise<ProfileRow> {
-  for (let i = 0; i < attempts; i++) {
-    const row = await fetchProfile(userId);
-    if (row) return row;
-    await new Promise((r) => setTimeout(r, 200));
+  const supabase = requireSupabaseClient();
+  const normalizedEmail = email.trim().toLowerCase();
+  const { data, error } = await supabase.rpc("bootstrap_new_user", {
+    p_email: normalizedEmail,
+    p_starting_face: startingFace,
+  });
+  if (error) {
+    mapCloudError(
+      error,
+      "Could not finish account setup (bootstrap failed). In Supabase SQL Editor, run 20261121000000_bootstrap_new_user.sql, then try again.",
+    );
   }
-  throw new ApiError(
-    "Profile was not created after signup. Confirm the SQL migration ran (profiles trigger) in Supabase.",
-    "server",
-  );
+  const row = (Array.isArray(data) ? data[0] : data) as ProfileRow | null;
+  if (!row?.id) {
+    throw new ApiError(
+      "Could not finish account setup (bootstrap returned no profile). Confirm 20261121000000_bootstrap_new_user.sql ran in Supabase.",
+      "server",
+    );
+  }
+  return row;
+}
+
+async function ensureBootstrappedProfile(
+  session: Session,
+  startingFace?: AppFace,
+): Promise<ProfileRow> {
+  const face = startingFace ?? startingFaceFromSession(session);
+  const email = session.user.email ?? "";
+  const existing = await fetchProfile(session.user.id);
+  if (existing) return existing;
+  return bootstrapNewUser(email, face);
 }
 
 async function listOwnedProperties(
@@ -281,10 +338,13 @@ async function listOwnedProperties(
   return ((data as PropertyRow[]) ?? []).map(propertyFromRow);
 }
 
-async function meFromUserId(userId: string): Promise<MeResponse> {
-  const profile = await waitForProfile(userId);
+async function meFromSession(
+  session: Session,
+  startingFace?: AppFace,
+): Promise<MeResponse> {
+  const profile = await ensureBootstrappedProfile(session, startingFace);
   const user = profileToUser(profile);
-  const properties = await listOwnedProperties(userId);
+  const properties = await listOwnedProperties(session.user.id);
   const activeProperty =
     properties.find((p) => p.id === user.activePropertyId) ?? null;
   return {
@@ -352,7 +412,12 @@ export async function cloudSignup(input: {
         401,
       );
     }
-    const me = await meFromUserId(data.user.id);
+    // Persist session before RLS / RPC (same race LightLift avoids after signUp).
+    await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+    const me = await meFromSession(data.session, startingFace);
     return authResponse(data.session, me.user);
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -373,7 +438,12 @@ export async function cloudLogin(input: {
     if (error || !data.session || !data.user) {
       mapCloudError(error ?? new Error("invalid credentials"), "Sign-in failed.");
     }
-    const me = await meFromUserId(data.user!.id);
+    await supabase.auth.setSession({
+      access_token: data.session!.access_token,
+      refresh_token: data.session!.refresh_token,
+    });
+    // Confirm-email path: first real session finishes bootstrap (idempotent).
+    const me = await meFromSession(data.session!);
     return authResponse(data.session!, me.user);
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -384,7 +454,7 @@ export async function cloudLogin(input: {
 export async function cloudFetchMe(_accessToken?: string): Promise<MeResponse> {
   try {
     const session = await requireSession();
-    return await meFromUserId(session.user.id);
+    return await meFromSession(session);
   } catch (err) {
     if (err instanceof ApiError) throw err;
     mapCloudError(err, "Could not load account.");
@@ -398,7 +468,7 @@ export async function cloudSwitchFace(
 ): Promise<AuthResponse> {
   try {
     const session = await requireSession();
-    const profile = await waitForProfile(session.user.id);
+    const profile = await ensureBootstrappedProfile(session);
     let faces = facesFrom(profile.faces_json);
     if (!faces.includes(face)) {
       if (!enableIfMissing) {
@@ -416,7 +486,7 @@ export async function cloudSwitchFace(
       .update({ faces_json: faces, active_face: face })
       .eq("id", session.user.id);
     if (error) mapCloudError(error, "Could not switch face.");
-    const me = await meFromUserId(session.user.id);
+    const me = await meFromSession(session);
     return authResponse(session, me.user);
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -450,14 +520,14 @@ export async function cloudCreateProperty(
       .single();
     if (error) mapCloudError(error, "Could not add home.");
     const property = propertyFromRow(data as PropertyRow);
-    const profile = await waitForProfile(session.user.id);
+    const profile = await ensureBootstrappedProfile(session);
     if (!profile.active_property_id) {
       await supabase
         .from("profiles")
         .update({ active_property_id: property.id })
         .eq("id", session.user.id);
     }
-    const me = await meFromUserId(session.user.id);
+    const me = await meFromSession(session);
     return { property, user: me.user };
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -487,7 +557,7 @@ export async function cloudSelectProperty(
       .update({ active_property_id: propertyId })
       .eq("id", session.user.id);
     if (updateError) mapCloudError(updateError, "Could not switch homes.");
-    const me = await meFromUserId(session.user.id);
+    const me = await meFromSession(session);
     return { property: propertyFromRow(data as PropertyRow), user: me.user };
   } catch (err) {
     if (err instanceof ApiError) throw err;

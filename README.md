@@ -118,12 +118,16 @@ In production set `JOBS_SECRET` and send it as `X-Jobs-Secret` (or `Authorizatio
 
 Local demo needs **no** Supabase. When you want cloud accounts + file storage on the phone:
 
-1. Create a project at [supabase.com](https://supabase.com)
-2. Run the SQL in [`supabase/README.md`](./supabase/README.md) (SQL Editor → paste → Run)
+1. Create a project at [supabase.com](https://supabase.com) (known HomeAsset URL: `https://iiyhogiwqqotlrsjlqud.supabase.co`)
+2. Run the SQL in [`supabase/README.md`](./supabase/README.md) **in order** (SQL Editor → paste → Run) — includes LightLift-style `bootstrap_new_user`
 3. Copy URL + anon key into **`apps/mobile/.env` only** for signup/login/ledger (see `.env.example`)
 4. Optional: same URL/anon (+ service-role) on `apps/api/.env` for CI, server jobs, or AI — never put the service-role key in the phone app
 
-With mobile Supabase env set, the phone talks to Auth/Postgres/Storage directly (LightLift-style). `AUTH_BACKEND=auto` on the API still uses Supabase when configured; `DATA_BACKEND=sqlite` stays the CI-safe default.
+With mobile Supabase env set, the phone talks to Auth/Postgres/Storage directly (LightLift-style). **No localhost API / LAN IP** for preview signup and core ledger. `AUTH_BACKEND=auto` on the API still uses Supabase when configured; `DATA_BACKEND=sqlite` stays the CI-safe default.
+
+### Auth bootstrap (LightLift model)
+
+After signup or sign-in **when a session exists**, the phone calls the security-definer RPC `bootstrap_new_user` to create **that user’s** profile (and notification prefs) idempotently. We do **not** rely on an Auth SQL trigger as the only path. Details and trigger choice: [`supabase/README.md`](./supabase/README.md). Agent rules: [`.cursorrules`](./.cursorrules).
 
 ## Android install (EAS) — primary phone path
 
@@ -181,11 +185,13 @@ docker run --rm -p 8787:8787 \
 ## Privacy & security
 
 - Auth required before any personal, home, asset, document, reminder, recall, notification, or AI endpoint
+- **Auth bootstrap:** LightLift-style RPC only creates the signed-in user’s own profile; RLS select/update own; no service-role on device
 - Homes, assets, documents, reminders, and recall alerts are **property-scoped**: list/get/update/delete only succeed for homes you own
 - Notifications are **account-scoped** and never leak across users; reminder and recall notices include the home id when relevant
-- **AI never silently writes** — scan returns a draft; manuals/assets are saved only on explicit confirm; how-to and contractor format are draft/read-only
+- **AI never silently writes** — scan returns a draft; manuals/assets are saved only on explicit confirm; how-to and contractor format are draft/read-only; AI keys stay on edge/server (not `EXPO_PUBLIC_*`)
 - Preferences default to product notices only — **no marketing drip**, SMS out of scope
 - Passwords hashed (bcrypt) locally, or held by Supabase Auth when configured; API JWTs are short-lived
+- Homeowner control: least data shared, approve-before-official, no silent auto-adds
 - No analytics or silent third-party sharing wired in
 - Home packet export is owner-only and does not share anything by itself
 - Secure HTTP headers on the API; CORS locked down in production via `CORS_ORIGINS`

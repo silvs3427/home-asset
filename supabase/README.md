@@ -2,6 +2,10 @@
 
 Same founder-friendly pattern as LightLift: create a project, paste SQL in order, put URL + anon key in env. Never put the service-role key in the phone app.
 
+**Auth → profile = LightLift model:** after signup/sign-in (when a session exists), the phone calls the security-definer RPC `bootstrap_new_user`. Do **not** rely on an Auth SQL trigger as the only path. There is no localhost API required for phone preview once URL + anon key are set.
+
+HomeAsset’s cloud project ref (from project docs): `iiyhogiwqqotlrsjlqud` → URL `https://iiyhogiwqqotlrsjlqud.supabase.co`. Repo `.env.example` files keep a `YOUR_PROJECT` placeholder so secrets are never committed.
+
 ## Apply the schema
 
 1. Create a project at [supabase.com](https://supabase.com).
@@ -10,19 +14,28 @@ Same founder-friendly pattern as LightLift: create a project, paste SQL in order
 
 | # | File | What it adds |
 |---|------|----------------|
-| 1 | `migrations/20261118000000_init_schema.sql` | Profiles, properties, assets, documents, reminders, notifications; RLS; signup trigger; private `documents` Storage bucket |
+| 1 | `migrations/20261118000000_init_schema.sql` | Profiles, properties, assets, documents, reminders, notifications; RLS; private `documents` Storage bucket (no Auth→profiles trigger) |
+| 2 | `migrations/20261120000000_epic7_recalls.sql` | Safety recall alerts (optional if you already ran it) |
+| 3 | `migrations/20261121000000_bootstrap_new_user.sql` | LightLift-style `bootstrap_new_user` RPC; drops Auth trigger / insert-own policy if present |
 
-That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, auto-creates a profile on Auth signup, and adds a private Storage bucket for manuals / photos.
+That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, lets the signed-in user bootstrap **their own** profile via RPC, and adds a private Storage bucket for manuals / photos.
 
 ### Exact clicks (first-time)
 
 1. Supabase project → left sidebar **SQL Editor** → **New query**.
-2. Open `migrations/20261118000000_init_schema.sql` on GitHub → **Raw** → select all → copy.
+2. Open each migration file on GitHub → **Raw** → select all → copy (run **in order**).
 3. Paste into the SQL Editor → click **Run**. Confirm no red error.
+4. If signup shows **Could not load profile** / bootstrap failed, re-run `20261121000000_bootstrap_new_user.sql` (even if init already ran).
+
+### Trigger choice (documented)
+
+- **Dropped / disabled:** Auth `on_auth_user_created` trigger is **not** the account-creation path (same as LightLift).
+- **Why:** silent triggers are easy to miss on a live project and hide failures; the phone must call an explicit RPC so errors are visible and idempotent.
+- **Safe if leftover:** `bootstrap_new_user` is idempotent (returns existing profile). The migration removes the trigger so duplicates cannot race.
 
 ### Auth tip (product testing)
 
-**Authentication → Sign In / Providers → Email → Confirm email → OFF → Save** on a **dev/test** project only, so sign-up returns a session immediately (no inbox wait).
+**Authentication → Sign In / Providers → Email → Confirm email → OFF → Save** on a **dev/test** project only, so sign-up returns a session immediately (no inbox wait). If Confirm email stays on, bootstrap runs on the first successful sign-in (metadata carries starting face).
 
 ## App / API env vars
 
