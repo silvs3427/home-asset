@@ -1,4 +1,3 @@
-import * as LocalAuthentication from "expo-local-authentication";
 import {
   createContext,
   useCallback,
@@ -31,6 +30,22 @@ import {
 } from "./sessionLockPrefs";
 import { colors } from "./theme";
 
+type LocalAuthModule = typeof import("expo-local-authentication");
+
+/**
+ * Lazy-load so a preview APK missing the native biometric module (or a bad
+ * OTA/native mismatch) does not crash the whole app at root layout import.
+ */
+function loadLocalAuth(): LocalAuthModule | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("expo-local-authentication") as LocalAuthModule;
+  } catch (err) {
+    console.warn("[sessionLock] expo-local-authentication unavailable", err);
+    return null;
+  }
+}
+
 type BiometricAvailability = {
   hardware: boolean;
   enrolled: boolean;
@@ -50,7 +65,10 @@ type SessionLockState = {
 
 const SessionLockContext = createContext<SessionLockState | null>(null);
 
-function biometricLabelFromTypes(types: LocalAuthentication.AuthenticationType[]): string {
+function biometricLabelFromTypes(
+  LocalAuthentication: LocalAuthModule,
+  types: number[],
+): string {
   const hasFace = types.includes(
     LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION,
   );
@@ -67,6 +85,10 @@ async function readBiometricAvailability(): Promise<BiometricAvailability> {
   if (Platform.OS === "web") {
     return { hardware: false, enrolled: false, label: "Device biometrics" };
   }
+  const LocalAuthentication = loadLocalAuth();
+  if (!LocalAuthentication) {
+    return { hardware: false, enrolled: false, label: "Device biometrics" };
+  }
   try {
     const [hardware, enrolled, types] = await Promise.all([
       LocalAuthentication.hasHardwareAsync(),
@@ -76,7 +98,7 @@ async function readBiometricAvailability(): Promise<BiometricAvailability> {
     return {
       hardware,
       enrolled,
-      label: biometricLabelFromTypes(types),
+      label: biometricLabelFromTypes(LocalAuthentication, types),
     };
   } catch (err) {
     console.warn("[sessionLock] biometric availability check failed", err);
@@ -256,6 +278,9 @@ export function SessionLockProvider({ children }: { children: ReactNode }) {
   const unlockWithBiometrics = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === "web") return false;
     try {
+      const LocalAuthentication = loadLocalAuth();
+      if (!LocalAuthentication) return false;
+
       const bio = await readBiometricAvailability();
       setBiometric(bio);
       if (!bio.hardware || !bio.enrolled) return false;
