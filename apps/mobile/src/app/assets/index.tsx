@@ -18,7 +18,8 @@ import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
 /**
- * View Assets for the current home. Header + adds; each row opens edit.
+ * View Assets for the current home. Header + adds; each row opens the
+ * asset record (documents, recalls, reminders) — Edit is on that screen.
  */
 export default function AssetsListScreen() {
   const router = useRouter();
@@ -101,7 +102,7 @@ export default function AssetsListScreen() {
               onPress={() =>
                 router.push({
                   pathname: "/assets/[id]",
-                  params: { id: asset.id, edit: "1" },
+                  params: { id: asset.id },
                 })
               }
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
@@ -119,7 +120,7 @@ export default function AssetsListScreen() {
                   {asset.location ? ` · ${asset.location}` : ""}
                 </Text>
               </View>
-              <Text style={styles.rowAction}>Edit</Text>
+              <Text style={styles.rowAction}>Open</Text>
             </Pressable>
           ))}
         </View>
