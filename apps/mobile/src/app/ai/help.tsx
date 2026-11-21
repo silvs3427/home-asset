@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
 /**
- * Ask HomeAsset — single AI entry: picture scan or how-to.
+ * Ask HomeAsset — single AI entry for homeowners.
  * Opened from Home’s top button (not a floating FAB).
  */
 export default function AskHomeAssetScreen() {
@@ -16,8 +16,7 @@ export default function AskHomeAssetScreen() {
     return <Redirect href="/sign-in" />;
   }
 
-  const canUseHomeTools =
-    user.activeFace === "homeowner" && Boolean(activeProperty);
+  const canUseHomeTools = Boolean(activeProperty);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -34,18 +33,7 @@ export default function AskHomeAssetScreen() {
       </View>
 
       <View style={styles.body}>
-        {user.activeFace === "contractor" ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.replace("/ai/contractor-format")}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.primaryLabel}>Format notes</Text>
-          </Pressable>
-        ) : canUseHomeTools ? (
+        {canUseHomeTools ? (
           <>
             <Pressable
               accessibilityRole="button"

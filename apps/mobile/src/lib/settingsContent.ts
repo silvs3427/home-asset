@@ -9,6 +9,7 @@
  * commentary on feature screens. Use `lib/theme.ts` colors everywhere.
  * Home CTAs: Ask HomeAsset → View Assets → Notifications → Settings.
  * Suggest-from-permits is not a primary CTA.
+ * HomeAsset is homeowner-only — no contractor face in the app.
  */
 
 export type ContentSection = {
@@ -40,11 +41,11 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Settings",
-    body: "Add another home, How to use, Privacy, Security, push & in-app delivery prefs, face switch, and sign out.",
+    body: "Add another home, How to use, Privacy, Security, push & in-app delivery prefs, and sign out.",
   },
   {
-    title: "Contractor face",
-    body: "Switch faces in Settings. Ask HomeAsset can format notes. Submitting into a homeowner ledger with their approval comes later.",
+    title: "Contractors (coming soon)",
+    body: "HomeAsset is for homeowners only. Pros who use LightLift can push finished work into your home for you to approve. Pros without LightLift: you will be able to send a submission link; they type notes, record voice, and upload photos. Ask HomeAsset ingests that voice, photos, and text into a draft; nothing becomes official until you approve. That invite link is not in the app yet.",
   },
   {
     title: "Privacy and security",
@@ -55,11 +56,11 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
 export const PRIVACY_SECTIONS: ContentSection[] = [
   {
     title: "You own the record",
-    body: "Homeowners own what is official on each home. Contractors may help prepare drafts later; they do not silently write your ledger.",
+    body: "HomeAsset is homeowner-only. You own what is official on each home. Contractors may send work through LightLift or a future submission link you share; they do not silently write your ledger.",
   },
   {
     title: "Approve before official",
-    body: "Ask HomeAsset drafts (add/update from photo, email, or invoice; scans; and similar helpers) wait for your review. Nothing is auto-added as official without your confirm.",
+    body: "Ask HomeAsset drafts (add/update from photo, email, or invoice; scans; and similar helpers) wait for your review. Future contractor submissions — including invite-link voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Nothing is auto-added as official without your confirm.",
   },
   {
     title: "Signed-in and home-scoped",
@@ -67,7 +68,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Least data shared",
-    body: "We avoid broad sharing by default. Exports and shares happen when you choose them. Notification delivery preferences are under your control; there is no marketing channel in the app.",
+    body: "We avoid broad sharing by default. Pros do not browse your full home ledger. Exports and shares happen when you choose them. Notification delivery preferences are under your control; there is no marketing channel in the app.",
   },
   {
     title: "AI and your data",
