@@ -632,6 +632,25 @@ function matchExistingAsset(
   return null;
 }
 
+const ASSET_INTAKE_LIVE_SYSTEM =
+  `${HOME_SCOPE_SYSTEM_BLURB} ` +
+  "You extract ONE distinct home asset from homeowner input. " +
+  "When an image or PDF is attached, carefully OCR / read ALL visible text: equipment nameplates, data plates, " +
+  "HVAC proposals, invoices, receipts, stickers, and purchase screenshots. " +
+  "Prefer exact printed values over guesses. Transcribe model and serial character-for-character " +
+  "(watch O vs 0, I vs 1, S vs 5). " +
+  "Look for Manufacturer/Brand, Model, Serial, Capacity (tons/BTU/kW/gallons), SEER/AFUE/HSPF, refrigerant, voltage. " +
+  "Put capacity and other plate facts into suggestedAsset.notes when there is no dedicated field. " +
+  "identificationLabel should be brand + model when known. " +
+  "Reply with JSON only: {intent:\"add\"|\"update\", matchedAssetId:string|null, identificationLabel:string, confidence:number, " +
+  "capacity:string|null, " +
+  "suggestedAsset:{name,category,manufacturer,model,serial,purchaseDate,installDate,installerVendor,location,notes,warrantyEndDate,warrantyTerm}, " +
+  "missingFields:string[]}. " +
+  "category must be one of: hvac,roof,appliance,generator,water_heater,plumbing,electrical,kids_gear,vehicle,other. " +
+  "matchedAssetId must be one of the provided existing asset ids or null. Prefer update when the same equipment already exists. " +
+  "Do not invent serial numbers, model numbers, or capacity. Dates YYYY-MM-DD or null. " +
+  "Fill only facts grounded in the input or attached media.";
+
 /**
  * Multi-source Ask HomeAsset intake → one distinct asset draft (Add or Update).
  * Never writes — homeowner must confirm.
@@ -641,6 +660,8 @@ export async function formatAssetIntake(input: {
   text?: string | null;
   hint?: string | null;
   filename?: string | null;
+  imageBase64?: string | null;
+  mediaMimeType?: string | null;
   existingAssets: ExistingAssetLite[];
 }): Promise<AssetIntakeFormatResult> {
   const mode = resolveAiMode();
@@ -653,6 +674,196 @@ export async function formatAssetIntake(input: {
     .filter(Boolean)
     .join(" ")
     .trim();
+  const mediaBase64 = input.imageBase64?.trim() || null;
+  const mediaMimeType = input.mediaMimeType?.trim().toLowerCase() || null;
+  const hasMedia = Boolean(mediaBase64 && mediaMimeType);
+
+  if (mode === "live" && config.aiApiKey) {
+    try {
+      const existingJson = JSON.stringify(
+        input.existingAssets.slice(0, 40).map((a) => ({
+          id: a.id,
+          name: a.name,
+          category: a.category,
+          manufacturer: a.manufacturer ?? null,
+          model: a.model ?? null,
+          serial: a.serial ?? null,
+        })),
+      );
+      const mediaNote = hasMedia
+        ? `mediaAttached=true mime=${mediaMimeType}`
+        : "mediaAttached=false";
+      const userText =
+        `sourceKind=${input.sourceKind}\n${mediaNote}\n` +
+        `existingAssets=${existingJson}\ninput:\n${query || "(see attached media)"}`;
+      const userContent: Array<Record<string, unknown>> = [
+        { type: "text", text: userText },
+      ];
+      if (hasMedia) {
+        userContent.push({
+          type: "image_url",
+          image_url: {
+            url: `data:${mediaMimeType};base64,${mediaBase64}`,
+          },
+        });
+      }
+      const res = await fetch(`${config.aiBaseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${config.aiApiKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: config.aiModel,
+          temperature: 0,
+          messages: [
+            { role: "system", content: ASSET_INTAKE_LIVE_SYSTEM },
+            {
+              role: "user",
+              content: hasMedia ? userContent : userText,
+            },
+          ],
+        }),
+      });
+      if (res.ok) {
+        const body = (await res.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        const content = body.choices?.[0]?.message?.content ?? "";
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]) as {
+            intent?: string;
+            matchedAssetId?: string | null;
+            identificationLabel?: string;
+            confidence?: number;
+            capacity?: string | null;
+            suggestedAsset?: Partial<AssetIntakeSuggestedFields> & {
+              category?: string;
+            };
+            missingFields?: unknown;
+          };
+          let notes =
+            parsed.suggestedAsset?.notes != null
+              ? String(parsed.suggestedAsset.notes).trim().slice(0, 2000) || null
+              : null;
+          const capacity =
+            parsed.capacity != null
+              ? String(parsed.capacity).trim().slice(0, 160) || null
+              : null;
+          if (capacity) {
+            const capacityLine = `Capacity: ${capacity}`;
+            notes = notes
+              ? notes.toLowerCase().includes("capacity:")
+                ? notes
+                : `${notes}\n${capacityLine}`.slice(0, 2000)
+              : capacityLine;
+          }
+          const suggestedAsset: AssetIntakeSuggestedFields = {
+            name:
+              String(parsed.suggestedAsset?.name ?? "Home asset")
+                .trim()
+                .slice(0, 120) || "Home asset",
+            category: coerceCategory(parsed.suggestedAsset?.category),
+            manufacturer:
+              parsed.suggestedAsset?.manufacturer != null
+                ? String(parsed.suggestedAsset.manufacturer).trim().slice(0, 120) ||
+                  null
+                : null,
+            model:
+              parsed.suggestedAsset?.model != null
+                ? String(parsed.suggestedAsset.model).trim().slice(0, 120) || null
+                : null,
+            serial:
+              parsed.suggestedAsset?.serial != null
+                ? String(parsed.suggestedAsset.serial).trim().slice(0, 120) || null
+                : null,
+            purchaseDate:
+              parsed.suggestedAsset?.purchaseDate &&
+              /^\d{4}-\d{2}-\d{2}$/.test(
+                String(parsed.suggestedAsset.purchaseDate),
+              )
+                ? String(parsed.suggestedAsset.purchaseDate)
+                : null,
+            installDate:
+              parsed.suggestedAsset?.installDate &&
+              /^\d{4}-\d{2}-\d{2}$/.test(
+                String(parsed.suggestedAsset.installDate),
+              )
+                ? String(parsed.suggestedAsset.installDate)
+                : null,
+            installerVendor:
+              parsed.suggestedAsset?.installerVendor != null
+                ? String(parsed.suggestedAsset.installerVendor)
+                    .trim()
+                    .slice(0, 120) || null
+                : null,
+            location:
+              parsed.suggestedAsset?.location != null
+                ? String(parsed.suggestedAsset.location).trim().slice(0, 120) ||
+                  null
+                : null,
+            notes,
+            warrantyEndDate:
+              parsed.suggestedAsset?.warrantyEndDate &&
+              /^\d{4}-\d{2}-\d{2}$/.test(
+                String(parsed.suggestedAsset.warrantyEndDate),
+              )
+                ? String(parsed.suggestedAsset.warrantyEndDate)
+                : null,
+            warrantyTerm:
+              parsed.suggestedAsset?.warrantyTerm != null
+                ? String(parsed.suggestedAsset.warrantyTerm)
+                    .trim()
+                    .slice(0, 120) || null
+                : null,
+          };
+          const existingIds = new Set(input.existingAssets.map((a) => a.id));
+          let matchedAssetId =
+            typeof parsed.matchedAssetId === "string" &&
+            existingIds.has(parsed.matchedAssetId)
+              ? parsed.matchedAssetId
+              : null;
+          let intent: "add" | "update" =
+            parsed.intent === "update" && matchedAssetId ? "update" : "add";
+          if (!matchedAssetId) {
+            const auto = matchExistingAsset(
+              suggestedAsset,
+              input.existingAssets,
+            );
+            if (auto) {
+              matchedAssetId = auto.id;
+              intent = "update";
+            }
+          }
+          const matched = matchedAssetId
+            ? input.existingAssets.find((a) => a.id === matchedAssetId)
+            : undefined;
+          return {
+            mode: "live",
+            intent,
+            matchedAssetId,
+            matchedAssetLabel: matched
+              ? `${matched.name}${matched.manufacturer ? ` · ${matched.manufacturer}` : ""}${matched.model ? ` ${matched.model}` : ""}`
+              : null,
+            identificationLabel: String(
+              parsed.identificationLabel ??
+                `${suggestedAsset.manufacturer ?? ""} ${suggestedAsset.model ?? suggestedAsset.name}`.trim(),
+            ).slice(0, 200),
+            confidence: Math.min(
+              1,
+              Math.max(0, Number(parsed.confidence ?? 0.7) || 0.7),
+            ),
+            suggestedAsset,
+            missingFields: computeMissingFields(suggestedAsset),
+            privacy,
+          };
+        }
+      }
+    } catch {
+      // fall through to mock
+    }
+  }
 
   const product = matchCatalogProducts(query || "appliance")[0]!;
   const installDate = extractLikelyDate(query);
@@ -670,7 +881,9 @@ export async function formatAssetIntake(input: {
         : null,
     installerVendor,
     location: null,
-    notes: `Drafted from ${input.sourceKind} via Ask HomeAsset (${mode}). Confirm before saving.`,
+    notes: hasMedia
+      ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (${mode}). Confirm before saving.`
+      : `Drafted from ${input.sourceKind} via Ask HomeAsset (${mode}). Confirm before saving.`,
     warrantyEndDate: null,
     warrantyTerm: null,
   };

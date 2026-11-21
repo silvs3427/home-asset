@@ -18,6 +18,7 @@ export type AiEdgeAction =
   | "contractor-format"
   | "email-intake"
   | "asset-intake"
+  | "suggest-manuals"
   | "permits-suggest";
 
 type EdgeErrorBody = {
@@ -216,6 +217,39 @@ export function rememberAssetIntakeDraft(
 export function takeAssetIntakeDraft(draftId: string) {
   const value = assetIntakeDraftById.get(draftId);
   assetIntakeDraftById.delete(draftId);
+  return value;
+}
+
+/** Manual / spec suggestions held until homeowner confirms (cloud path). */
+const manualsDraftById = new Map<
+  string,
+  {
+    propertyId: string;
+    assetId: string;
+    manufacturer: string;
+    model: string;
+    manuals: Array<{ id: string; title: string }>;
+    manualContents: Record<string, string>;
+  }
+>();
+
+export function rememberManualsDraft(
+  draftId: string,
+  draft: {
+    propertyId: string;
+    assetId: string;
+    manufacturer: string;
+    model: string;
+    manuals: Array<{ id: string; title: string }>;
+    manualContents: Record<string, string>;
+  },
+): void {
+  manualsDraftById.set(draftId, draft);
+}
+
+export function takeManualsDraft(draftId: string) {
+  const value = manualsDraftById.get(draftId);
+  manualsDraftById.delete(draftId);
   return value;
 }
 

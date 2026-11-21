@@ -13,58 +13,87 @@ export type PickedUpload = {
   name: string;
   mimeType: string;
   suggestedType: DocumentType;
+  /** Present when picked for Ask HomeAsset vision / OCR. */
+  base64?: string | null;
 };
+
+export type PickForAiOptions = {
+  /** Include base64 for multimodal asset intake (compressed). */
+  forAi?: boolean;
+};
+
+/** Soft cap so edge JSON stays under typical body limits (~2.5MB binary). */
+const AI_MEDIA_BASE64_MAX_CHARS = 3_200_000;
 
 /**
  * Camera path for phone-first capture (warranties, receipts, install photos).
  */
-export async function pickFromCamera(): Promise<PickedUpload | null> {
+export async function pickFromCamera(
+  options: PickForAiOptions = {},
+): Promise<PickedUpload | null> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
     throw new Error("Camera permission is needed to attach a photo.");
   }
 
+  const forAi = Boolean(options.forAi);
   const result = await ImagePicker.launchCameraAsync({
     mediaTypes: ["images"],
-    quality: 0.85,
+    quality: forAi ? 0.65 : 0.85,
     exif: false,
+    base64: forAi,
   });
   if (result.canceled || !result.assets[0]) return null;
 
-  const asset = result.assets[0];
-  return {
-    uri: asset.uri,
-    name: asset.fileName ?? `photo-${Date.now()}.jpg`,
-    mimeType: asset.mimeType ?? "image/jpeg",
-    suggestedType: "photo",
-  };
+  return finalizeAiPhotoPick(result.assets[0], forAi);
 }
 
 /** Photo library pick — still phone-friendly for existing camera-roll paperwork. */
-export async function pickFromLibrary(): Promise<PickedUpload | null> {
+export async function pickFromLibrary(
+  options: PickForAiOptions = {},
+): Promise<PickedUpload | null> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
     throw new Error("Photo library permission is needed to attach a photo.");
   }
 
+  const forAi = Boolean(options.forAi);
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
-    quality: 0.85,
+    quality: forAi ? 0.65 : 0.85,
     exif: false,
+    base64: forAi,
   });
   if (result.canceled || !result.assets[0]) return null;
 
-  const asset = result.assets[0];
+  return finalizeAiPhotoPick(result.assets[0], forAi);
+}
+
+function finalizeAiPhotoPick(
+  asset: ImagePicker.ImagePickerAsset,
+  forAi: boolean,
+): PickedUpload {
+  // ImagePicker base64 is JPEG when requested.
+  const mimeType = forAi ? "image/jpeg" : (asset.mimeType ?? "image/jpeg");
+  const base64 = forAi ? asset.base64 ?? null : null;
+  if (forAi && base64 && base64.length > AI_MEDIA_BASE64_MAX_CHARS) {
+    throw new Error(
+      "That photo is too large to read right now. Try a closer crop of the label, or take the photo again.",
+    );
+  }
   return {
     uri: asset.uri,
     name: asset.fileName ?? `photo-${Date.now()}.jpg`,
-    mimeType: asset.mimeType ?? "image/jpeg",
+    mimeType,
     suggestedType: "photo",
+    base64,
   };
 }
 
 /** PDFs / other files (manuals, receipts) from the device. */
-export async function pickDocumentFile(): Promise<PickedUpload | null> {
+export async function pickDocumentFile(
+  options: PickForAiOptions = {},
+): Promise<PickedUpload | null> {
   const result = await DocumentPicker.getDocumentAsync({
     copyToCacheDirectory: true,
     multiple: false,
@@ -78,16 +107,25 @@ export async function pickDocumentFile(): Promise<PickedUpload | null> {
     ? "photo"
     : "manual";
 
+  let base64: string | null = null;
+  if (options.forAi) {
+    base64 = await readUriAsBase64(asset.uri);
+    assertAiMediaSize(base64, "file");
+  }
+
   return {
     uri: asset.uri,
     name: asset.name || `document-${Date.now()}`,
     mimeType: mime,
     suggestedType,
+    base64,
   };
 }
 
 /** PDF-only pick for Ask HomeAsset invoice / paperwork intake. */
-export async function pickPdfFile(): Promise<PickedUpload | null> {
+export async function pickPdfFile(
+  options: PickForAiOptions = {},
+): Promise<PickedUpload | null> {
   const result = await DocumentPicker.getDocumentAsync({
     copyToCacheDirectory: true,
     multiple: false,
@@ -96,11 +134,18 @@ export async function pickPdfFile(): Promise<PickedUpload | null> {
   if (result.canceled || !result.assets[0]) return null;
 
   const asset = result.assets[0];
+  let base64: string | null = null;
+  if (options.forAi) {
+    base64 = await readUriAsBase64(asset.uri);
+    assertAiMediaSize(base64, "PDF");
+  }
+
   return {
     uri: asset.uri,
     name: asset.name || `invoice-${Date.now()}.pdf`,
     mimeType: asset.mimeType ?? "application/pdf",
     suggestedType: "receipt",
+    base64,
   };
 }
 
@@ -123,6 +168,25 @@ export async function pickAudioFile(): Promise<PickedUpload | null> {
     mimeType: asset.mimeType ?? "audio/mpeg",
     suggestedType: "other",
   };
+}
+
+/** Read a local file URI as base64 (PDF / fallback when picker base64 is missing). */
+export async function readUriAsBase64(uri: string): Promise<string> {
+  const file = new File(uri);
+  if (!file.exists) {
+    throw new Error("Could not read that file on this phone.");
+  }
+  return file.base64();
+}
+
+function assertAiMediaSize(base64: string, kind: string): void {
+  if (base64.length > AI_MEDIA_BASE64_MAX_CHARS) {
+    throw new Error(
+      kind === "PDF"
+        ? "That file is too large to read right now. Try a shorter PDF or a clearer photo of the label page."
+        : "That file is too large to read right now. Try a closer crop of the label, or a smaller attachment.",
+    );
+  }
 }
 
 /** Download with auth (or signed Supabase URL), then open the share sheet. */

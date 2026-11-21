@@ -75,7 +75,8 @@ npx supabase secrets set AI_ASSIST_LIVE=true
 | `howto` | `propertyId`, `question`, `assetId?` | how-to answer + citations |
 | `contractor-format` | `inputText`, `inputKind?` | format draft (no writes) |
 | `email-intake` | `propertyId`, `emailText` | email intake draft |
-| `asset-intake` | `propertyId`, `sourceKind`, `text?`, `hint?`, `filename?`, `existingAssets?` | one-asset Add/Update draft + missing fields |
+| `asset-intake` | `propertyId`, `sourceKind`, `text?`, `hint?`, `filename?`, `imageBase64?`, `mediaMimeType?`, `existingAssets?` | one-asset Add/Update draft + missing fields (multimodal OCR for photos/PDFs) |
+| `suggest-manuals` | `propertyId`, `manufacturer`, `model`, `assetId?` | draft manuals / spec sheets (catalog + live web search) — confirm on phone |
 | `permits-suggest` | `propertyId` | permit suggestion draft |
 
 **Confirm / save** (scan confirm, email approve, asset intake confirm, permit approve) runs on the phone against Supabase Postgres + Storage with the user JWT — those steps do **not** need an AI key.
@@ -83,7 +84,8 @@ npx supabase secrets set AI_ASSIST_LIVE=true
 ## Privacy
 
 - Drafts are never written to the home ledger until the homeowner confirms in the app
-- Function logs record operational codes / user id / model — not full email bodies or photo bytes
+- Function logs record operational codes / user id / model — not full email bodies or photo/PDF bytes
+- Photo/PDF bytes are used only to draft fields; they are not written to the ledger until the homeowner confirms (and intake does not auto-store the attachment as a document)
 - How-to answers only use the user’s stored manuals + asset facts (plus catalog fallback)
 - Ask HomeAsset is home-scoped (ledger / equipment / manuals / maintenance / recalls / intake) — not a general coding assistant
 - Rate and daily caps are enforced on the server; the phone cannot bypass them
