@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import {
   categoryLabel,
   listAssets,
@@ -62,24 +63,19 @@ export default function AssetsListScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>View Assets</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add asset"
-          onPress={() => router.push("/assets/new")}
-          style={styles.addBtn}
-        >
-          <Text style={styles.addLabel}>+</Text>
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="View Assets"
+        right={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add asset"
+            onPress={() => router.push("/assets/new")}
+            style={styles.addBtn}
+          >
+            <Text style={styles.addLabel}>+</Text>
+          </Pressable>
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>
@@ -157,8 +153,6 @@ const styles = StyleSheet.create({
     color: colors.brand,
   },
   addBtn: {
-    minWidth: 56,
-    alignItems: "flex-end",
     paddingVertical: 4,
     paddingHorizontal: 4,
   },

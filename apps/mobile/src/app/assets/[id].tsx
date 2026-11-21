@@ -38,6 +38,7 @@ import {
   type PublicDocument,
   type PublicReminder,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 import { OpenLabelField } from "@/components/OpenLabelField";
@@ -339,32 +340,27 @@ export default function AssetDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Asset</Text>
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy || loading || !asset}
-          onPress={() => {
-            if (editing) {
-              void onSave();
-            } else {
-              setEditing(true);
-            }
-          }}
-          style={styles.headerAction}
-        >
-          <Text style={styles.headerActionLabel}>
-            {editing ? (busy ? "Saving…" : "Save") : "Edit"}
-          </Text>
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="Asset"
+        right={
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy || loading || !asset}
+            onPress={() => {
+              if (editing) {
+                void onSave();
+              } else {
+                setEditing(true);
+              }
+            }}
+            style={styles.headerAction}
+          >
+            <Text style={styles.headerActionLabel}>
+              {editing ? (busy ? "Saving…" : "Save") : "Edit"}
+            </Text>
+          </Pressable>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={styles.body}

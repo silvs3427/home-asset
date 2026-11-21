@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import {
   REMINDER_RECURRENCES,
   createReminder,
@@ -150,28 +151,23 @@ export default function NewReminderScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>New reminder</Text>
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy || loading}
-          onPress={() => {
-            void onSave();
-          }}
-          style={styles.headerAction}
-        >
-          <Text style={styles.headerActionLabel}>
-            {busy ? "Saving…" : "Save"}
-          </Text>
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="New reminder"
+        right={
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy || loading}
+            onPress={() => {
+              void onSave();
+            }}
+            style={styles.headerAction}
+          >
+            <Text style={styles.headerActionLabel}>
+              {busy ? "Saving…" : "Save"}
+            </Text>
+          </Pressable>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={styles.body}

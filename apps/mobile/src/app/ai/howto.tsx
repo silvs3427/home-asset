@@ -1,4 +1,4 @@
-import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -16,6 +16,7 @@ import {
   type AiHowToResponse,
   type PublicAsset,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 
 /**
@@ -23,7 +24,6 @@ import { useAuth } from "@/lib/auth";
  * Read-only — never writes the ledger.
  */
 export default function AiHowtoScreen() {
-  const router = useRouter();
   const { assetId: assetIdParam } = useLocalSearchParams<{
     assetId?: string;
   }>();
@@ -90,13 +90,7 @@ export default function AiHowtoScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button">
-          <Text style={styles.back}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Ask how-to</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader title="Ask how-to" />
 
       <ScrollView contentContainerStyle={styles.body}>
         {loadingAssets ? (
