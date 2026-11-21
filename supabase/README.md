@@ -15,10 +15,10 @@ HomeAsset’s cloud project ref (from project docs): `iiyhogiwqqotlrsjlqud` → 
 | # | File | What it adds |
 |---|------|----------------|
 | 1 | `migrations/20261118000000_init_schema.sql` | Profiles, properties, assets, documents, reminders, notifications; RLS; private `documents` Storage bucket (no Auth→profiles trigger) |
-| 2 | `migrations/20261120000000_epic7_recalls.sql` | Safety recall alerts (optional if you already ran it) |
+| 2 | `migrations/20261120000000_epic7_recalls.sql` | **Required for phone safety recalls** — `recall_notices` + `asset_recall_alerts` + RLS (safe to re-run) |
 | 3 | `migrations/20261121000000_bootstrap_new_user.sql` | LightLift-style `bootstrap_new_user` RPC; drops Auth trigger / insert-own policy if present |
 
-That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, lets the signed-in user bootstrap **their own** profile via RPC, and adds a private Storage bucket for manuals / photos.
+That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, lets the signed-in user bootstrap **their own** profile via RPC, and adds a private Storage bucket for manuals / photos. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message.
 
 ### Exact clicks (first-time)
 
@@ -26,6 +26,7 @@ That setup creates the homeowner ledger tables, enables RLS so each user only se
 2. Open each migration file on GitHub → **Raw** → select all → copy (run **in order**).
 3. Paste into the SQL Editor → click **Run**. Confirm no red error.
 4. If signup shows **Could not load profile** / bootstrap failed, re-run `20261121000000_bootstrap_new_user.sql` (even if init already ran).
+5. If **Check safety recalls** says tables are missing, re-run `20261120000000_epic7_recalls.sql`.
 
 ### Trigger choice (documented)
 
@@ -46,7 +47,7 @@ Copy `apps/mobile/.env.example` to `apps/mobile/.env` (never commit a real `.env
 - `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (local Expo)
 - `SUPABASE_URL` / `SUPABASE_ANON_KEY` (Cursor/Cloud secrets; `EXPO_PUBLIC_` is reserved in bind-app-secrets)
 
-With those two set, the phone uses **Supabase Auth + Postgres (+ Storage) directly** — no laptop API and **no `EXPO_PUBLIC_API_URL` / LAN IP** for signup, login, homes, the core ledger, **and AI assist**.
+With those two set, the phone uses **Supabase Auth + Postgres (+ Storage) directly** — no laptop API and **no `EXPO_PUBLIC_API_URL` / LAN IP** for signup, login, homes, the core ledger, **safety recalls**, **and AI assist**.
 
 `EXPO_PUBLIC_API_URL` is optional: only for the local SQLite demo without Supabase, or a hosted API for cron / jobs.
 
