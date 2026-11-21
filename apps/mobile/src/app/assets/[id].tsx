@@ -39,6 +39,7 @@ import {
   type PublicReminder,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
 import {
   downloadAndShareDocument,
   pickDocumentFile,
@@ -53,7 +54,10 @@ import {
  */
 export default function AssetDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, edit: editParam } = useLocalSearchParams<{
+    id: string;
+    edit?: string;
+  }>();
   const { user, accessToken, activeProperty } = useAuth();
   const [asset, setAsset] = useState<PublicAsset | null>(null);
   const [documents, setDocuments] = useState<PublicDocument[]>([]);
@@ -61,7 +65,7 @@ export default function AssetDetailScreen() {
   const [recallAlerts, setRecallAlerts] = useState<PublicAssetRecallAlert[]>(
     [],
   );
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(editParam === "1");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -356,7 +360,7 @@ export default function AssetDetailScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {loading ? (
-          <ActivityIndicator color="#1B3A2F" style={styles.loader} />
+          <ActivityIndicator color={colors.brand} style={styles.loader} />
         ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -388,29 +392,7 @@ export default function AssetDetailScreen() {
               />
             </View>
 
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy}
-              onPress={() =>
-                router.push({
-                  pathname: "/ai/howto",
-                  params: { assetId: id },
-                })
-              }
-              style={({ pressed }) => [
-                styles.secondaryBtn,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.secondaryLabel}>Ask how-to (AI)</Text>
-            </Pressable>
-
             <Text style={styles.sectionHeading}>Safety recalls</Text>
-            <Text style={styles.sectionCopy}>
-              Matched from free public safety lists using manufacturer, model,
-              and serial when available. Acknowledge or dismiss — history stays
-              on this asset.
-            </Text>
             <Pressable
               accessibilityRole="button"
               disabled={busy}
@@ -693,7 +675,7 @@ export default function AssetDetailScreen() {
                   ]}
                 >
                   {busy ? (
-                    <ActivityIndicator color="#F3F6F4" />
+                    <ActivityIndicator color={colors.onBrand} />
                   ) : (
                     <Text style={styles.primaryLabel}>Save document</Text>
                   )}
@@ -743,10 +725,6 @@ export default function AssetDetailScreen() {
               ))}
             </View>
 
-            <Text style={styles.footnote}>
-              Files stay on this home only. No silent sharing.
-            </Text>
-
             <Pressable
               accessibilityRole="button"
               disabled={busy}
@@ -760,9 +738,6 @@ export default function AssetDetailScreen() {
 
         {!loading && asset && editing ? (
           <>
-            <Text style={styles.copy}>
-              Editing on {activeProperty.name}. Changes stay on this home only.
-            </Text>
             <Field label="Name" value={name} onChangeText={setName} />
             <Text style={styles.label}>Category</Text>
             <View style={styles.chips}>
@@ -894,7 +869,7 @@ function Field(props: {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 24,
@@ -909,14 +884,14 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   headerAction: {
     paddingVertical: 8,
@@ -924,7 +899,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   headerActionLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -941,20 +916,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: colors.muted,
   },
   title: {
     marginTop: 8,
     fontSize: 28,
     fontWeight: "700",
-    color: "#14241D",
+    color: colors.ink,
     letterSpacing: -0.4,
   },
   copy: {
     marginTop: 12,
     fontSize: 16,
     lineHeight: 24,
-    color: "#3D5349",
+    color: colors.copy,
   },
   facts: {
     marginTop: 24,
@@ -968,50 +943,50 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.4,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: colors.muted,
   },
   factValue: {
     fontSize: 16,
     lineHeight: 22,
-    color: "#14241D",
+    color: colors.ink,
   },
   sectionHeading: {
     marginTop: 32,
     fontSize: 20,
     fontWeight: "700",
-    color: "#14241D",
+    color: colors.ink,
   },
   sectionCopy: {
     marginTop: 8,
     fontSize: 15,
     lineHeight: 22,
-    color: "#3D5349",
+    color: colors.copy,
   },
   docActions: {
     marginTop: 16,
     gap: 10,
   },
   primaryBtn: {
-    backgroundColor: "#1B3A2F",
+    backgroundColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "600",
   },
   secondaryBtn: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#1B3A2F",
+    borderColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   secondaryLabel: {
-    color: "#1B3A2F",
+    color: colors.brand,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -1028,12 +1003,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 4,
     fontSize: 14,
-    color: "#3D5349",
+    color: colors.copy,
   },
   emptyDocs: {
     marginTop: 16,
     fontSize: 14,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   docList: {
     marginTop: 16,
@@ -1041,8 +1016,8 @@ const styles = StyleSheet.create({
   },
   docRow: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 14,
     flexDirection: "row",
@@ -1056,17 +1031,17 @@ const styles = StyleSheet.create({
   docName: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#14241D",
+    color: colors.ink,
   },
   docMeta: {
     fontSize: 12,
     lineHeight: 17,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   docAction: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#2F5B4A",
+    color: colors.brandMuted,
   },
   recallActions: {
     gap: 10,
@@ -1075,13 +1050,13 @@ const styles = StyleSheet.create({
   docDanger: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#8B2E2E",
+    color: colors.danger,
   },
   footnote: {
     marginTop: 28,
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   dangerBtn: {
     marginTop: 24,
@@ -1089,14 +1064,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dangerLabel: {
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
     fontWeight: "600",
   },
   error: {
     marginTop: 8,
     marginBottom: 8,
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
   },
   field: {
@@ -1106,18 +1081,18 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 13,
     fontWeight: "600",
-    color: "#1B3A2F",
+    color: colors.brand,
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: "#14241D",
+    color: colors.ink,
   },
   inputMultiline: {
     minHeight: 96,
@@ -1130,30 +1105,30 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   chipSelected: {
-    borderColor: "#1B3A2F",
-    backgroundColor: "#1B3A2F",
+    borderColor: colors.brand,
+    backgroundColor: colors.brand,
   },
   chipLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#2F5B4A",
+    color: colors.brandMuted,
   },
   chipLabelSelected: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
   },
   cancelBtn: {
     marginTop: 16,
     paddingVertical: 10,
   },
   cancelLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },

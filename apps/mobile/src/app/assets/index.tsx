@@ -15,10 +15,10 @@ import {
   type PublicAsset,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
 
 /**
- * Asset list for the currently selected home only.
- * Switching homes changes this list — never mixes other properties.
+ * View Assets for the current home. Header + adds; each row opens edit.
  */
 export default function AssetsListScreen() {
   const router = useRouter();
@@ -69,40 +69,28 @@ export default function AssetsListScreen() {
         >
           <Text style={styles.backLabel}>Back</Text>
         </Pressable>
-        <Text style={styles.brand}>Assets</Text>
-        <View style={styles.backSpacer} />
+        <Text style={styles.brand}>View Assets</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add asset"
+          onPress={() => router.push("/assets/new")}
+          style={styles.addBtn}
+        >
+          <Text style={styles.addLabel}>+</Text>
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>
-        <Text style={styles.title}>What&apos;s in this home</Text>
-        <Text style={styles.copy}>
-          Track installs and serials for warranties, maintenance, and recalls.
-          Only visible on this home.
-        </Text>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/assets/new")}
-          style={({ pressed }) => [
-            styles.primaryBtn,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.primaryLabel}>Add asset</Text>
-        </Pressable>
 
         {loading ? (
-          <ActivityIndicator style={styles.loader} color="#1B3A2F" />
+          <ActivityIndicator style={styles.loader} color={colors.brand} />
         ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {!loading && assets.length === 0 ? (
-          <Text style={styles.empty}>
-            No assets yet. Add a furnace, roof, appliance, or kids&apos; gear to
-            start this home&apos;s ledger.
-          </Text>
+          <Text style={styles.empty}>No assets yet.</Text>
         ) : null}
 
         <View style={styles.list}>
@@ -110,11 +98,13 @@ export default function AssetsListScreen() {
             <Pressable
               key={asset.id}
               accessibilityRole="button"
-              onPress={() => router.push(`/assets/${asset.id}`)}
-              style={({ pressed }) => [
-                styles.row,
-                pressed && styles.pressed,
-              ]}
+              onPress={() =>
+                router.push({
+                  pathname: "/assets/[id]",
+                  params: { id: asset.id, edit: "1" },
+                })
+              }
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             >
               <View style={styles.rowText}>
                 <Text style={styles.rowName}>{asset.name}</Text>
@@ -129,14 +119,10 @@ export default function AssetsListScreen() {
                   {asset.location ? ` · ${asset.location}` : ""}
                 </Text>
               </View>
-              <Text style={styles.rowAction}>View</Text>
+              <Text style={styles.rowAction}>Edit</Text>
             </Pressable>
           ))}
         </View>
-
-        <Text style={styles.footnote}>
-          Privacy: signed-in only. Assets stay scoped to {activeProperty.name}.
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -145,7 +131,7 @@ export default function AssetsListScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 24,
@@ -159,18 +145,27 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     minWidth: 56,
   },
-  backSpacer: {
-    minWidth: 56,
-  },
   backLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
+  },
+  addBtn: {
+    minWidth: 56,
+    alignItems: "flex-end",
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  addLabel: {
+    color: colors.brand,
+    fontSize: 28,
+    fontWeight: "600",
+    lineHeight: 32,
   },
   body: {
     paddingHorizontal: 24,
@@ -182,32 +177,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: "#5A6E64",
-  },
-  title: {
-    marginTop: 8,
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#14241D",
-    letterSpacing: -0.4,
-  },
-  copy: {
-    marginTop: 12,
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#3D5349",
-  },
-  primaryBtn: {
-    marginTop: 20,
-    backgroundColor: "#1B3A2F",
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  primaryLabel: {
-    color: "#F3F6F4",
-    fontSize: 16,
-    fontWeight: "600",
+    color: colors.muted,
   },
   pressed: {
     opacity: 0.9,
@@ -217,14 +187,14 @@ const styles = StyleSheet.create({
   },
   error: {
     marginTop: 16,
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
   },
   empty: {
     marginTop: 24,
     fontSize: 15,
     lineHeight: 22,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   list: {
     marginTop: 20,
@@ -232,8 +202,8 @@ const styles = StyleSheet.create({
   },
   row: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 14,
     flexDirection: "row",
@@ -247,22 +217,16 @@ const styles = StyleSheet.create({
   rowName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#14241D",
+    color: colors.ink,
   },
   rowMeta: {
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   rowAction: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#2F5B4A",
-  },
-  footnote: {
-    marginTop: 28,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#5A6E64",
+    color: colors.brandMuted,
   },
 });

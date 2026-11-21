@@ -83,12 +83,6 @@ export default function ContractorFormatScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.copy}>
-          Paste typed notes, a voice transcript, or text from an upload. AI
-          formats a draft packet — you confirm the wording. Submit to a homeowner
-          ledger ships in the next contractor handoff epic; homeowner approval is
-          still required.
-        </Text>
         {statusNote ? <Text style={styles.meta}>{statusNote}</Text> : null}
 
         <Text style={styles.label}>Input kind</Text>
@@ -143,7 +137,6 @@ export default function ContractorFormatScreen() {
         {draft ? (
           <View style={styles.draftBox}>
             <Text style={styles.sectionLabel}>Draft packet · {draft.mode}</Text>
-            <Text style={styles.privacy}>{draft.privacy.note}</Text>
             <Text style={styles.fieldLabel}>Summary</Text>
             <Text style={styles.fieldValue}>{draft.draft.summary}</Text>
             <Text style={styles.fieldLabel}>Work performed</Text>
@@ -189,10 +182,7 @@ export default function ContractorFormatScreen() {
               </Text>
             </Pressable>
             {confirmedLocal ? (
-              <Text style={styles.success}>
-                Confirmed locally. Full submit → homeowner approve lands in EPIC
-                8 — nothing was written to a home ledger.
-              </Text>
+              <Text style={styles.success}>Draft confirmed (local only).</Text>
             ) : null}
           </View>
         ) : null}

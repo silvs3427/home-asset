@@ -74,11 +74,6 @@ export default function AddHomeScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          <Text style={styles.copy}>
-            Only you can see this home. We store the least needed to keep your
-            record organized — no silent sharing.
-          </Text>
-
           <Field label="Home name" value={name} onChangeText={setName} placeholder="e.g. Oak Street" />
           <Field
             label="Street address"

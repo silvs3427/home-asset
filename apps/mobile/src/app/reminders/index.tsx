@@ -12,24 +12,35 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   completeReminder,
+  listNotifications,
   listReminderHistory,
   listReminders,
+  markAllNotificationsRead,
+  markNotificationRead,
+  notificationKindLabel,
   recurrenceLabel,
+  runDueNotificationCheck,
+  runRecallNotificationCheck,
+  type PublicNotification,
   type PublicReminder,
   type PublicReminderCompletion,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
 
 /**
- * Upcoming maintenance for the current home only.
- * Mark done here; due notices also land in the notification center.
+ * One homeowner Notifications surface: upcoming reminders + recent notices.
+ * Delivery (push / in-app) is configured under Settings → Push & in-app.
  */
-export default function RemindersUpcomingScreen() {
+export default function NotificationsScreen() {
   const router = useRouter();
   const { user, accessToken, activeProperty } = useAuth();
   const [reminders, setReminders] = useState<PublicReminder[]>([]);
+  const [notices, setNotices] = useState<PublicNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [history, setHistory] = useState<PublicReminderCompletion[]>([]);
@@ -37,18 +48,22 @@ export default function RemindersUpcomingScreen() {
   const load = useCallback(async () => {
     if (!accessToken || !activeProperty) {
       setReminders([]);
+      setNotices([]);
       setLoading(false);
       return;
     }
     setError(null);
     setLoading(true);
     try {
-      const res = await listReminders(accessToken, activeProperty.id);
-      setReminders(res.reminders);
+      const [remRes, noteRes] = await Promise.all([
+        listReminders(accessToken, activeProperty.id),
+        listNotifications(accessToken),
+      ]);
+      setReminders(remRes.reminders);
+      setNotices(noteRes.notifications);
+      setUnreadCount(noteRes.unreadCount);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not load reminders.",
-      );
+      setError(err instanceof Error ? err.message : "Could not load alerts.");
     } finally {
       setLoading(false);
     }
@@ -126,6 +141,55 @@ export default function RemindersUpcomingScreen() {
     ]);
   }
 
+  async function onRefreshNotices() {
+    if (!accessToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await runDueNotificationCheck(accessToken);
+      await runRecallNotificationCheck(accessToken);
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not refresh notices.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onMarkRead(item: PublicNotification) {
+    if (!accessToken || item.readAt) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await markNotificationRead(accessToken, item.id);
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not mark as read.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onMarkAll() {
+    if (!accessToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await markAllNotificationsRead(accessToken);
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not mark all as read.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -136,17 +200,12 @@ export default function RemindersUpcomingScreen() {
         >
           <Text style={styles.backLabel}>Back</Text>
         </Pressable>
-        <Text style={styles.brand}>Reminders</Text>
+        <Text style={styles.brand}>Notifications</Text>
         <View style={styles.backSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>
-        <Text style={styles.title}>Upcoming</Text>
-        <Text style={styles.copy}>
-          Maintenance for this home, soonest first. Push alerts come later —
-          act on due items here for now.
-        </Text>
 
         <Pressable
           accessibilityRole="button"
@@ -160,20 +219,19 @@ export default function RemindersUpcomingScreen() {
         </Pressable>
 
         {loading ? (
-          <ActivityIndicator style={styles.loader} color="#1B3A2F" />
+          <ActivityIndicator style={styles.loader} color={colors.brand} />
         ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
+        <Text style={styles.sectionLabel}>Upcoming</Text>
         {!loading && reminders.length === 0 ? (
-          <Text style={styles.empty}>
-            Nothing upcoming. Add a one-time or repeating reminder on an asset.
-          </Text>
+          <Text style={styles.empty}>No upcoming reminders.</Text>
         ) : null}
 
         <View style={styles.list}>
           {reminders.map((reminder) => {
-            const busy = busyId === reminder.id;
+            const rowBusy = busyId === reminder.id;
             return (
               <View key={reminder.id} style={styles.row}>
                 <View style={styles.rowText}>
@@ -190,7 +248,7 @@ export default function RemindersUpcomingScreen() {
                 <View style={styles.rowActions}>
                   <Pressable
                     accessibilityRole="button"
-                    disabled={busy}
+                    disabled={rowBusy}
                     onPress={() => {
                       void onToggleHistory(reminder.id);
                     }}
@@ -201,15 +259,15 @@ export default function RemindersUpcomingScreen() {
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
-                    disabled={busy}
+                    disabled={rowBusy}
                     onPress={() => confirmComplete(reminder)}
                     style={({ pressed }) => [
                       styles.doneBtn,
                       pressed && styles.pressed,
                     ]}
                   >
-                    {busy ? (
-                      <ActivityIndicator color="#F3F6F4" />
+                    {rowBusy ? (
+                      <ActivityIndicator color={colors.onBrand} />
                     ) : (
                       <Text style={styles.doneLabel}>Done</Text>
                     )}
@@ -235,10 +293,58 @@ export default function RemindersUpcomingScreen() {
           })}
         </View>
 
-        <Text style={styles.footnote}>
-          Reminders stay on this home only. No silent sharing. Phone push is not
-          enabled yet.
-        </Text>
+        <View style={styles.noticesHeader}>
+          <Text style={styles.sectionLabel}>Recent notices</Text>
+          <View style={styles.noticeActions}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => {
+                void onRefreshNotices();
+              }}
+            >
+              <Text style={styles.linkAction}>Refresh</Text>
+            </Pressable>
+            {unreadCount > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  void onMarkAll();
+                }}
+              >
+                <Text style={styles.linkAction}>Mark all read</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+
+        {!loading && notices.length === 0 ? (
+          <Text style={styles.empty}>No notices yet.</Text>
+        ) : null}
+
+        <View style={styles.list}>
+          {notices.map((item) => {
+            const unread = !item.readAt;
+            return (
+              <Pressable
+                key={item.id}
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  void onMarkRead(item);
+                }}
+                style={[styles.row, unread && styles.rowUnread]}
+              >
+                <Text style={styles.due}>{notificationKindLabel(item.kind)}</Text>
+                <Text style={styles.rowName}>{item.title}</Text>
+                {item.body ? (
+                  <Text style={styles.rowMeta}>{item.body}</Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -247,7 +353,7 @@ export default function RemindersUpcomingScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 24,
@@ -265,50 +371,36 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   body: {
     paddingHorizontal: 24,
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: 88,
   },
   eyebrow: {
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: "#5A6E64",
-  },
-  title: {
-    marginTop: 8,
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#14241D",
-    letterSpacing: -0.4,
-  },
-  copy: {
-    marginTop: 12,
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#3D5349",
-    maxWidth: 420,
+    color: colors.muted,
   },
   primaryBtn: {
-    marginTop: 24,
-    backgroundColor: "#1B3A2F",
+    marginTop: 16,
+    backgroundColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -320,26 +412,52 @@ const styles = StyleSheet.create({
   },
   error: {
     marginTop: 16,
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
   },
-  empty: {
+  sectionLabel: {
     marginTop: 28,
+    marginBottom: 10,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    color: colors.muted,
+  },
+  noticesHeader: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  noticeActions: {
+    flexDirection: "row",
+    gap: 14,
+    paddingBottom: 8,
+  },
+  linkAction: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.brandMuted,
+  },
+  empty: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   list: {
-    marginTop: 24,
     gap: 12,
   },
   row: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 14,
-    gap: 12,
+    gap: 8,
+  },
+  rowUnread: {
+    borderColor: colors.brand,
   },
   rowText: {
     gap: 4,
@@ -347,17 +465,17 @@ const styles = StyleSheet.create({
   due: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   rowName: {
     fontSize: 17,
     fontWeight: "600",
-    color: "#14241D",
+    color: colors.ink,
   },
   rowMeta: {
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   rowActions: {
     flexDirection: "row",
@@ -368,10 +486,10 @@ const styles = StyleSheet.create({
   historyAction: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#2F5B4A",
+    color: colors.brandMuted,
   },
   doneBtn: {
-    backgroundColor: "#1B3A2F",
+    backgroundColor: colors.brand,
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -379,29 +497,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   doneLabel: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
     fontSize: 14,
     fontWeight: "600",
   },
   historyBox: {
     borderTopWidth: 1,
-    borderTopColor: "#E2EAE5",
+    borderTopColor: colors.borderSoft,
     paddingTop: 10,
     gap: 6,
   },
   historyEmpty: {
     fontSize: 13,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   historyLine: {
     fontSize: 13,
     lineHeight: 18,
-    color: "#3D5349",
-  },
-  footnote: {
-    marginTop: 28,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#5A6E64",
+    color: colors.copy,
   },
 });

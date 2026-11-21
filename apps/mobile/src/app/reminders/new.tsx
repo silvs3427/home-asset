@@ -178,11 +178,7 @@ export default function NewReminderScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>
-        <Text style={styles.title}>Maintenance task</Text>
-        <Text style={styles.copy}>
-          Tie it to one asset on this home. Optional starters below are
-          suggestions only — you confirm before saving.
-        </Text>
+        <Text style={styles.title}>Add reminder</Text>
 
         {loading ? (
           <ActivityIndicator color="#1B3A2F" style={styles.loader} />
@@ -191,9 +187,7 @@ export default function NewReminderScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {!loading && assets.length === 0 ? (
-          <Text style={styles.empty}>
-            No assets yet. Add an asset first, then come back to set a reminder.
-          </Text>
+          <Text style={styles.empty}>Add an asset first.</Text>
         ) : null}
 
         {!loading && assets.length > 0 ? (

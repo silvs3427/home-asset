@@ -96,16 +96,8 @@ export default function PermitSuggestionsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.copy}>
-          HomeAsset looks for public open/closed permit-style hints for this
-          address and suggests assets or jobs you might want on the ledger.
-        </Text>
         <Text style={styles.address}>
           {formatPropertyAddress(activeProperty)}
-        </Text>
-        <Text style={styles.privacy}>
-          Suggestions only. You approve each one. Hints stay scoped to this home
-          — never mixed across homes, never silent auto-add.
         </Text>
 
         <Pressable
@@ -135,13 +127,10 @@ export default function PermitSuggestionsScreen() {
             <Text style={styles.sectionLabel}>
               Suggestions · {draft.mode} source · not saved yet
             </Text>
-            <Text style={styles.privacy}>{draft.sourceNote}</Text>
-            <Text style={styles.privacy}>{draft.privacy.note}</Text>
 
             {draft.permits.length === 0 ? (
               <Text style={styles.fieldValue}>
-                No permit hints for this address yet. Live public data can fill
-                this later — the approve step will stay the same.
+                No permit hints for this address yet.
               </Text>
             ) : (
               draft.permits.map((permit) => {

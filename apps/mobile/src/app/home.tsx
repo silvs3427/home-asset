@@ -11,23 +11,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatPropertyAddress } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
 
 /**
- * Homeowner home shell: current home, thin switcher, and path to Add home.
- * Ledger content (assets/docs) arrives in later epics — always property-scoped.
+ * Homeowner home: Ask HomeAsset → View Assets → Notifications → Settings.
+ * No FAB / Documents / competing CTAs on this screen.
  */
 export default function HomeShellScreen() {
   const router = useRouter();
-  const {
-    user,
-    properties,
-    activeProperty,
-    signOut,
-    selectHome,
-    setFace,
-  } = useAuth();
+  const { user, properties, activeProperty, selectHome } = useAuth();
   const [switchingId, setSwitchingId] = useState<string | null>(null);
-  const [faceBusy, setFaceBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!user) {
@@ -49,31 +42,10 @@ export default function HomeShellScreen() {
     }
   }
 
-  async function onToggleFace() {
-    setError(null);
-    setFaceBusy(true);
-    try {
-      await setFace(isHomeownerFace ? "contractor" : "homeowner");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not switch face.");
-    } finally {
-      setFaceBusy(false);
-    }
-  }
-
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.brand}>HomeAsset</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            void signOut();
-          }}
-          style={styles.signOut}
-        >
-          <Text style={styles.signOutLabel}>Sign out</Text>
-        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -86,45 +58,29 @@ export default function HomeShellScreen() {
             {activeProperty ? (
               <>
                 <Text style={styles.title}>{activeProperty.name}</Text>
-                <Text style={styles.copy}>
+                <Text style={styles.address}>
                   {formatPropertyAddress(activeProperty)}
                 </Text>
-                <Text style={styles.ledgerNote}>
-                  Assets, warranties, documents, reminders, and notices for this
-                  home stay here — always scoped to this home only.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.title}>Add your first home</Text>
-                <Text style={styles.copy}>
-                  HomeAsset keeps each home&apos;s record separate. Start with one
-                  address; you can add another later.
-                </Text>
-              </>
-            )}
 
-            {activeProperty ? (
-              <>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push("/assets")}
+                  onPress={() => router.push("/ai/help")}
                   style={({ pressed }) => [
                     styles.primaryBtn,
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.primaryLabel}>View assets</Text>
+                  <Text style={styles.primaryLabel}>Ask HomeAsset</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push("/documents")}
+                  onPress={() => router.push("/assets")}
                   style={({ pressed }) => [
                     styles.secondaryBtn,
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.secondaryLabel}>Home documents</Text>
+                  <Text style={styles.secondaryLabel}>View Assets</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -134,81 +90,44 @@ export default function HomeShellScreen() {
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.secondaryLabel}>Upcoming reminders</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/notifications")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
                   <Text style={styles.secondaryLabel}>Notifications</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push("/ai/scan")}
+                  onPress={() => router.push("/settings")}
                   style={({ pressed }) => [
                     styles.secondaryBtn,
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.secondaryLabel}>Scan product (AI)</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/ai/howto")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>Ask how-to (AI)</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/ai/email-intake")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>
-                    Paste contractor email
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/ai/permit-suggestions")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>
-                    Suggest from permits
-                  </Text>
+                  <Text style={styles.secondaryLabel}>Settings</Text>
                 </Pressable>
               </>
-            ) : null}
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push("/add-home")}
-              style={({ pressed }) => [
-                activeProperty ? styles.secondaryBtn : styles.primaryBtn,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text
-                style={
-                  activeProperty ? styles.secondaryLabel : styles.primaryLabel
-                }
-              >
-                {activeProperty ? "Add another home" : "Add home"}
-              </Text>
-            </Pressable>
+            ) : (
+              <>
+                <Text style={styles.title}>Add your first home</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/add-home")}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.primaryLabel}>Add home</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/settings")}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>Settings</Text>
+                </Pressable>
+              </>
+            )}
 
             {properties.length > 1 ? (
               <View style={styles.switcher}>
@@ -236,7 +155,7 @@ export default function HomeShellScreen() {
                         </Text>
                       </View>
                       {busy ? (
-                        <ActivityIndicator color="#1B3A2F" />
+                        <ActivityIndicator color={colors.brand} />
                       ) : selected ? (
                         <Text style={styles.homeRowBadge}>Current</Text>
                       ) : (
@@ -250,56 +169,31 @@ export default function HomeShellScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.title}>Contractor face</Text>
-            <Text style={styles.copy}>
-              Format typed, voice, or upload notes with AI before you confirm.
-              Full submit into a homeowner ledger (with their approval) comes in
-              the contractor handoff epic. Homes stay on the homeowner face —
-              switch back anytime on this same login.
-            </Text>
+            <Text style={styles.title}>Contractor</Text>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/ai/contractor-format")}
+              onPress={() => router.push("/ai/help")}
               style={({ pressed }) => [
                 styles.primaryBtn,
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.primaryLabel}>Format notes (AI)</Text>
+              <Text style={styles.primaryLabel}>Ask HomeAsset</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/settings")}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Settings</Text>
             </Pressable>
           </>
         )}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <View style={styles.meta}>
-          <Text style={styles.metaLabel}>Signed in as</Text>
-          <Text style={styles.metaValue}>{user.email}</Text>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={faceBusy}
-          onPress={() => {
-            void onToggleFace();
-          }}
-          style={styles.faceSwitch}
-        >
-          {faceBusy ? (
-            <ActivityIndicator color="#2F5B4A" />
-          ) : (
-            <Text style={styles.faceSwitchLabel}>
-              {isHomeownerFace
-                ? "Switch to contractor face"
-                : "Switch to homeowner face"}
-            </Text>
-          )}
-        </Pressable>
-
-        <Text style={styles.footnote}>
-          Privacy: signed-in only. Each home&apos;s data stays scoped to that home.
-          No silent sharing. You decide what becomes official.
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -308,85 +202,66 @@ export default function HomeShellScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
   brand: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#1B3A2F",
-  },
-  signOut: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  signOutLabel: {
-    color: "#2F5B4A",
-    fontSize: 14,
-    fontWeight: "600",
+    color: colors.brand,
   },
   body: {
     paddingHorizontal: 24,
     paddingTop: 28,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
   eyebrow: {
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: colors.muted,
   },
   title: {
     marginTop: 8,
     fontSize: 28,
     fontWeight: "700",
-    color: "#14241D",
+    color: colors.ink,
     letterSpacing: -0.4,
   },
-  copy: {
-    marginTop: 12,
+  address: {
+    marginTop: 8,
     fontSize: 16,
     lineHeight: 24,
-    color: "#3D5349",
-    maxWidth: 420,
-  },
-  ledgerNote: {
-    marginTop: 16,
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#5A6E64",
+    color: colors.copy,
   },
   primaryBtn: {
     marginTop: 24,
-    backgroundColor: "#1B3A2F",
+    backgroundColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "600",
   },
   secondaryBtn: {
     marginTop: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#1B3A2F",
+    borderColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   secondaryLabel: {
-    color: "#1B3A2F",
+    color: colors.brand,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -402,13 +277,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: colors.muted,
     marginBottom: 4,
   },
   homeRow: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 14,
     flexDirection: "row",
@@ -416,7 +291,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   homeRowSelected: {
-    borderColor: "#1B3A2F",
+    borderColor: colors.brand,
   },
   homeRowText: {
     flex: 1,
@@ -425,56 +300,26 @@ const styles = StyleSheet.create({
   homeRowName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#14241D",
+    color: colors.ink,
   },
   homeRowAddress: {
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   homeRowBadge: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   homeRowAction: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#2F5B4A",
+    color: colors.brandMuted,
   },
   error: {
     marginTop: 16,
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
-  },
-  meta: {
-    marginTop: 28,
-    gap: 4,
-  },
-  metaLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#5A6E64",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  metaValue: {
-    fontSize: 16,
-    color: "#14241D",
-  },
-  faceSwitch: {
-    marginTop: 16,
-    paddingVertical: 10,
-  },
-  faceSwitchLabel: {
-    color: "#2F5B4A",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  footnote: {
-    marginTop: 28,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#5A6E64",
   },
 });

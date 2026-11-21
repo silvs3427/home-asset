@@ -196,11 +196,7 @@ export default function PropertyDocumentsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>
-        <Text style={styles.title}>Home paperwork</Text>
-        <Text style={styles.copy}>
-          Photos and files for this home (not tied to one asset). Use the camera
-          for quick capture. Asset manuals live on each asset.
-        </Text>
+        <Text style={styles.title}>Documents</Text>
 
         <View style={styles.actions}>
           <Pressable
@@ -374,10 +370,6 @@ export default function PropertyDocumentsScreen() {
           ))}
         </View>
 
-        <Text style={styles.footnote}>
-          Privacy: signed-in only. Files stay on {activeProperty.name}. Export
-          never silently shares.
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
