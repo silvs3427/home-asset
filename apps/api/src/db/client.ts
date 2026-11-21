@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS assets (
   purchase_date TEXT,
   install_date TEXT,
   installer_vendor TEXT,
+  installer_contractor_id TEXT,
   last_serviced_at TEXT,
   confirmed_by_contractor_name TEXT,
   location TEXT,
@@ -269,6 +270,7 @@ function migrateSchema(database: DatabaseSync): void {
   ensureColumn(database, "assets", "warranty_term", "TEXT");
   ensureColumn(database, "assets", "last_serviced_at", "TEXT");
   ensureColumn(database, "assets", "confirmed_by_contractor_name", "TEXT");
+  ensureColumn(database, "assets", "installer_contractor_id", "TEXT");
 }
 
 /**

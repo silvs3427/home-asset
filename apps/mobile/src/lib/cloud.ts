@@ -184,6 +184,7 @@ type AssetRow = {
   purchase_date: string | null;
   install_date: string | null;
   installer_vendor: string | null;
+  installer_contractor_id: string | null;
   last_serviced_at: string | null;
   confirmed_by_contractor_name: string | null;
   location: string | null;
@@ -271,6 +272,7 @@ function assetFromRow(row: AssetRow): PublicAsset {
     purchaseDate: row.purchase_date,
     installDate: row.install_date,
     installerVendor: row.installer_vendor,
+    installerContractorId: row.installer_contractor_id ?? null,
     lastServicedAt: row.last_serviced_at ?? null,
     confirmedByContractorName: row.confirmed_by_contractor_name ?? null,
     location: row.location,
@@ -771,21 +773,35 @@ export async function cloudCreateAsset(
   input: CreateAssetInput,
 ): Promise<{ asset: PublicAsset }> {
   try {
-    await requireSession();
+    const session = await requireSession();
     const supabase = requireSupabaseClient();
     const now = new Date().toISOString();
+    const assetName = input.name.trim();
+    const linked = await resolveInstallerDirectoryLink(
+      supabase,
+      session.user.id,
+      propertyId,
+      {
+        installerVendor: input.installerVendor,
+        installerContractorId: input.installerContractorId,
+        assetName,
+        installDate: input.installDate,
+        recordWork: true,
+      },
+    );
     const { data, error } = await supabase
       .from("assets")
       .insert({
         property_id: propertyId,
-        name: input.name.trim(),
+        name: assetName,
         category: input.category,
         manufacturer: input.manufacturer?.trim() || null,
         model: input.model?.trim() || null,
         serial: input.serial?.trim() || null,
         purchase_date: input.purchaseDate || null,
         install_date: input.installDate || null,
-        installer_vendor: input.installerVendor?.trim() || null,
+        installer_vendor: linked.installerVendor,
+        installer_contractor_id: linked.installerContractorId,
         last_serviced_at: input.lastServicedAt || null,
         confirmed_by_contractor_name:
           input.confirmedByContractorName?.trim() || null,
@@ -823,7 +839,7 @@ export async function cloudUpdateAsset(
   input: UpdateAssetInput,
 ): Promise<{ asset: PublicAsset }> {
   try {
-    await requireSession();
+    const session = await requireSession();
     const supabase = requireSupabaseClient();
     const patch: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -838,8 +854,26 @@ export async function cloudUpdateAsset(
       patch.purchase_date = input.purchaseDate || null;
     if (input.installDate !== undefined)
       patch.install_date = input.installDate || null;
-    if (input.installerVendor !== undefined)
-      patch.installer_vendor = input.installerVendor?.trim() || null;
+    if (
+      input.installerVendor !== undefined ||
+      input.installerContractorId !== undefined
+    ) {
+      const linked = await resolveInstallerDirectoryLink(
+        supabase,
+        session.user.id,
+        propertyId,
+        {
+          installerVendor: input.installerVendor,
+          installerContractorId: input.installerContractorId,
+          assetName:
+            typeof input.name === "string" ? input.name.trim() : undefined,
+          installDate: input.installDate,
+          recordWork: true,
+        },
+      );
+      patch.installer_vendor = linked.installerVendor;
+      patch.installer_contractor_id = linked.installerContractorId;
+    }
     if (input.lastServicedAt !== undefined)
       patch.last_serviced_at = input.lastServicedAt || null;
     if (input.confirmedByContractorName !== undefined)
@@ -2652,6 +2686,28 @@ export async function cloudApproveContractorSubmission(
       );
     }
 
+    // Directory upsert only after homeowner approve tap (privacy: no silent add).
+    // Run before asset creates so Installer / vendor links to Past contractors.
+    let directoryContractorId: string | null = null;
+    try {
+      const upserted = await upsertDirectoryFromApprovedSubmission(
+        supabase,
+        session.user.id,
+        propertyId,
+        submission,
+      );
+      directoryContractorId = upserted.contractorId;
+    } catch (dirErr) {
+      console.warn(
+        JSON.stringify({
+          msg: "home_contractor_directory_upsert_failed",
+          propertyId,
+          submissionId,
+          error: dirErr instanceof Error ? dirErr.message : String(dirErr),
+        }),
+      );
+    }
+
     const assets: PublicAsset[] = [];
     for (const index of [...new Set(input.selectedAssetIndexes)].sort(
       (a, b) => a - b,
@@ -2676,6 +2732,7 @@ export async function cloudApproveContractorSubmission(
         manufacturer: base.manufacturer,
         model: base.model,
         installerVendor: contractorName,
+        installerContractorId: directoryContractorId,
         installDate: workDate,
         lastServicedAt: workDate,
         confirmedByContractorName: contractorName,
@@ -2752,25 +2809,6 @@ export async function cloudApproveContractorSubmission(
       );
     }
 
-    // Directory upsert only after homeowner approve (privacy: no silent add).
-    try {
-      await upsertDirectoryFromApprovedSubmission(
-        supabase,
-        session.user.id,
-        propertyId,
-        submissionFromRow(data as SubmissionRow, []),
-      );
-    } catch (dirErr) {
-      console.warn(
-        JSON.stringify({
-          msg: "home_contractor_directory_upsert_failed",
-          propertyId,
-          submissionId,
-          error: dirErr instanceof Error ? dirErr.message : String(dirErr),
-        }),
-      );
-    }
-
     const media = await loadSubmissionMedia(supabase, submissionId);
     return {
       submission: submissionFromRow(data as SubmissionRow, media),
@@ -2788,12 +2826,174 @@ export async function cloudApproveContractorSubmission(
   }
 }
 
+/**
+ * Resolve Installer / vendor against Past contractors for this home.
+ * Pick by id, or find/create by name so the searchable directory stays in sync
+ * after the homeowner saves (approve-before-official still applies to invites).
+ */
+async function resolveInstallerDirectoryLink(
+  supabase: ReturnType<typeof requireSupabaseClient>,
+  userId: string,
+  propertyId: string,
+  input: {
+    installerVendor?: string | null;
+    installerContractorId?: string | null;
+    assetName?: string;
+    installDate?: string | null;
+    recordWork?: boolean;
+  },
+): Promise<{
+  installerVendor: string | null;
+  installerContractorId: string | null;
+}> {
+  const nameHint = input.installerVendor?.trim() || null;
+  const idHint = input.installerContractorId?.trim() || null;
+  if (!nameHint && !idHint) {
+    return { installerVendor: null, installerContractorId: null };
+  }
+
+  const workDate =
+    input.installDate && /^\d{4}-\d{2}-\d{2}$/.test(input.installDate)
+      ? input.installDate
+      : null;
+
+  let contractor: HomeContractorRow | null = null;
+
+  if (idHint) {
+    const { data, error } = await supabase
+      .from("home_contractors")
+      .select("*")
+      .eq("id", idHint)
+      .eq("property_id", propertyId)
+      .maybeSingle();
+    if (error) {
+      console.warn(
+        JSON.stringify({
+          msg: "installer_contractor_lookup_failed",
+          propertyId,
+          error: error.message,
+        }),
+      );
+    } else if (data) {
+      contractor = data as HomeContractorRow;
+    }
+  }
+
+  if (!contractor && nameHint) {
+    const { data: existingRows, error: listErr } = await supabase
+      .from("home_contractors")
+      .select("*")
+      .eq("property_id", propertyId);
+    if (listErr) {
+      console.warn(
+        JSON.stringify({
+          msg: "installer_directory_list_failed",
+          propertyId,
+          error: listErr.message,
+        }),
+      );
+    } else {
+      const needle = nameHint.toLowerCase();
+      const rows = (existingRows as HomeContractorRow[]) ?? [];
+      contractor =
+        rows.find((row) => {
+          const display = row.display_name.trim().toLowerCase();
+          const company = (row.company_name ?? "").trim().toLowerCase();
+          return display === needle || (company && company === needle);
+        }) ?? null;
+    }
+  }
+
+  const now = new Date().toISOString();
+  if (!contractor && nameHint) {
+    const { data: inserted, error: insErr } = await supabase
+      .from("home_contractors")
+      .insert({
+        property_id: propertyId,
+        display_name: nameHint.slice(0, 120),
+        company_name: null,
+        last_worked_at: workDate,
+        created_by: userId,
+        created_at: now,
+        updated_at: now,
+      })
+      .select("*")
+      .single();
+    if (insErr) {
+      console.warn(
+        JSON.stringify({
+          msg: "installer_directory_create_failed",
+          propertyId,
+          error: insErr.message,
+        }),
+      );
+      // Still store free-text vendor on the asset when directory write fails.
+      return { installerVendor: nameHint, installerContractorId: null };
+    }
+    contractor = inserted as HomeContractorRow;
+  }
+
+  if (!contractor) {
+    return { installerVendor: nameHint, installerContractorId: null };
+  }
+
+  const displayName =
+    nameHint ||
+    contractor.display_name.trim() ||
+    contractor.company_name?.trim() ||
+    null;
+
+  if (workDate && workDate !== contractor.last_worked_at) {
+    await supabase
+      .from("home_contractors")
+      .update({ last_worked_at: workDate, updated_at: now })
+      .eq("id", contractor.id)
+      .eq("property_id", propertyId);
+  }
+
+  if (input.recordWork && input.assetName?.trim()) {
+    const summary = `Installed ${input.assetName.trim()}`.slice(0, 200);
+    try {
+      const { data: prior } = await supabase
+        .from("home_contractor_work")
+        .select("id")
+        .eq("contractor_id", contractor.id)
+        .eq("property_id", propertyId)
+        .eq("summary", summary)
+        .limit(1);
+      if (!prior || prior.length === 0) {
+        await supabase.from("home_contractor_work").insert({
+          contractor_id: contractor.id,
+          property_id: propertyId,
+          summary,
+          work_performed: null,
+          work_date: workDate,
+          created_at: now,
+        });
+      }
+    } catch (workErr) {
+      console.warn(
+        JSON.stringify({
+          msg: "installer_directory_work_failed",
+          propertyId,
+          error: workErr instanceof Error ? workErr.message : String(workErr),
+        }),
+      );
+    }
+  }
+
+  return {
+    installerVendor: displayName,
+    installerContractorId: contractor.id,
+  };
+}
+
 async function upsertDirectoryFromApprovedSubmission(
   supabase: ReturnType<typeof requireSupabaseClient>,
   userId: string,
   propertyId: string,
   submission: PublicContractorSubmission,
-): Promise<void> {
+): Promise<{ contractorId: string }> {
   const displayName = (
     submission.contractorName ||
     submission.draft.contractorName ||
@@ -2881,6 +3081,7 @@ async function upsertDirectoryFromApprovedSubmission(
     created_at: now,
   });
   if (workErr) mapCloudError(workErr, "Could not save contractor work history.");
+  return { contractorId };
 }
 
 export async function cloudListHomeContractors(

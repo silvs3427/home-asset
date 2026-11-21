@@ -20,6 +20,7 @@ type AssetRow = {
   purchase_date: string | null;
   install_date: string | null;
   installer_vendor: string | null;
+  installer_contractor_id: string | null;
   last_serviced_at: string | null;
   confirmed_by_contractor_name: string | null;
   location: string | null;
@@ -40,6 +41,7 @@ export type CreateAssetInput = {
   purchaseDate?: string | null;
   installDate?: string | null;
   installerVendor?: string | null;
+  installerContractorId?: string | null;
   lastServicedAt?: string | null;
   confirmedByContractorName?: string | null;
   location?: string | null;
@@ -69,6 +71,7 @@ function rowToAsset(row: AssetRow): AssetRecord {
     purchaseDate: row.purchase_date,
     installDate: row.install_date,
     installerVendor: row.installer_vendor,
+    installerContractorId: row.installer_contractor_id,
     lastServicedAt: row.last_serviced_at,
     confirmedByContractorName: row.confirmed_by_contractor_name,
     location: row.location,
@@ -82,7 +85,7 @@ function rowToAsset(row: AssetRow): AssetRecord {
 }
 
 const ASSET_SELECT = `SELECT id, property_id, name, category, manufacturer, model, serial,
-       purchase_date, install_date, installer_vendor,
+       purchase_date, install_date, installer_vendor, installer_contractor_id,
        last_serviced_at, confirmed_by_contractor_name,
        location, notes,
        warranty_end_date, warranty_term, provenance,
@@ -153,6 +156,7 @@ export function createAsset(
     purchaseDate: optionalText(input.purchaseDate),
     installDate: optionalText(input.installDate),
     installerVendor: optionalText(input.installerVendor),
+    installerContractorId: optionalText(input.installerContractorId),
     lastServicedAt: optionalText(input.lastServicedAt),
     confirmedByContractorName: optionalText(input.confirmedByContractorName),
     location: optionalText(input.location),
@@ -169,11 +173,11 @@ export function createAsset(
     .prepare(
       `INSERT INTO assets
         (id, property_id, name, category, manufacturer, model, serial,
-         purchase_date, install_date, installer_vendor,
+         purchase_date, install_date, installer_vendor, installer_contractor_id,
          last_serviced_at, confirmed_by_contractor_name,
          location, notes,
          warranty_end_date, warranty_term, provenance, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       asset.id,
@@ -186,6 +190,7 @@ export function createAsset(
       asset.purchaseDate,
       asset.installDate,
       asset.installerVendor,
+      asset.installerContractorId,
       asset.lastServicedAt,
       asset.confirmedByContractorName,
       asset.location,
@@ -240,6 +245,10 @@ export function updateAsset(
       input.installerVendor !== undefined
         ? optionalText(input.installerVendor)
         : existing.installerVendor,
+    installerContractorId:
+      input.installerContractorId !== undefined
+        ? optionalText(input.installerContractorId)
+        : existing.installerContractorId,
     lastServicedAt:
       input.lastServicedAt !== undefined
         ? optionalText(input.lastServicedAt)
@@ -271,6 +280,7 @@ export function updateAsset(
       `UPDATE assets SET
          name = ?, category = ?, manufacturer = ?, model = ?, serial = ?,
          purchase_date = ?, install_date = ?, installer_vendor = ?,
+         installer_contractor_id = ?,
          last_serviced_at = ?, confirmed_by_contractor_name = ?,
          location = ?, notes = ?, warranty_end_date = ?, warranty_term = ?,
          provenance = ?, updated_at = ?
@@ -285,6 +295,7 @@ export function updateAsset(
       updated.purchaseDate,
       updated.installDate,
       updated.installerVendor,
+      updated.installerContractorId,
       updated.lastServicedAt,
       updated.confirmedByContractorName,
       updated.location,

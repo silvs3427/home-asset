@@ -12,6 +12,7 @@ import {
   KeyboardAwareScroll,
   KeyboardAwareTextInput,
 } from "@/components/KeyboardAwareScroll";
+import { InstallerVendorField } from "@/components/InstallerVendorField";
 import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   aiAssetIntake,
@@ -194,6 +195,7 @@ export default function AssetIntakeScreen() {
           purchaseDate: fields.purchaseDate?.trim() || null,
           installDate: fields.installDate?.trim() || null,
           installerVendor: fields.installerVendor?.trim() || null,
+          installerContractorId: fields.installerContractorId ?? null,
           location: fields.location?.trim() || null,
           notes: fields.notes?.trim() || null,
           warrantyEndDate: fields.warrantyEndDate?.trim() || null,
@@ -448,12 +450,28 @@ export default function AssetIntakeScreen() {
               placeholder="YYYY-MM-DD"
               highlight={missingKeys.has("installDate")}
             />
-            <Field
-              label="Installer / vendor"
-              value={fields.installerVendor ?? ""}
-              onChangeText={(v) => patchField("installerVendor", v)}
-              highlight={missingKeys.has("installerVendor")}
-            />
+            {accessToken && activeProperty ? (
+              <InstallerVendorField
+                accessToken={accessToken}
+                propertyId={activeProperty.id}
+                value={{
+                  installerVendor: fields.installerVendor ?? "",
+                  installerContractorId: fields.installerContractorId ?? null,
+                }}
+                onChange={(next) => {
+                  setFields((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          installerVendor: next.installerVendor || null,
+                          installerContractorId: next.installerContractorId,
+                        }
+                      : prev,
+                  );
+                }}
+                highlight={missingKeys.has("installerVendor")}
+              />
+            ) : null}
             <Field
               label="Location"
               value={fields.location ?? ""}
