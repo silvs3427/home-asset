@@ -17,6 +17,7 @@ import {
   type NotificationPreferences,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
 import {
   isPushSoftDisabled,
   pushUnavailableReason,
@@ -145,7 +146,7 @@ export default function NotificationPreferencesScreen() {
 
       <ScrollView contentContainerStyle={styles.body}>
         {loading || !prefs ? (
-          <ActivityIndicator color="#1B3A2F" style={styles.spinner} />
+          <ActivityIndicator color={colors.brand} style={styles.spinner} />
         ) : (
           <>
             <View style={styles.section}>
@@ -269,8 +270,8 @@ function PrefRow(props: {
         value={props.value}
         disabled={props.disabled}
         onValueChange={props.onChange}
-        trackColor={{ false: "#C5D2CB", true: "#2F5B4A" }}
-        thumbColor="#FFFFFF"
+        trackColor={{ false: colors.border, true: colors.brandMuted }}
+        thumbColor={colors.surface}
       />
     </View>
   );
@@ -279,7 +280,7 @@ function PrefRow(props: {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 20,
@@ -295,14 +296,14 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   spacer: {
     minWidth: 56,
@@ -315,7 +316,7 @@ const styles = StyleSheet.create({
   copy: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#3D5349",
+    color: colors.copy,
   },
   spinner: {
     marginTop: 32,
@@ -329,12 +330,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: colors.muted,
   },
   prefRow: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -346,13 +347,13 @@ const styles = StyleSheet.create({
   prefLabel: {
     flex: 1,
     fontSize: 15,
-    color: "#14241D",
+    color: colors.ink,
     fontWeight: "500",
   },
   fieldHint: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   leadRow: {
     flexDirection: "row",
@@ -361,30 +362,30 @@ const styles = StyleSheet.create({
   },
   leadInput: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: "#14241D",
+    color: colors.ink,
   },
   smallBtn: {
-    backgroundColor: "#1B3A2F",
+    backgroundColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 18,
   },
   smallBtnLabel: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
     fontSize: 15,
     fontWeight: "600",
   },
   secondaryBtn: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#1B3A2F",
+    borderColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
@@ -393,7 +394,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   secondaryLabel: {
-    color: "#1B3A2F",
+    color: colors.brand,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -403,16 +404,16 @@ const styles = StyleSheet.create({
   footnote: {
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   status: {
     marginTop: 16,
     fontSize: 14,
-    color: "#2F5B4A",
+    color: colors.brandMuted,
   },
   error: {
     marginTop: 16,
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
   },
 });

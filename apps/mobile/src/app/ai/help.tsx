@@ -2,12 +2,13 @@ import { Redirect, useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
 
 /**
- * Single AI help entry: picture scan or ask how-to.
- * Opened from the persistent FAB — not from Home button clutter.
+ * Ask HomeAsset — single AI entry: picture scan or how-to.
+ * Opened from Home’s top button (not a floating FAB).
  */
-export default function AiHelpScreen() {
+export default function AskHomeAssetScreen() {
   const router = useRouter();
   const { user, activeProperty } = useAuth();
 
@@ -28,7 +29,7 @@ export default function AiHelpScreen() {
         >
           <Text style={styles.backLabel}>Close</Text>
         </Pressable>
-        <Text style={styles.brand}>AI help</Text>
+        <Text style={styles.brand}>Ask HomeAsset</Text>
         <View style={styles.spacer} />
       </View>
 
@@ -68,7 +69,7 @@ export default function AiHelpScreen() {
             </Pressable>
           </>
         ) : (
-          <Text style={styles.empty}>Add a home first to use AI help.</Text>
+          <Text style={styles.empty}>Add a home first to use Ask HomeAsset.</Text>
         )}
       </View>
     </SafeAreaView>
@@ -78,7 +79,7 @@ export default function AiHelpScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 20,
@@ -94,14 +95,14 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   spacer: {
     minWidth: 56,
@@ -113,26 +114,26 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   primaryBtn: {
-    backgroundColor: "#1B3A2F",
+    backgroundColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "600",
   },
   secondaryBtn: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#1B3A2F",
+    borderColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: "center",
   },
   secondaryLabel: {
-    color: "#1B3A2F",
+    color: colors.brand,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -142,6 +143,6 @@ const styles = StyleSheet.create({
   empty: {
     fontSize: 16,
     lineHeight: 24,
-    color: "#3D5349",
+    color: colors.copy,
   },
 });

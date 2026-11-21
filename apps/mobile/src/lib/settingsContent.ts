@@ -6,8 +6,9 @@
  * `.cursorrules` / `AGENTS.md` — keep this in sync with the product.
  *
  * Product UI: keep screens clean — put explanations here, not as in-app
- * commentary on feature screens. AI scan / how-to open from the persistent
- * FAB (`/ai/help`), not Home buttons. Suggest-from-permits is not a primary CTA.
+ * commentary on feature screens. Use `lib/theme.ts` colors everywhere.
+ * Home CTAs: Ask HomeAsset → View Assets → Notifications → Settings.
+ * Suggest-from-permits is not a primary CTA.
  */
 
 export type ContentSection = {
@@ -19,31 +20,35 @@ export type ContentSection = {
 export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   {
     title: "Home",
-    body: "Shows your current address and three next steps: Assets, Documents, and Alerts. Switch homes here when you have more than one. Settings is in the header.",
+    body: "Shows your current address and four actions, top to bottom: Ask HomeAsset, View Assets, Notifications, and Settings. Switch homes here when you have more than one.",
   },
   {
     title: "Homes",
     body: "Add your first home from Home when you have none. Add another from Settings → Add another home. Each address keeps its own record.",
   },
   {
-    title: "Assets and documents",
-    body: "Assets track equipment and installs for this home. Documents hold photos and files; you can export a home packet when you need one.",
+    title: "Ask HomeAsset",
+    body: "The AI feature. From Home, open Ask HomeAsset to Scan a picture (identify a product and manuals; confirm before save) or Ask how-to (answers from manuals and facts on this home; asking never writes the ledger).",
   },
   {
-    title: "Alerts",
-    body: "One place for upcoming reminders and recent notices (due items, safety recalls, and later contractor submissions). Add reminders here. Push and in-app delivery are under Settings → Push & in-app — not a second competing feature on Home.",
+    title: "View Assets",
+    body: "See equipment and installs for this home. Use + to add an asset; tap Edit on a row to change it. Documents and recalls for an asset live on that asset’s record.",
   },
   {
-    title: "AI help",
-    body: "Use the floating AI button on any signed-in screen. Choose Scan a picture (identify a product and manuals; confirm before save) or Ask how-to (answers from manuals and facts on this home; asking never writes the ledger).",
+    title: "Notifications",
+    body: "One place for upcoming reminders and recent notices (due items, safety recalls, and later contractor submissions). Add reminders here. Push and in-app delivery are under Settings → Push & in-app — delivery only, not a second competing home feature.",
+  },
+  {
+    title: "Settings",
+    body: "Add another home, How to use, Privacy, Security, push & in-app delivery prefs, face switch, and sign out.",
   },
   {
     title: "Contractor face",
-    body: "Switch faces in Settings. Format notes from Home or AI help. Submitting into a homeowner ledger with their approval comes later.",
+    body: "Switch faces in Settings. Ask HomeAsset can format notes. Submitting into a homeowner ledger with their approval comes later.",
   },
   {
     title: "Privacy and security",
-    body: "Settings opens How to use, Privacy, and Security. You own the record; approve before anything becomes official. Sign out is in Settings.",
+    body: "You own the record; approve before anything becomes official. Details are under Settings → Privacy and Security.",
   },
 ];
 
@@ -54,7 +59,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Approve before official",
-    body: "AI scans and similar helpers create drafts for you to review. Nothing is auto-added as official without your confirm.",
+    body: "Ask HomeAsset scans and similar helpers create drafts for you to review. Nothing is auto-added as official without your confirm.",
   },
   {
     title: "Signed-in and home-scoped",
@@ -62,7 +67,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Least data shared",
-    body: "We avoid broad sharing by default. Exports and shares happen when you choose them. Alert delivery preferences are under your control; there is no marketing channel in the app.",
+    body: "We avoid broad sharing by default. Exports and shares happen when you choose them. Notification delivery preferences are under your control; there is no marketing channel in the app.",
   },
   {
     title: "AI and your data",

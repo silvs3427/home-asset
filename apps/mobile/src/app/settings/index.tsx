@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
 
 /**
  * Settings: Add home, guide (How to use / Privacy / Security),
@@ -106,7 +107,7 @@ export default function SettingsScreen() {
           ]}
         >
           {faceBusy ? (
-            <ActivityIndicator color="#1B3A2F" />
+            <ActivityIndicator color={colors.brand} />
           ) : (
             <Text style={styles.secondaryLabel}>
               {isHomeownerFace
@@ -152,7 +153,7 @@ function NavRow(props: { label: string; onPress: () => void }) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 20,
@@ -168,14 +169,14 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   spacer: {
     minWidth: 56,
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 24,
     paddingTop: 12,
-    paddingBottom: 88,
+    paddingBottom: 40,
   },
   sectionLabel: {
     marginTop: 24,
@@ -192,12 +193,12 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: colors.muted,
   },
   navRow: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 14,
@@ -209,11 +210,11 @@ const styles = StyleSheet.create({
   navLabel: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#14241D",
+    color: colors.ink,
   },
   navChevron: {
     fontSize: 22,
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontWeight: "300",
   },
   meta: {
@@ -223,23 +224,23 @@ const styles = StyleSheet.create({
   metaLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#5A6E64",
+    color: colors.muted,
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   metaValue: {
     fontSize: 16,
-    color: "#14241D",
+    color: colors.ink,
   },
   metaFace: {
     marginTop: 4,
     fontSize: 14,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   secondaryBtn: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#1B3A2F",
+    borderColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
@@ -248,7 +249,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   secondaryLabel: {
-    color: "#1B3A2F",
+    color: colors.brand,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
   },
   error: {
     marginTop: 16,
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
   },
 });

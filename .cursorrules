@@ -24,8 +24,9 @@ Phone-first home memory for homeowners. Contractors may submit work into the hom
 ## Keep How to use in sync
 
 - When you ship a **user-facing** feature (or move where it lives in the UI), update `apps/mobile/src/lib/settingsContent.ts` (`HOW_TO_USE_SECTIONS`, and Privacy/Security sections if promises change). That copy powers Settings → How to use / Privacy / Security.
-- Prefer a calm Home (current home + primary next steps: Assets, Documents, Alerts). “Add another home” belongs in Settings. AI scan / how-to open from the persistent FAB (`AiHelpFab` → `/ai/help`), not Home buttons.
-- Do **not** put long instructional / privacy commentary on feature screens — How to use owns that. One Alerts surface for reminders + notices; delivery prefs stay under Settings.
+- Home CTAs (top→bottom): **Ask HomeAsset** → **View Assets** → **Notifications** → **Settings**. AI is named Ask HomeAsset (`/ai/help`); no floating FAB when that home button exists.
+- Do **not** put long instructional / privacy commentary on feature screens — How to use owns that. One Notifications surface for reminders + notices; delivery prefs stay under Settings.
+- Colors: use shared tokens in `apps/mobile/src/lib/theme.ts` — no one-off palette drifts.
 - “Suggest from permits” is not a primary CTA (off Home; no new home decided yet).
 
 ## Keep short

@@ -11,10 +11,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatPropertyAddress } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { colors } from "@/lib/theme";
 
 /**
- * Current home + primary next steps. Secondary tools and Add another home
- * live in Settings; AI scan/how-to via the persistent FAB.
+ * Homeowner home: Ask HomeAsset → View Assets → Notifications → Settings.
+ * No FAB / Documents / competing CTAs on this screen.
  */
 export default function HomeShellScreen() {
   const router = useRouter();
@@ -45,13 +46,6 @@ export default function HomeShellScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.brand}>HomeAsset</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/settings")}
-          style={styles.settingsBtn}
-        >
-          <Text style={styles.settingsLabel}>Settings</Text>
-        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -70,23 +64,23 @@ export default function HomeShellScreen() {
 
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push("/assets")}
+                  onPress={() => router.push("/ai/help")}
                   style={({ pressed }) => [
                     styles.primaryBtn,
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.primaryLabel}>Assets</Text>
+                  <Text style={styles.primaryLabel}>Ask HomeAsset</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push("/documents")}
+                  onPress={() => router.push("/assets")}
                   style={({ pressed }) => [
                     styles.secondaryBtn,
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.secondaryLabel}>Documents</Text>
+                  <Text style={styles.secondaryLabel}>View Assets</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -96,7 +90,17 @@ export default function HomeShellScreen() {
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.secondaryLabel}>Alerts</Text>
+                  <Text style={styles.secondaryLabel}>Notifications</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/settings")}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>Settings</Text>
                 </Pressable>
               </>
             ) : (
@@ -111,6 +115,16 @@ export default function HomeShellScreen() {
                   ]}
                 >
                   <Text style={styles.primaryLabel}>Add home</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/settings")}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>Settings</Text>
                 </Pressable>
               </>
             )}
@@ -141,7 +155,7 @@ export default function HomeShellScreen() {
                         </Text>
                       </View>
                       {busy ? (
-                        <ActivityIndicator color="#1B3A2F" />
+                        <ActivityIndicator color={colors.brand} />
                       ) : selected ? (
                         <Text style={styles.homeRowBadge}>Current</Text>
                       ) : (
@@ -158,13 +172,23 @@ export default function HomeShellScreen() {
             <Text style={styles.title}>Contractor</Text>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/ai/contractor-format")}
+              onPress={() => router.push("/ai/help")}
               style={({ pressed }) => [
                 styles.primaryBtn,
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.primaryLabel}>Format notes</Text>
+              <Text style={styles.primaryLabel}>Ask HomeAsset</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/settings")}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Settings</Text>
             </Pressable>
           </>
         )}
@@ -178,78 +202,66 @@ export default function HomeShellScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
   },
   brand: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#1B3A2F",
-  },
-  settingsBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  settingsLabel: {
-    color: "#2F5B4A",
-    fontSize: 14,
-    fontWeight: "600",
+    color: colors.brand,
   },
   body: {
     paddingHorizontal: 24,
     paddingTop: 28,
-    paddingBottom: 88,
+    paddingBottom: 40,
   },
   eyebrow: {
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: colors.muted,
   },
   title: {
     marginTop: 8,
     fontSize: 28,
     fontWeight: "700",
-    color: "#14241D",
+    color: colors.ink,
     letterSpacing: -0.4,
   },
   address: {
     marginTop: 8,
     fontSize: 16,
     lineHeight: 24,
-    color: "#3D5349",
+    color: colors.copy,
   },
   primaryBtn: {
     marginTop: 24,
-    backgroundColor: "#1B3A2F",
+    backgroundColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "600",
   },
   secondaryBtn: {
     marginTop: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#1B3A2F",
+    borderColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   secondaryLabel: {
-    color: "#1B3A2F",
+    color: colors.brand,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -265,13 +277,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: colors.muted,
     marginBottom: 4,
   },
   homeRow: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 14,
     flexDirection: "row",
@@ -279,7 +291,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   homeRowSelected: {
-    borderColor: "#1B3A2F",
+    borderColor: colors.brand,
   },
   homeRowText: {
     flex: 1,
@@ -288,26 +300,26 @@ const styles = StyleSheet.create({
   homeRowName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#14241D",
+    color: colors.ink,
   },
   homeRowAddress: {
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: colors.muted,
   },
   homeRowBadge: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   homeRowAction: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#2F5B4A",
+    color: colors.brandMuted,
   },
   error: {
     marginTop: 16,
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
   },
 });

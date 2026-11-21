@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth";
 import { PRIVACY_SECTIONS } from "@/lib/settingsContent";
+import { colors } from "@/lib/theme";
 
 /**
  * Privacy promises in plain language for homeowners.
@@ -53,7 +54,7 @@ export default function PrivacyScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   header: {
     paddingHorizontal: 20,
@@ -69,14 +70,14 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   spacer: {
     minWidth: 56,
@@ -84,7 +85,7 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 24,
     paddingTop: 12,
-    paddingBottom: 88,
+    paddingBottom: 40,
   },
   section: {
     marginTop: 20,
@@ -92,20 +93,20 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#14241D",
+    color: colors.ink,
     marginBottom: 6,
   },
   sectionBody: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#3D5349",
+    color: colors.copy,
   },
   linkBtn: {
     marginTop: 24,
     paddingVertical: 8,
   },
   linkLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "600",
   },
