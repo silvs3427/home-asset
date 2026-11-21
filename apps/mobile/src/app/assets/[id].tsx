@@ -857,7 +857,7 @@ function Field(props: {
         value={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
-        placeholderTextColor="#7A8A82"
+        placeholderTextColor="#8A9BB0"
         autoCapitalize={props.autoCapitalize}
         multiline={props.multiline}
         textAlignVertical={props.multiline ? "top" : "center"}
@@ -980,13 +980,13 @@ const styles = StyleSheet.create({
   secondaryBtn: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.brand,
+    borderColor: colors.accent,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   secondaryLabel: {
-    color: colors.brand,
+    color: colors.accent,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -1112,8 +1112,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipSelected: {
-    borderColor: colors.brand,
-    backgroundColor: colors.brand,
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
   },
   chipLabel: {
     fontSize: 13,

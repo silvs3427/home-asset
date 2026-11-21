@@ -269,8 +269,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   chipSelected: {
-    borderColor: colors.brand,
-    backgroundColor: colors.brand,
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
   },
   chipLabel: {
     fontSize: 14,

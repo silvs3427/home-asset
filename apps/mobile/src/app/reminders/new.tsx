@@ -181,7 +181,7 @@ export default function NewReminderScreen() {
         <Text style={styles.title}>Add reminder</Text>
 
         {loading ? (
-          <ActivityIndicator color="#1B3A2F" style={styles.loader} />
+          <ActivityIndicator color="#002D72" style={styles.loader} />
         ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -288,7 +288,7 @@ export default function NewReminderScreen() {
               ]}
             >
               {busy ? (
-                <ActivityIndicator color="#F3F6F4" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.primaryLabel}>Save reminder</Text>
               )}
@@ -314,7 +314,7 @@ function Field(props: {
         style={[styles.input, props.multiline && styles.inputMultiline]}
         value={props.value}
         onChangeText={props.onChangeText}
-        placeholderTextColor="#7A8A82"
+        placeholderTextColor="#8A9BB0"
         autoCapitalize={props.autoCapitalize}
         multiline={props.multiline}
         textAlignVertical={props.multiline ? "top" : "center"}
@@ -326,7 +326,7 @@ function Field(props: {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: "#F2F5FA",
   },
   header: {
     paddingHorizontal: 24,
@@ -341,14 +341,14 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: "#1E4D96",
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: "#002D72",
   },
   headerAction: {
     paddingVertical: 8,
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   headerActionLabel: {
-    color: "#1B3A2F",
+    color: "#002D72",
     fontSize: 14,
     fontWeight: "700",
   },
@@ -370,20 +370,20 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   title: {
     marginTop: 8,
     fontSize: 28,
     fontWeight: "700",
-    color: "#14241D",
+    color: "#0B1B33",
     letterSpacing: -0.4,
   },
   copy: {
     marginTop: 12,
     fontSize: 16,
     lineHeight: 24,
-    color: "#3D5349",
+    color: "#3D4F66",
     maxWidth: 420,
   },
   loader: {
@@ -391,14 +391,14 @@ const styles = StyleSheet.create({
   },
   error: {
     marginTop: 16,
-    color: "#8B2E2E",
+    color: "#B42318",
     fontSize: 14,
   },
   empty: {
     marginTop: 28,
     fontSize: 15,
     lineHeight: 22,
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   field: {
     marginTop: 16,
@@ -410,17 +410,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.4,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   input: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: "#C5D0DE",
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: "#14241D",
+    color: "#0B1B33",
   },
   inputMultiline: {
     minHeight: 96,
@@ -432,47 +432,47 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: "#C5D0DE",
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
   chipSelected: {
-    borderColor: "#1B3A2F",
-    backgroundColor: "#1B3A2F",
+    borderColor: "#002D72",
+    backgroundColor: "#002D72",
   },
   chipLabel: {
     fontSize: 14,
-    color: "#14241D",
+    color: "#0B1B33",
     fontWeight: "500",
   },
   chipLabelSelected: {
-    color: "#F3F6F4",
+    color: "#FFFFFF",
   },
   templateChip: {
     borderWidth: 1,
-    borderColor: "#A8BDB2",
+    borderColor: "#C5D0DE",
     borderStyle: "dashed",
-    backgroundColor: "#EEF3F0",
+    backgroundColor: "#E6EBF3",
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
   templateLabel: {
     fontSize: 13,
-    color: "#2F5B4A",
+    color: "#1E4D96",
     fontWeight: "600",
   },
   primaryBtn: {
     marginTop: 28,
-    backgroundColor: "#1B3A2F",
+    backgroundColor: "#002D72",
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
   },

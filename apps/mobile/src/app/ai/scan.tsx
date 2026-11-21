@@ -118,7 +118,7 @@ export default function AiScanScreen() {
           value={hint}
           onChangeText={setHint}
           placeholder="e.g. Generac GP6500 generator"
-          placeholderTextColor="#8AA094"
+          placeholderTextColor="#8A9BB0"
           style={styles.input}
           autoCapitalize="words"
         />
@@ -165,7 +165,7 @@ export default function AiScanScreen() {
         </Pressable>
 
         {busy ? (
-          <ActivityIndicator style={{ marginTop: 20 }} color="#1B3A2F" />
+          <ActivityIndicator style={{ marginTop: 20 }} color="#002D72" />
         ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {savedMsg ? <Text style={styles.success}>{savedMsg}</Text> : null}
@@ -240,7 +240,7 @@ export default function AiScanScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F3F6F4" },
+  safe: { flex: 1, backgroundColor: "#F2F5FA" },
   header: {
     paddingHorizontal: 24,
     paddingTop: 12,
@@ -249,16 +249,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  back: { color: "#2F5B4A", fontSize: 14, fontWeight: "600", width: 56 },
-  brand: { fontSize: 18, fontWeight: "700", color: "#1B3A2F" },
+  back: { color: "#1E4D96", fontSize: 14, fontWeight: "600", width: 56 },
+  brand: { fontSize: 18, fontWeight: "700", color: "#002D72" },
   headerSpacer: { width: 56 },
   body: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
-  copy: { fontSize: 16, lineHeight: 24, color: "#3D5349", marginBottom: 16 },
+  copy: { fontSize: 16, lineHeight: 24, color: "#3D4F66", marginBottom: 16 },
   label: {
     marginTop: 12,
     fontSize: 12,
     fontWeight: "700",
-    color: "#5A6E64",
+    color: "#5C6E84",
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
@@ -266,36 +266,36 @@ const styles = StyleSheet.create({
     marginTop: 8,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: "#C5D0DE",
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: "#14241D",
+    color: "#0B1B33",
   },
-  meta: { marginTop: 8, fontSize: 13, color: "#5A6E64" },
+  meta: { marginTop: 8, fontSize: 13, color: "#5C6E84" },
   primaryBtn: {
     marginTop: 16,
-    backgroundColor: "#1B3A2F",
+    backgroundColor: "#002D72",
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
-  primaryLabel: { color: "#F3F6F4", fontSize: 16, fontWeight: "600" },
+  primaryLabel: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
   secondaryBtn: {
     marginTop: 10,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#1B3A2F",
+    borderColor: "#FF5910",
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
-  secondaryLabel: { color: "#1B3A2F", fontSize: 16, fontWeight: "600" },
+  secondaryLabel: { color: "#FF5910", fontSize: 16, fontWeight: "600" },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.9 },
-  error: { marginTop: 14, color: "#8B2E2E", fontSize: 14 },
-  success: { marginTop: 14, color: "#1B3A2F", fontSize: 14, fontWeight: "600" },
+  error: { marginTop: 14, color: "#B42318", fontSize: 14 },
+  success: { marginTop: 14, color: "#002D72", fontSize: 14, fontWeight: "600" },
   draftBox: { marginTop: 28 },
   sectionLabel: {
     marginTop: 18,
@@ -303,44 +303,44 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   draftTitle: {
     marginTop: 6,
     fontSize: 22,
     fontWeight: "700",
-    color: "#14241D",
+    color: "#0B1B33",
   },
   privacy: {
     marginTop: 10,
     fontSize: 14,
     lineHeight: 20,
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   manualRow: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: "#C5D0DE",
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     padding: 12,
     flexDirection: "row",
     gap: 10,
   },
-  manualRowOn: { borderColor: "#1B3A2F" },
+  manualRowOn: { borderColor: "#002D72" },
   manualCheck: {
     width: 22,
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: "#002D72",
   },
-  manualTitle: { fontSize: 15, fontWeight: "600", color: "#14241D" },
+  manualTitle: { fontSize: 15, fontWeight: "600", color: "#0B1B33" },
   manualPreview: {
     marginTop: 4,
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   linkBtn: { marginTop: 12, paddingVertical: 8, alignItems: "center" },
-  linkLabel: { color: "#2F5B4A", fontSize: 14, fontWeight: "600" },
+  linkLabel: { color: "#1E4D96", fontSize: 14, fontWeight: "600" },
 });

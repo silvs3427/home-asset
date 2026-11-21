@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
   secondaryBtn: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.brand,
+    borderColor: colors.accent,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   secondaryLabel: {
-    color: colors.brand,
+    color: colors.accent,
     fontSize: 16,
     fontWeight: "600",
   },
