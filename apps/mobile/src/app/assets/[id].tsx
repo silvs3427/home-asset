@@ -393,6 +393,11 @@ export default function AssetDetailScreen() {
               />
             </View>
 
+            <Text style={styles.sectionHeading}>Documents</Text>
+            <Text style={styles.sectionCopy}>
+              Manuals, receipts, warranties, and photos for this asset.
+            </Text>
+
             {manualsSuggestPath({
               assetId: asset.id,
               manufacturer: asset.manufacturer,
@@ -409,13 +414,152 @@ export default function AssetDetailScreen() {
                   if (path) router.push(path);
                 }}
                 style={({ pressed }) => [
-                  styles.secondaryBtn,
+                  styles.findManualsBtn,
                   pressed && styles.pressed,
                 ]}
               >
                 <Text style={styles.secondaryLabel}>Find manuals</Text>
               </Pressable>
             ) : null}
+
+            <View style={styles.docActions}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  void beginPick(pickFromCamera);
+                }}
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.primaryLabel}>Take photo</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  void beginPick(pickFromLibrary);
+                }}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.secondaryLabel}>Photo library</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  void beginPick(pickDocumentFile);
+                }}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.secondaryLabel}>Choose file</Text>
+              </Pressable>
+            </View>
+
+            {pending ? (
+              <View style={styles.uploadBox}>
+                <Text style={styles.factLabel}>Ready to save</Text>
+                <Text style={styles.pendingName}>{pending.name}</Text>
+                <Field label="Title" value={docTitle} onChangeText={setDocTitle} />
+                <Text style={styles.label}>Type</Text>
+                <View style={styles.chips}>
+                  {DOCUMENT_TYPES.map((item) => {
+                    const selected = item.value === docType;
+                    return (
+                      <Pressable
+                        key={item.value}
+                        accessibilityRole="button"
+                        onPress={() => setDocType(item.value)}
+                        style={[styles.chip, selected && styles.chipSelected]}
+                      >
+                        <Text
+                          style={[
+                            styles.chipLabel,
+                            selected && styles.chipLabelSelected,
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Field
+                  label="Document date (YYYY-MM-DD)"
+                  value={docDate}
+                  onChangeText={setDocDate}
+                  autoCapitalize="none"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => {
+                    void onUploadDoc();
+                  }}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    pressed && styles.pressed,
+                    busy && styles.disabled,
+                  ]}
+                >
+                  {busy ? (
+                    <ActivityIndicator color={colors.onBrand} />
+                  ) : (
+                    <Text style={styles.primaryLabel}>Save document</Text>
+                  )}
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setPending(null)}
+                  style={styles.cancelBtn}
+                >
+                  <Text style={styles.cancelLabel}>Cancel</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {documents.length === 0 && !pending ? (
+              <Text style={styles.emptyDocs}>No documents on this asset yet.</Text>
+            ) : null}
+
+            <View style={styles.docList}>
+              {documents.map((doc) => (
+                <View key={doc.id} style={styles.docRow}>
+                  <View style={styles.docRowText}>
+                    <Text style={styles.docName}>{doc.title}</Text>
+                    <Text style={styles.docMeta}>
+                      {documentTypeLabel(doc.docType)} ·{" "}
+                      {documentSourceLabel(doc.source)}
+                      {doc.documentDate ? ` · ${doc.documentDate}` : ""}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    onPress={() => {
+                      void onShareDoc(doc);
+                    }}
+                  >
+                    <Text style={styles.docAction}>View</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    onPress={() => onDeleteDoc(doc)}
+                  >
+                    <Text style={styles.docDanger}>Remove</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
 
             <Text style={styles.sectionHeading}>Safety recalls</Text>
             <Pressable
@@ -604,151 +748,6 @@ export default function AssetDetailScreen() {
                 ))}
               </View>
             )}
-
-            <Text style={styles.sectionHeading}>Documents</Text>
-            <Text style={styles.sectionCopy}>
-              Manuals, receipts, warranties, and photos for this asset. Camera
-              is the fastest path on your phone.
-            </Text>
-
-            <View style={styles.docActions}>
-              <Pressable
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={() => {
-                  void beginPick(pickFromCamera);
-                }}
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.primaryLabel}>Take photo</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={() => {
-                  void beginPick(pickFromLibrary);
-                }}
-                style={({ pressed }) => [
-                  styles.secondaryBtn,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.secondaryLabel}>Photo library</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={() => {
-                  void beginPick(pickDocumentFile);
-                }}
-                style={({ pressed }) => [
-                  styles.secondaryBtn,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.secondaryLabel}>Choose file</Text>
-              </Pressable>
-            </View>
-
-            {pending ? (
-              <View style={styles.uploadBox}>
-                <Text style={styles.factLabel}>Ready to save</Text>
-                <Text style={styles.pendingName}>{pending.name}</Text>
-                <Field label="Title" value={docTitle} onChangeText={setDocTitle} />
-                <Text style={styles.label}>Type</Text>
-                <View style={styles.chips}>
-                  {DOCUMENT_TYPES.map((item) => {
-                    const selected = item.value === docType;
-                    return (
-                      <Pressable
-                        key={item.value}
-                        accessibilityRole="button"
-                        onPress={() => setDocType(item.value)}
-                        style={[styles.chip, selected && styles.chipSelected]}
-                      >
-                        <Text
-                          style={[
-                            styles.chipLabel,
-                            selected && styles.chipLabelSelected,
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Field
-                  label="Document date (YYYY-MM-DD)"
-                  value={docDate}
-                  onChangeText={setDocDate}
-                  autoCapitalize="none"
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={busy}
-                  onPress={() => {
-                    void onUploadDoc();
-                  }}
-                  style={({ pressed }) => [
-                    styles.primaryBtn,
-                    pressed && styles.pressed,
-                    busy && styles.disabled,
-                  ]}
-                >
-                  {busy ? (
-                    <ActivityIndicator color={colors.onBrand} />
-                  ) : (
-                    <Text style={styles.primaryLabel}>Save document</Text>
-                  )}
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setPending(null)}
-                  style={styles.cancelBtn}
-                >
-                  <Text style={styles.cancelLabel}>Cancel</Text>
-                </Pressable>
-              </View>
-            ) : null}
-
-            {documents.length === 0 && !pending ? (
-              <Text style={styles.emptyDocs}>No documents on this asset yet.</Text>
-            ) : null}
-
-            <View style={styles.docList}>
-              {documents.map((doc) => (
-                <View key={doc.id} style={styles.docRow}>
-                  <View style={styles.docRowText}>
-                    <Text style={styles.docName}>{doc.title}</Text>
-                    <Text style={styles.docMeta}>
-                      {documentTypeLabel(doc.docType)} ·{" "}
-                      {documentSourceLabel(doc.source)}
-                      {doc.documentDate ? ` · ${doc.documentDate}` : ""}
-                    </Text>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={busy}
-                    onPress={() => {
-                      void onShareDoc(doc);
-                    }}
-                  >
-                    <Text style={styles.docAction}>View</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={busy}
-                    onPress={() => onDeleteDoc(doc)}
-                  >
-                    <Text style={styles.docDanger}>Remove</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
 
             <Pressable
               accessibilityRole="button"
@@ -987,8 +986,17 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: colors.copy,
   },
-  docActions: {
+  findManualsBtn: {
     marginTop: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  docActions: {
+    marginTop: 12,
     gap: 10,
   },
   primaryBtn: {
