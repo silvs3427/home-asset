@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { AssetCategory } from "../types.js";
+import type {
+  AssetIntakeMissingField,
+  AssetIntakeSourceKind,
+  AssetIntakeSuggestedFields,
+} from "./provider.js";
 import type { PublicPermitHint } from "./permits.js";
 
 export type SuggestedManualDraft = {
@@ -51,6 +56,24 @@ export type EmailIntakeDraftRecord = {
   expiresAt: string;
 };
 
+/** Multi-source Ask HomeAsset asset intake draft. */
+export type AssetIntakeDraftRecord = {
+  id: string;
+  userId: string;
+  propertyId: string;
+  mode: "mock" | "live";
+  sourceKind: AssetIntakeSourceKind;
+  intent: "add" | "update";
+  matchedAssetId: string | null;
+  matchedAssetLabel: string | null;
+  identificationLabel: string;
+  confidence: number;
+  suggestedAsset: AssetIntakeSuggestedFields;
+  missingFields: AssetIntakeMissingField[];
+  createdAt: string;
+  expiresAt: string;
+};
+
 /** Public permit hints → suggest assets/jobs draft (D18). */
 export type PermitSuggestDraftRecord = {
   id: string;
@@ -66,6 +89,7 @@ export type PermitSuggestDraftRecord = {
 
 const drafts = new Map<string, ScanDraftRecord>();
 const emailDrafts = new Map<string, EmailIntakeDraftRecord>();
+const assetIntakeDrafts = new Map<string, AssetIntakeDraftRecord>();
 const permitDrafts = new Map<string, PermitSuggestDraftRecord>();
 const TTL_MS = 30 * 60 * 1000;
 
@@ -75,6 +99,9 @@ function pruneExpired(now = Date.now()): void {
   }
   for (const [id, draft] of emailDrafts) {
     if (Date.parse(draft.expiresAt) <= now) emailDrafts.delete(id);
+  }
+  for (const [id, draft] of assetIntakeDrafts) {
+    if (Date.parse(draft.expiresAt) <= now) assetIntakeDrafts.delete(id);
   }
   for (const [id, draft] of permitDrafts) {
     if (Date.parse(draft.expiresAt) <= now) permitDrafts.delete(id);
@@ -233,6 +260,87 @@ export function toPublicEmailIntakeDraft(draft: EmailIntakeDraftRecord) {
   };
 }
 
+export function createAssetIntakeDraft(input: {
+  userId: string;
+  propertyId: string;
+  mode: "mock" | "live";
+  sourceKind: AssetIntakeSourceKind;
+  intent: "add" | "update";
+  matchedAssetId: string | null;
+  matchedAssetLabel: string | null;
+  identificationLabel: string;
+  confidence: number;
+  suggestedAsset: AssetIntakeSuggestedFields;
+  missingFields: AssetIntakeMissingField[];
+}): AssetIntakeDraftRecord {
+  pruneExpired();
+  const now = Date.now();
+  const draft: AssetIntakeDraftRecord = {
+    id: randomUUID(),
+    userId: input.userId,
+    propertyId: input.propertyId,
+    mode: input.mode,
+    sourceKind: input.sourceKind,
+    intent: input.intent,
+    matchedAssetId: input.matchedAssetId,
+    matchedAssetLabel: input.matchedAssetLabel,
+    identificationLabel: input.identificationLabel,
+    confidence: input.confidence,
+    suggestedAsset: input.suggestedAsset,
+    missingFields: input.missingFields,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + TTL_MS).toISOString(),
+  };
+  assetIntakeDrafts.set(draft.id, draft);
+  return draft;
+}
+
+export function getAssetIntakeDraftForUser(
+  draftId: string,
+  userId: string,
+  propertyId: string,
+): AssetIntakeDraftRecord | undefined {
+  pruneExpired();
+  const draft = assetIntakeDrafts.get(draftId);
+  if (!draft) return undefined;
+  if (draft.userId !== userId || draft.propertyId !== propertyId) {
+    return undefined;
+  }
+  return draft;
+}
+
+export function consumeAssetIntakeDraft(
+  draftId: string,
+  userId: string,
+  propertyId: string,
+): AssetIntakeDraftRecord | undefined {
+  const draft = getAssetIntakeDraftForUser(draftId, userId, propertyId);
+  if (!draft) return undefined;
+  assetIntakeDrafts.delete(draftId);
+  return draft;
+}
+
+export function toPublicAssetIntakeDraft(draft: AssetIntakeDraftRecord) {
+  return {
+    draftId: draft.id,
+    mode: draft.mode,
+    sourceKind: draft.sourceKind,
+    intent: draft.intent,
+    matchedAssetId: draft.matchedAssetId,
+    matchedAssetLabel: draft.matchedAssetLabel,
+    identificationLabel: draft.identificationLabel,
+    confidence: draft.confidence,
+    suggestedAsset: draft.suggestedAsset,
+    missingFields: draft.missingFields,
+    expiresAt: draft.expiresAt,
+    privacy: {
+      writes: false as const,
+      confirmRequired: true as const,
+      note: "Draft only. Nothing is official until you choose Add or Update and confirm.",
+    },
+  };
+}
+
 export function createPermitSuggestDraft(input: {
   userId: string;
   propertyId: string;
@@ -313,5 +421,6 @@ export function toPublicPermitSuggestDraft(draft: PermitSuggestDraftRecord) {
 export function __resetAiDraftsForTests(): void {
   drafts.clear();
   emailDrafts.clear();
+  assetIntakeDrafts.clear();
   permitDrafts.clear();
 }

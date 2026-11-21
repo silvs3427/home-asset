@@ -4,18 +4,22 @@ import { createAsset, getAssetForProperty, updateAsset } from "../lib/assets.js"
 import { createDocument } from "../lib/documents.js";
 import { answerHowTo } from "../lib/ai/howto.js";
 import {
+  consumeAssetIntakeDraft,
   consumeEmailIntakeDraft,
   consumePermitSuggestDraft,
   consumeScanDraft,
+  createAssetIntakeDraft,
   createEmailIntakeDraft,
   createPermitSuggestDraft,
   createScanDraft,
+  toPublicAssetIntakeDraft,
   toPublicEmailIntakeDraft,
   toPublicPermitSuggestDraft,
   toPublicScanDraft,
 } from "../lib/ai/drafts.js";
 import { suggestPermitsForAddress } from "../lib/ai/permits.js";
 import {
+  formatAssetIntake,
   formatContractorInput,
   formatEmailIntake,
   identifyProduct,
@@ -29,7 +33,10 @@ import {
   toPublicDocument,
 } from "../lib/types.js";
 import { requireAuth, type AuthVariables } from "../middleware/requireAuth.js";
-import { assertPropertyOwnedByUser } from "../lib/assets.js";
+import {
+  assertPropertyOwnedByUser,
+  listAssetsForProperty,
+} from "../lib/assets.js";
 
 /**
  * Property-scoped AI assist (EPIC 6).
@@ -498,6 +505,188 @@ aiRoutes.post("/confirm-email-intake", async (c) => {
         writes: true,
         confirmedByUser: true,
         note: "Saved only because you approved. Pasted emails never auto-add to your ledger.",
+      },
+    });
+  } catch (err) {
+    return mapAiError(err, c);
+  }
+});
+
+const assetIntakeSchema = z.object({
+  sourceKind: z.enum(["photo", "email", "invoice", "notes"]),
+  text: z.string().trim().max(20000).optional().nullable(),
+  hint: z.string().trim().max(500).optional().nullable(),
+  filename: z.string().trim().max(200).optional().nullable(),
+});
+
+/**
+ * POST /properties/:propertyId/ai/asset-intake
+ * Photo / email / invoice / notes → one-asset Add or Update draft. No ledger writes.
+ */
+aiRoutes.post("/asset-intake", async (c) => {
+  const claims = c.get("claims");
+  const propertyId = c.req.param("propertyId");
+  if (!propertyId) {
+    return c.json({ error: "not_found", message: "Home not found." }, 404);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = assetIntakeSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "invalid_input",
+        message:
+          "Provide sourceKind (photo|email|invoice|notes) plus a photo filename, hint, or pasted text.",
+      },
+      400,
+    );
+  }
+
+  const text = parsed.data.text?.trim() || null;
+  const hint = parsed.data.hint?.trim() || null;
+  const filename = parsed.data.filename?.trim() || null;
+  if (!text && !hint && !filename) {
+    return c.json(
+      {
+        error: "invalid_input",
+        message: "Provide a photo filename, hint, or pasted text.",
+      },
+      400,
+    );
+  }
+
+  try {
+    assertPropertyOwnedByUser(propertyId, claims.sub);
+    const existing = listAssetsForProperty(propertyId, claims.sub).map((a) => ({
+      id: a.id,
+      name: a.name,
+      category: a.category,
+      manufacturer: a.manufacturer,
+      model: a.model,
+      serial: a.serial,
+    }));
+    const formatted = await formatAssetIntake({
+      sourceKind: parsed.data.sourceKind,
+      text,
+      hint,
+      filename,
+      existingAssets: existing,
+    });
+    const draft = createAssetIntakeDraft({
+      userId: claims.sub,
+      propertyId,
+      mode: formatted.mode,
+      sourceKind: parsed.data.sourceKind,
+      intent: formatted.intent,
+      matchedAssetId: formatted.matchedAssetId,
+      matchedAssetLabel: formatted.matchedAssetLabel,
+      identificationLabel: formatted.identificationLabel,
+      confidence: formatted.confidence,
+      suggestedAsset: formatted.suggestedAsset,
+      missingFields: formatted.missingFields,
+    });
+    return c.json({
+      draft: toPublicAssetIntakeDraft(draft),
+      aiMode: resolveAiMode(),
+    });
+  } catch (err) {
+    return mapAiError(err, c);
+  }
+});
+
+const confirmAssetIntakeSchema = z.object({
+  draftId: z.string().uuid(),
+  intent: z.enum(["add", "update"]),
+  matchedAssetId: z.string().uuid().optional().nullable(),
+  assetOverrides: z.object({
+    name: z.string().trim().min(1).max(120),
+    category: z.enum(ASSET_CATEGORIES as [string, ...string[]]),
+    manufacturer: z.string().trim().max(120).optional().nullable(),
+    model: z.string().trim().max(120).optional().nullable(),
+    serial: z.string().trim().max(120).optional().nullable(),
+    purchaseDate: z.string().trim().max(40).optional().nullable(),
+    installDate: z.string().trim().max(40).optional().nullable(),
+    installerVendor: z.string().trim().max(120).optional().nullable(),
+    location: z.string().trim().max(120).optional().nullable(),
+    notes: z.string().trim().max(2000).optional().nullable(),
+    warrantyEndDate: z.string().trim().max(40).optional().nullable(),
+    warrantyTerm: z.string().trim().max(120).optional().nullable(),
+  }),
+});
+
+/**
+ * POST /properties/:propertyId/ai/confirm-asset-intake
+ * Explicit homeowner approval — only place multi-source asset intake writes.
+ */
+aiRoutes.post("/confirm-asset-intake", async (c) => {
+  const claims = c.get("claims");
+  const propertyId = c.req.param("propertyId");
+  if (!propertyId) {
+    return c.json({ error: "not_found", message: "Home not found." }, 404);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = confirmAssetIntakeSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "invalid_input",
+        message:
+          "Confirm with draftId, intent (add|update), and assetOverrides. Nothing is saved without this step.",
+      },
+      400,
+    );
+  }
+
+  try {
+    const draft = consumeAssetIntakeDraft(
+      parsed.data.draftId,
+      claims.sub,
+      propertyId,
+    );
+    if (!draft) throw new Error("DRAFT_NOT_FOUND");
+
+    const overrides = parsed.data.assetOverrides;
+    const payload = {
+      name: overrides.name,
+      category: overrides.category as (typeof ASSET_CATEGORIES)[number],
+      manufacturer: overrides.manufacturer ?? null,
+      model: overrides.model ?? null,
+      serial: overrides.serial ?? null,
+      purchaseDate: overrides.purchaseDate ?? null,
+      installDate: overrides.installDate ?? null,
+      installerVendor: overrides.installerVendor ?? null,
+      location: overrides.location ?? null,
+      notes: overrides.notes ?? null,
+      warrantyEndDate: overrides.warrantyEndDate ?? null,
+      warrantyTerm: overrides.warrantyTerm ?? null,
+      provenance: "homeowner" as const,
+    };
+
+    const matchedId =
+      parsed.data.matchedAssetId ?? draft.matchedAssetId ?? null;
+    if (parsed.data.intent === "update" && matchedId) {
+      const asset = updateAsset(matchedId, propertyId, claims.sub, payload);
+      return c.json({
+        asset: toPublicAsset(asset),
+        intent: "update" as const,
+        privacy: {
+          writes: true,
+          confirmedByUser: true,
+          note: "Updated only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
+        },
+      });
+    }
+
+    const asset = createAsset(propertyId, claims.sub, payload);
+    return c.json({
+      asset: toPublicAsset(asset),
+      intent: "add" as const,
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Saved only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
       },
     });
   } catch (err) {

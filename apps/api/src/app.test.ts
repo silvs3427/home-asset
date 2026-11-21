@@ -1408,6 +1408,120 @@ describe("HomeAsset API — email + permit intake (D18)", () => {
     );
   });
 
+  it("drafts multi-source asset intake without writing, then confirms add", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "asset-intake@example.com");
+    const home = await createHome(app, auth.accessToken, "Asset Intake Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const before = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(
+      ((await before.json()) as { assets: unknown[] }).assets.length,
+      0,
+    );
+
+    const intake = await app.request(
+      `/properties/${home.id}/ai/asset-intake`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          sourceKind: "email",
+          text: [
+            "From: Acme HVAC LLC <jobs@acme.example>",
+            "Subject: Installed ductless AC/Heater — 2024-05-10",
+            "",
+            "Installed your new Carrier Infinity ductless unit today.",
+          ].join("\n"),
+        }),
+      },
+    );
+    assert.equal(intake.status, 200);
+    const intakeBody = (await intake.json()) as {
+      draft: {
+        draftId: string;
+        intent: "add" | "update";
+        privacy: { writes: boolean; confirmRequired: boolean };
+        suggestedAsset: {
+          name: string;
+          category: string;
+          manufacturer: string | null;
+          model: string | null;
+          serial: string | null;
+          purchaseDate: string | null;
+          installDate: string | null;
+          installerVendor: string | null;
+          location: string | null;
+          notes: string | null;
+          warrantyEndDate: string | null;
+          warrantyTerm: string | null;
+        };
+        missingFields: Array<{ key: string }>;
+      };
+      aiMode: string;
+    };
+    assert.equal(intakeBody.aiMode, "mock");
+    assert.equal(intakeBody.draft.privacy.writes, false);
+    assert.equal(intakeBody.draft.privacy.confirmRequired, true);
+    assert.equal(intakeBody.draft.intent, "add");
+    assert.ok(intakeBody.draft.suggestedAsset.name.length > 0);
+    assert.ok(intakeBody.draft.missingFields.length >= 1);
+
+    const mid = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(
+      ((await mid.json()) as { assets: unknown[] }).assets.length,
+      0,
+    );
+
+    const confirm = await app.request(
+      `/properties/${home.id}/ai/confirm-asset-intake`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          draftId: intakeBody.draft.draftId,
+          intent: "add",
+          assetOverrides: {
+            ...intakeBody.draft.suggestedAsset,
+            serial: "SN-TEST-001",
+            location: "Living room",
+          },
+        }),
+      },
+    );
+    assert.equal(confirm.status, 200);
+    const confirmBody = (await confirm.json()) as {
+      asset: { id: string; name: string; serial: string | null };
+      intent: string;
+      privacy: { confirmedByUser: boolean };
+    };
+    assert.equal(confirmBody.privacy.confirmedByUser, true);
+    assert.equal(confirmBody.intent, "add");
+    assert.equal(confirmBody.asset.serial, "SN-TEST-001");
+
+    const reuse = await app.request(
+      `/properties/${home.id}/ai/confirm-asset-intake`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          draftId: intakeBody.draft.draftId,
+          intent: "add",
+          assetOverrides: intakeBody.draft.suggestedAsset,
+        }),
+      },
+    );
+    assert.equal(reuse.status, 404);
+  });
+
   it("drafts email intake without writing, then confirms selected assets", async () => {
     process.env.AI_FORCE_MOCK = "1";
     const app = createApp();

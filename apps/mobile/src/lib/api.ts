@@ -1605,6 +1605,48 @@ export type EmailIntakeDraft = {
   };
 };
 
+export type AssetIntakeSourceKind = "photo" | "email" | "invoice" | "notes";
+
+export type AssetIntakeSuggested = {
+  name: string;
+  category: AssetCategory;
+  manufacturer: string | null;
+  model: string | null;
+  serial: string | null;
+  purchaseDate: string | null;
+  installDate: string | null;
+  installerVendor: string | null;
+  location: string | null;
+  notes: string | null;
+  warrantyEndDate: string | null;
+  warrantyTerm: string | null;
+};
+
+export type AssetIntakeMissingField = {
+  key: keyof AssetIntakeSuggested;
+  label: string;
+  reason: string;
+};
+
+export type AssetIntakeDraft = {
+  draftId: string;
+  mode: "mock" | "live";
+  sourceKind: AssetIntakeSourceKind;
+  intent: "add" | "update";
+  matchedAssetId: string | null;
+  matchedAssetLabel: string | null;
+  identificationLabel: string;
+  confidence: number;
+  suggestedAsset: AssetIntakeSuggested;
+  missingFields: AssetIntakeMissingField[];
+  expiresAt: string;
+  privacy: {
+    writes: false;
+    confirmRequired: true;
+    note: string;
+  };
+};
+
 export type PermitSuggestDraft = {
   draftId: string;
   mode: "stub" | "live";
@@ -1773,6 +1815,142 @@ export async function aiConfirmEmailIntake(
   }
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/ai/confirm-email-intake`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function aiAssetIntake(
+  accessToken: string,
+  propertyId: string,
+  input: {
+    sourceKind: AssetIntakeSourceKind;
+    text?: string | null;
+    hint?: string | null;
+    filename?: string | null;
+  },
+): Promise<{ draft: AssetIntakeDraft; aiMode: "mock" | "live" }> {
+  if (useCloud()) {
+    const { invokeAiAssist, rememberAssetIntakeDraft } = await import(
+      "./aiEdge"
+    );
+    const { assets } = await listAssets(accessToken, propertyId);
+    const existingAssets = assets.map((a) => ({
+      id: a.id,
+      name: a.name,
+      category: a.category,
+      manufacturer: a.manufacturer,
+      model: a.model,
+      serial: a.serial,
+    }));
+    const res = await invokeAiAssist<{
+      draft: AssetIntakeDraft;
+      aiMode: "mock" | "live";
+    }>("asset-intake", {
+      propertyId,
+      sourceKind: input.sourceKind,
+      text: input.text ?? null,
+      hint: input.hint ?? null,
+      filename: input.filename ?? null,
+      existingAssets,
+    });
+    rememberAssetIntakeDraft(res.draft.draftId, {
+      propertyId,
+      sourceKind: res.draft.sourceKind,
+      intent: res.draft.intent,
+      matchedAssetId: res.draft.matchedAssetId,
+      suggestedAsset: res.draft.suggestedAsset,
+    });
+    return { draft: res.draft, aiMode: res.aiMode };
+  }
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/ai/asset-intake`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify(input),
+    },
+  );
+  return parseJson(res);
+}
+
+export async function aiConfirmAssetIntake(
+  accessToken: string,
+  propertyId: string,
+  input: {
+    draftId: string;
+    intent: "add" | "update";
+    matchedAssetId?: string | null;
+    assetOverrides: AssetIntakeSuggested;
+  },
+): Promise<{
+  asset: PublicAsset;
+  intent: "add" | "update";
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  if (useCloud()) {
+    const { takeAssetIntakeDraft } = await import("./aiEdge");
+    const { cloudCreateAsset, cloudUpdateAsset } = await import("./cloud");
+    const held = takeAssetIntakeDraft(input.draftId);
+    if (!held || held.propertyId !== propertyId) {
+      throw new ApiError(
+        "That AI draft expired or was already used. Try again.",
+        "client",
+        404,
+      );
+    }
+    const base: CreateAssetInput = {
+      name: input.assetOverrides.name.trim(),
+      category: input.assetOverrides.category,
+      manufacturer: input.assetOverrides.manufacturer,
+      model: input.assetOverrides.model,
+      serial: input.assetOverrides.serial,
+      purchaseDate: input.assetOverrides.purchaseDate,
+      installDate: input.assetOverrides.installDate,
+      installerVendor: input.assetOverrides.installerVendor,
+      location: input.assetOverrides.location,
+      notes: input.assetOverrides.notes,
+      warrantyEndDate: input.assetOverrides.warrantyEndDate,
+      warrantyTerm: input.assetOverrides.warrantyTerm,
+    };
+    if (!base.name) {
+      throw new ApiError("Asset name is required.", "client", 400);
+    }
+    const matchedId = input.matchedAssetId ?? held.matchedAssetId;
+    if (input.intent === "update" && matchedId) {
+      const updated = await cloudUpdateAsset(
+        accessToken,
+        propertyId,
+        matchedId,
+        base,
+      );
+      return {
+        asset: updated.asset,
+        intent: "update",
+        privacy: {
+          writes: true,
+          confirmedByUser: true,
+          note: "Updated only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
+        },
+      };
+    }
+    const created = await cloudCreateAsset(accessToken, propertyId, base);
+    return {
+      asset: created.asset,
+      intent: "add",
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Saved only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
+      },
+    };
+  }
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/ai/confirm-asset-intake`,
     {
       method: "POST",
       headers: authHeaders(accessToken),

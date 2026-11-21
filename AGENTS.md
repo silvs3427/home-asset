@@ -21,4 +21,4 @@ Mobile Expo specifics live in [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
 1. In-app guide: `apps/mobile/src/app/settings/how-to-use.tsx` reads `HOW_TO_USE_SECTIONS` from `apps/mobile/src/lib/settingsContent.ts`.
 2. Privacy / Security screens use `PRIVACY_SECTIONS` / `SECURITY_SECTIONS` in the same file.
 3. **When adding or relocating user-facing features**, update that content in the same PR.
-4. Home CTAs: Ask HomeAsset → View Assets → Notifications → Settings. AI named Ask HomeAsset (`/ai/help`). One Notifications surface; delivery prefs under Settings. Colors from `apps/mobile/src/lib/theme.ts`. No long instructional copy on feature screens — How to use owns it. Permits suggest is not a primary CTA.
+4. Home CTAs: Ask HomeAsset → View Assets → Notifications → Settings. AI named Ask HomeAsset (`/ai/help`): Add or update asset (multi-source photo/email/invoice/notes → approve-before-official), Scan a picture, Ask how-to. One Notifications surface; delivery prefs under Settings. Colors from `apps/mobile/src/lib/theme.ts`. No long instructional copy on feature screens — How to use owns it. Permits suggest is not a primary CTA.

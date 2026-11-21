@@ -28,7 +28,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Ask HomeAsset",
-    body: "The AI feature. From Home, open Ask HomeAsset to Scan a picture (identify a product and manuals; confirm before save) or Ask how-to (answers from manuals and facts on this home; asking never writes the ledger).",
+    body: "The AI feature. From Home, open Ask HomeAsset to: Add or update asset (drop in a photo of a label, contractor email, invoice, or notes — AI drafts one asset, asks Add or Update, fills what it knows, and prompts only for gaps; nothing saves until you confirm), Scan a picture (identify a product and manuals; confirm before save), or Ask how-to (answers from manuals and facts on this home; asking never writes the ledger).",
   },
   {
     title: "View Assets",
@@ -59,7 +59,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Approve before official",
-    body: "Ask HomeAsset scans and similar helpers create drafts for you to review. Nothing is auto-added as official without your confirm.",
+    body: "Ask HomeAsset drafts (add/update from photo, email, or invoice; scans; and similar helpers) wait for your review. Nothing is auto-added as official without your confirm.",
   },
   {
     title: "Signed-in and home-scoped",
@@ -71,7 +71,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "AI and your data",
-    body: "How-to answers use manuals and facts already on the home when possible. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; scan waits for your confirm.",
+    body: "How-to answers use manuals and facts already on the home when possible. Asset intake and scans create drafts only. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; add/update and scan wait for your confirm.",
   },
 ];
 

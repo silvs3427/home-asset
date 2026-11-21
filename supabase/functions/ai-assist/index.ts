@@ -71,6 +71,15 @@ const CATEGORIES: AssetCategory[] = [
   "other",
 ];
 
+const ExistingAssetSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().max(200),
+  category: z.string().max(40),
+  manufacturer: z.string().max(120).nullable().optional(),
+  model: z.string().max(120).nullable().optional(),
+  serial: z.string().max(120).nullable().optional(),
+});
+
 const RequestSchema = z
   .object({
     action: z.enum([
@@ -79,6 +88,7 @@ const RequestSchema = z
       "howto",
       "contractor-format",
       "email-intake",
+      "asset-intake",
       "permits-suggest",
     ]),
     propertyId: z.string().uuid().optional(),
@@ -89,6 +99,9 @@ const RequestSchema = z
     inputText: z.string().max(8000).optional(),
     inputKind: z.enum(["typed", "voice", "upload"]).optional(),
     emailText: z.string().max(20000).optional(),
+    sourceKind: z.enum(["photo", "email", "invoice", "notes"]).optional(),
+    text: z.string().max(20000).optional().nullable(),
+    existingAssets: z.array(ExistingAssetSchema).max(100).optional(),
   })
   .strict();
 
@@ -175,6 +188,7 @@ Deno.serve(async (req) => {
             howto: true,
             contractorFormat: true,
             emailIntake: true,
+            assetIntake: true,
             permitsSuggest: true,
             submitToLedger: false,
             note: "Confirm / approve writes happen on the phone via Supabase RLS — never silently.",
@@ -289,6 +303,53 @@ Deno.serve(async (req) => {
           },
           aiMode: email.mode,
           rawEmailText: body.emailText.trim(),
+        });
+      }
+
+      case "asset-intake": {
+        if (!body.propertyId || !body.sourceKind) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "propertyId and sourceKind required",
+          );
+        }
+        const intakeText = (body.text ?? body.emailText ?? "").trim();
+        const intakeHint = (body.hint ?? "").trim();
+        const intakeFilename = (body.filename ?? "").trim();
+        if (!intakeText && !intakeHint && !intakeFilename) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "Provide photo filename, hint, or pasted text",
+          );
+        }
+        await assertPropertyOwned(supabase, body.propertyId, user.id);
+        const intake = await formatAssetIntake({
+          sourceKind: body.sourceKind,
+          text: intakeText || null,
+          hint: intakeHint || null,
+          filename: intakeFilename || null,
+          existingAssets: body.existingAssets ?? [],
+          live,
+        });
+        const draftId = crypto.randomUUID();
+        return jsonResponse({
+          draft: {
+            draftId,
+            mode: intake.mode,
+            sourceKind: body.sourceKind,
+            intent: intake.intent,
+            matchedAssetId: intake.matchedAssetId,
+            matchedAssetLabel: intake.matchedAssetLabel,
+            identificationLabel: intake.identificationLabel,
+            confidence: intake.confidence,
+            suggestedAsset: intake.suggestedAsset,
+            missingFields: intake.missingFields,
+            expiresAt: new Date(Date.now() + DRAFT_TTL_MS).toISOString(),
+            privacy: intake.privacy,
+          },
+          aiMode: intake.mode,
         });
       }
 
@@ -698,6 +759,340 @@ async function formatContractor(input: {
     },
     privacy,
   };
+}
+
+type ExistingAssetLite = {
+  id: string;
+  name: string;
+  category: string;
+  manufacturer?: string | null;
+  model?: string | null;
+  serial?: string | null;
+};
+
+type AssetIntakeSuggested = {
+  name: string;
+  category: AssetCategory;
+  manufacturer: string | null;
+  model: string | null;
+  serial: string | null;
+  purchaseDate: string | null;
+  installDate: string | null;
+  installerVendor: string | null;
+  location: string | null;
+  notes: string | null;
+  warrantyEndDate: string | null;
+  warrantyTerm: string | null;
+};
+
+type MissingField = {
+  key: keyof AssetIntakeSuggested;
+  label: string;
+  reason: string;
+};
+
+const MISSING_FIELD_META: Record<
+  keyof AssetIntakeSuggested,
+  { label: string; reason: string }
+> = {
+  name: { label: "Name", reason: "What should this asset be called?" },
+  category: { label: "Category", reason: "Which category fits best?" },
+  manufacturer: {
+    label: "Manufacturer",
+    reason: "Brand or maker if you have it.",
+  },
+  model: { label: "Model", reason: "Model number if shown on a label." },
+  serial: {
+    label: "Serial",
+    reason: "Serial helps match manuals and recalls later.",
+  },
+  purchaseDate: {
+    label: "Purchase date",
+    reason: "YYYY-MM-DD if you know when you bought it.",
+  },
+  installDate: {
+    label: "Install date",
+    reason: "YYYY-MM-DD if you know when it was installed.",
+  },
+  installerVendor: {
+    label: "Installer / vendor",
+    reason: "Who installed or sold it?",
+  },
+  location: {
+    label: "Location",
+    reason: "Where in the home (attic, kitchen, exterior…)?",
+  },
+  notes: { label: "Notes", reason: "Anything else worth keeping?" },
+  warrantyEndDate: {
+    label: "Warranty end",
+    reason: "YYYY-MM-DD if you know coverage end.",
+  },
+  warrantyTerm: {
+    label: "Warranty term",
+    reason: "e.g. 10 years parts / 1 year labor.",
+  },
+};
+
+function computeMissingFields(asset: AssetIntakeSuggested): MissingField[] {
+  const keys: Array<keyof AssetIntakeSuggested> = [
+    "manufacturer",
+    "model",
+    "serial",
+    "installDate",
+    "location",
+  ];
+  const missing: MissingField[] = [];
+  for (const key of keys) {
+    const value = asset[key];
+    if (value == null || String(value).trim() === "") {
+      const meta = MISSING_FIELD_META[key];
+      missing.push({ key, label: meta.label, reason: meta.reason });
+    }
+  }
+  return missing;
+}
+
+function matchExistingAsset(
+  suggested: Pick<
+    AssetIntakeSuggested,
+    "name" | "category" | "manufacturer" | "model" | "serial"
+  >,
+  existing: ExistingAssetLite[],
+): { id: string; label: string } | null {
+  if (existing.length === 0) return null;
+
+  const norm = (v: string | null | undefined) =>
+    (v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+  if (suggested.serial) {
+    const serialHit = existing.find(
+      (a) => a.serial && norm(a.serial) === norm(suggested.serial),
+    );
+    if (serialHit) {
+      return {
+        id: serialHit.id,
+        label: `${serialHit.name}${serialHit.manufacturer ? ` · ${serialHit.manufacturer}` : ""}${serialHit.model ? ` ${serialHit.model}` : ""}`,
+      };
+    }
+  }
+
+  if (suggested.manufacturer && suggested.model) {
+    const mm = existing.find(
+      (a) =>
+        norm(a.manufacturer) === norm(suggested.manufacturer) &&
+        norm(a.model) === norm(suggested.model),
+    );
+    if (mm) {
+      return {
+        id: mm.id,
+        label: `${mm.name} · ${mm.manufacturer} ${mm.model}`,
+      };
+    }
+  }
+
+  const nameNorm = norm(suggested.name);
+  const nameHit = existing.find((a) => {
+    const other = norm(a.name);
+    return (
+      other === nameNorm ||
+      (nameNorm.length >= 4 && other.includes(nameNorm)) ||
+      (other.length >= 4 && nameNorm.includes(other))
+    );
+  });
+  if (nameHit && nameHit.category === suggested.category) {
+    return {
+      id: nameHit.id,
+      label: `${nameHit.name}${nameHit.manufacturer ? ` · ${nameHit.manufacturer}` : ""}`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Multi-source Ask HomeAsset intake: photo label / email / invoice / notes →
+ * one distinct asset draft with Add or Update. Never writes the ledger.
+ */
+async function formatAssetIntake(input: {
+  sourceKind: "photo" | "email" | "invoice" | "notes";
+  text: string | null;
+  hint: string | null;
+  filename: string | null;
+  existingAssets: ExistingAssetLite[];
+  live: LiveConfig;
+}) {
+  const privacy = {
+    writes: false as const,
+    confirmRequired: true as const,
+    note: "Draft only. Nothing is official until you choose Add or Update and confirm.",
+  };
+  const query = [input.hint, input.filename, input.text]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const existingIds = new Set(input.existingAssets.map((a) => a.id));
+
+  if (input.live.mode === "live") {
+    try {
+      const existingJson = JSON.stringify(
+        input.existingAssets.slice(0, 40).map((a) => ({
+          id: a.id,
+          name: a.name,
+          category: a.category,
+          manufacturer: a.manufacturer ?? null,
+          model: a.model ?? null,
+          serial: a.serial ?? null,
+        })),
+      );
+      const content = await chatJsonText({
+        live: input.live,
+        system:
+          "You extract ONE distinct home asset from homeowner input (photo label hint, contractor email, invoice, or notes). " +
+          "Reply with JSON only: {intent:\"add\"|\"update\", matchedAssetId:string|null, identificationLabel:string, confidence:number, " +
+          "suggestedAsset:{name,category,manufacturer,model,serial,purchaseDate,installDate,installerVendor,location,notes,warrantyEndDate,warrantyTerm}, " +
+          "missingFields:string[]}. " +
+          "category must be one of: hvac,roof,appliance,generator,water_heater,plumbing,electrical,kids_gear,vehicle,other. " +
+          "matchedAssetId must be one of the provided existing asset ids or null. Prefer update when the same equipment already exists. " +
+          "Do not invent serial numbers. Dates YYYY-MM-DD or null. Fill only facts grounded in the input. missingFields = keys still unknown that a homeowner should confirm.",
+        user: `sourceKind=${input.sourceKind}\nexistingAssets=${existingJson}\ninput:\n${query}`,
+      });
+      const jsonMatch = content?.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as {
+          intent?: string;
+          matchedAssetId?: string | null;
+          identificationLabel?: string;
+          confidence?: number;
+          suggestedAsset?: Partial<AssetIntakeSuggested> & { category?: string };
+          missingFields?: unknown;
+        };
+        const suggestedAsset: AssetIntakeSuggested = {
+          name: String(parsed.suggestedAsset?.name ?? "Home asset")
+            .trim()
+            .slice(0, 120) || "Home asset",
+          category: coerceCategory(parsed.suggestedAsset?.category),
+          manufacturer: nullableTrim(parsed.suggestedAsset?.manufacturer, 120),
+          model: nullableTrim(parsed.suggestedAsset?.model, 120),
+          serial: nullableTrim(parsed.suggestedAsset?.serial, 120),
+          purchaseDate: nullableDate(parsed.suggestedAsset?.purchaseDate),
+          installDate: nullableDate(parsed.suggestedAsset?.installDate),
+          installerVendor: nullableTrim(
+            parsed.suggestedAsset?.installerVendor,
+            120,
+          ),
+          location: nullableTrim(parsed.suggestedAsset?.location, 120),
+          notes: nullableTrim(parsed.suggestedAsset?.notes, 2000),
+          warrantyEndDate: nullableDate(parsed.suggestedAsset?.warrantyEndDate),
+          warrantyTerm: nullableTrim(parsed.suggestedAsset?.warrantyTerm, 120),
+        };
+        let matchedAssetId =
+          typeof parsed.matchedAssetId === "string" &&
+          existingIds.has(parsed.matchedAssetId)
+            ? parsed.matchedAssetId
+            : null;
+        let intent: "add" | "update" =
+          parsed.intent === "update" && matchedAssetId ? "update" : "add";
+        if (!matchedAssetId) {
+          const auto = matchExistingAsset(suggestedAsset, input.existingAssets);
+          if (auto) {
+            matchedAssetId = auto.id;
+            intent = "update";
+          }
+        }
+        const matched = matchedAssetId
+          ? input.existingAssets.find((a) => a.id === matchedAssetId)
+          : undefined;
+        const missingFromModel = Array.isArray(parsed.missingFields)
+          ? parsed.missingFields
+              .map((k) => String(k))
+              .filter((k): k is keyof AssetIntakeSuggested =>
+                k in MISSING_FIELD_META,
+              )
+              .map((key) => ({
+                key,
+                label: MISSING_FIELD_META[key].label,
+                reason: MISSING_FIELD_META[key].reason,
+              }))
+          : [];
+        const missingFields =
+          missingFromModel.length > 0
+            ? missingFromModel
+            : computeMissingFields(suggestedAsset);
+        return {
+          mode: "live" as const,
+          intent,
+          matchedAssetId,
+          matchedAssetLabel: matched
+            ? `${matched.name}${matched.manufacturer ? ` · ${matched.manufacturer}` : ""}${matched.model ? ` ${matched.model}` : ""}`
+            : null,
+          identificationLabel:
+            String(parsed.identificationLabel ?? suggestedAsset.name).slice(
+              0,
+              200,
+            ),
+          confidence: Math.min(
+            1,
+            Math.max(0, Number(parsed.confidence ?? 0.7) || 0.7),
+          ),
+          suggestedAsset,
+          missingFields,
+          privacy,
+        };
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  const product = matchCatalogProducts(query || "appliance")[0]!;
+  const installDate =
+    input.text?.match(/\b(20\d{2}-\d{2}-\d{2})\b/)?.[1] ?? null;
+  const from = input.text?.match(/^From:\s*(.+)$/im)?.[1]
+    ?.replace(/<[^>]+>/g, "")
+    .replace(/["']/g, "")
+    .trim();
+  const suggestedAsset: AssetIntakeSuggested = {
+    name: product.name,
+    category: product.category as AssetCategory,
+    manufacturer: product.manufacturer,
+    model: product.model,
+    serial: null,
+    purchaseDate: null,
+    installDate,
+    installerVendor: from && from.length <= 120 ? from : null,
+    location: null,
+    notes: `Drafted from ${input.sourceKind} via Ask HomeAsset (mock). Confirm before saving.`,
+    warrantyEndDate: null,
+    warrantyTerm: null,
+  };
+  const matched = matchExistingAsset(suggestedAsset, input.existingAssets);
+  const intent: "add" | "update" = matched ? "update" : "add";
+  return {
+    mode: "mock" as const,
+    intent,
+    matchedAssetId: matched?.id ?? null,
+    matchedAssetLabel: matched?.label ?? null,
+    identificationLabel: `${product.manufacturer} ${product.model}`,
+    confidence: product.confidence,
+    suggestedAsset,
+    missingFields: computeMissingFields(suggestedAsset),
+    privacy,
+  };
+}
+
+function nullableTrim(
+  value: unknown,
+  max: number,
+): string | null {
+  if (value == null) return null;
+  const trimmed = String(value).trim().slice(0, max);
+  return trimmed || null;
+}
+
+function nullableDate(value: unknown): string | null {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  return null;
 }
 
 async function formatEmailIntake(input: {

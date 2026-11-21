@@ -17,6 +17,7 @@ export type AiEdgeAction =
   | "howto"
   | "contractor-format"
   | "email-intake"
+  | "asset-intake"
   | "permits-suggest";
 
 type EdgeErrorBody = {
@@ -88,6 +89,31 @@ const emailDraftById = new Map<
   }
 >();
 
+/** Multi-source asset intake drafts held until approve (cloud path). */
+const assetIntakeDraftById = new Map<
+  string,
+  {
+    propertyId: string;
+    sourceKind: "photo" | "email" | "invoice" | "notes";
+    intent: "add" | "update";
+    matchedAssetId: string | null;
+    suggestedAsset: {
+      name: string;
+      category: string;
+      manufacturer: string | null;
+      model: string | null;
+      serial: string | null;
+      purchaseDate: string | null;
+      installDate: string | null;
+      installerVendor: string | null;
+      location: string | null;
+      notes: string | null;
+      warrantyEndDate: string | null;
+      warrantyTerm: string | null;
+    };
+  }
+>();
+
 export function rememberScanDraft(
   draftId: string,
   draft: {
@@ -156,6 +182,38 @@ export function takeEmailIntakeDraft(draftId: string) {
   const value = emailDraftById.get(draftId);
   emailDraftById.delete(draftId);
   emailRawByDraft.delete(draftId);
+  return value;
+}
+
+export function rememberAssetIntakeDraft(
+  draftId: string,
+  draft: {
+    propertyId: string;
+    sourceKind: "photo" | "email" | "invoice" | "notes";
+    intent: "add" | "update";
+    matchedAssetId: string | null;
+    suggestedAsset: {
+      name: string;
+      category: string;
+      manufacturer: string | null;
+      model: string | null;
+      serial: string | null;
+      purchaseDate: string | null;
+      installDate: string | null;
+      installerVendor: string | null;
+      location: string | null;
+      notes: string | null;
+      warrantyEndDate: string | null;
+      warrantyTerm: string | null;
+    };
+  },
+): void {
+  assetIntakeDraftById.set(draftId, draft);
+}
+
+export function takeAssetIntakeDraft(draftId: string) {
+  const value = assetIntakeDraftById.get(draftId);
+  assetIntakeDraftById.delete(draftId);
   return value;
 }
 
