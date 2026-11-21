@@ -20,9 +20,10 @@ HomeAsset’s cloud project ref (from project docs): `iiyhogiwqqotlrsjlqud` → 
 | 4 | `migrations/20261121120000_profiles_table_grants.sql` | **Paste now if signup says permission denied for table profiles** — GRANTs + re-assert select/update policies (safe re-run; no app rebuild) |
 | 5 | `migrations/20261121140000_ai_assist_rate_limits.sql` | Ask HomeAsset rate / daily caps (server-side) |
 | 6 | `migrations/20261121160000_property_custom_labels.sql` | **Custom reusable categories + document types per home** — open lists (no fixed enums); seeds from existing assets/docs; RLS via `owns_property` |
-| 7 | `migrations/20261121180000_contractor_invite_submissions.sql` | **Contractor invite links** — invites, pending submissions, media bucket (required for Settings → Invite a contractor) |
+| 7 | `migrations/20261121180000_contractor_invite_submissions.sql` | **Contractor invite links** — invites, pending submissions, media bucket (required for Home → Contractors → Invite) |
+| 8 | `migrations/20261121200000_home_contractor_directory.sql` | **Past-contractor directory** — contact + services + work history; optional phone/email/services on submissions (after approve) |
 
-That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, and adds private Storage buckets for manuals / photos and invite media. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message. **Custom category / document-type reuse needs migration #6.** **Invite links need migration #7** plus deploying the `invite-submit` edge function.
+That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, and adds private Storage buckets for manuals / photos and invite media. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message. **Custom category / document-type reuse needs migration #6.** **Invite links need migration #7** plus deploying the `invite-submit` edge function. **Past contractors directory needs migration #8** (and re-deploy `invite-submit` if you want phone/email/services on the public form).
 
 ### Exact clicks (first-time)
 
@@ -78,9 +79,9 @@ Without a key, the function returns **mock** catalog drafts so demos still work.
 
 ## Contractor invite submit (`invite-submit`)
 
-Public page for **non-LightLift** pros: homeowner shares a link from Settings → Invite a contractor; the pro opens it in a browser (voice + photos + text); Ask HomeAsset formats a **pending** draft; homeowner approves in the app.
+Public page for **non-LightLift** pros: homeowner shares a link from Home → Contractors → Invite a contractor; the pro opens it in a browser (voice + photos + text, optional contact/services); Ask HomeAsset formats a **pending** draft; homeowner approves in the app (then contact lands in Past contractors).
 
-1. Paste SQL migration `20261121180000_contractor_invite_submissions.sql`.
+1. Paste SQL migrations `20261121180000_contractor_invite_submissions.sql` and `20261121200000_home_contractor_directory.sql`.
 2. Deploy (JWT verification off — token gates access):
 
 ```bash

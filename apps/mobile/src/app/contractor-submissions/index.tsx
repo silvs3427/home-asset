@@ -81,7 +81,8 @@ export default function ContractorSubmissionsScreen() {
           <ActivityIndicator color={colors.brand} />
         ) : items.length === 0 ? (
           <Text style={styles.empty}>
-            No contractor submissions yet. Share an invite link from Settings.
+            No contractor submissions yet. Share an invite link from
+            Contractors.
           </Text>
         ) : (
           items.map((item) => (

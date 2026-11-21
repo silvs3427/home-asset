@@ -2,10 +2,10 @@
 
 Public contractor submission page for **homeowner-sent invite links** (non-LightLift pros).
 
-- Homeowner creates a link in the phone app (Settings → Invite a contractor).
-- Pro opens the link (no HomeAsset account): type notes, record voice, upload photos.
+- Homeowner creates a link in the phone app (Home → Contractors → Invite a contractor).
+- Pro opens the link (no HomeAsset account): type notes, record voice, upload photos; optional phone, email, services.
 - This function formats a draft with Ask HomeAsset (server-side AI keys) and stores a **pending** submission.
-- Homeowner approves / edits / declines in the app — nothing becomes official silently.
+- Homeowner approves / edits / declines in the app — nothing becomes official silently; approved contact can enter the past-contractor directory.
 
 **JWT verification is off** (`config.toml` → `verify_jwt = false`). Access is gated by the invite **token**, not a login.
 
@@ -35,7 +35,7 @@ git pull origin main
 npx supabase functions deploy invite-submit
 ```
 
-Apply SQL first: `migrations/20261121180000_contractor_invite_submissions.sql` (paste in SQL Editor).
+Apply SQL first: `migrations/20261121180000_contractor_invite_submissions.sql` and `migrations/20261121200000_home_contractor_directory.sql` (paste in SQL Editor).
 
 ## URL shape
 
@@ -43,13 +43,13 @@ Apply SQL first: `migrations/20261121180000_contractor_invite_submissions.sql` (
 https://YOUR_PROJECT.supabase.co/functions/v1/invite-submit?t=TOKEN
 ```
 
-- `GET` — phone-friendly HTML form (voice + photos + text)
-- `POST` `multipart/form-data` — submit (fields: `token`, optional `notes` / `contractorName` / `companyName`, files `photos` / `audio`)
-- `POST` `application/json` — `{ token, notes?, contractorName?, companyName? }` for smoke tests without files
+- `GET` — phone-friendly HTML form (voice + photos + text + optional contact/services)
+- `POST` `multipart/form-data` — submit (fields: `token`, optional `notes` / `contractorName` / `companyName` / `phone` / `email` / `servicesOffered`, files `photos` / `audio`)
+- `POST` `application/json` — `{ token, notes?, contractorName?, companyName?, phone?, email?, servicesOffered? }` for smoke tests without files
 
 ## Privacy
 
 - Token must be valid, not revoked, and not expired.
 - Does **not** expose the home ledger to the contractor (only a short home label).
-- Writes a **pending** row only; ledger assets wait for homeowner approve in the app.
+- Writes a **pending** row only; ledger assets and directory contact wait for homeowner approve in the app.
 - AI keys never leave the edge.

@@ -234,6 +234,9 @@ type ParsedSubmit = {
   notes: string;
   contractorName: string;
   companyName: string;
+  phone: string;
+  email: string;
+  servicesOffered: string[];
   photos: FilePart[];
   audio: FilePart | null;
 } | {
@@ -242,6 +245,18 @@ type ParsedSubmit = {
   code: string;
   message: string;
 };
+
+function parseServicesOffered(raw: unknown): string[] {
+  const text = Array.isArray(raw)
+    ? raw.map((s) => String(s)).join(",")
+    : String(raw ?? "");
+  return text
+    .split(/[,;\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20)
+    .map((s) => s.slice(0, 80));
+}
 
 type FilePart = {
   bytes: Uint8Array;
@@ -272,6 +287,9 @@ async function parseSubmitBody(
     const notes = String(body.notes ?? "").trim();
     const contractorName = String(body.contractorName ?? "").trim();
     const companyName = String(body.companyName ?? "").trim();
+    const phone = String(body.phone ?? "").trim().slice(0, 40);
+    const email = String(body.email ?? "").trim().slice(0, 120);
+    const servicesOffered = parseServicesOffered(body.servicesOffered);
     if (!token) {
       return {
         ok: false,
@@ -295,6 +313,9 @@ async function parseSubmitBody(
       notes,
       contractorName,
       companyName,
+      phone,
+      email,
+      servicesOffered,
       photos: [],
       audio: null,
     };
@@ -317,6 +338,9 @@ async function parseSubmitBody(
   const notes = String(form.get("notes") ?? "").trim();
   const contractorName = String(form.get("contractorName") ?? "").trim();
   const companyName = String(form.get("companyName") ?? "").trim();
+  const phone = String(form.get("phone") ?? "").trim().slice(0, 40);
+  const email = String(form.get("email") ?? "").trim().slice(0, 120);
+  const servicesOffered = parseServicesOffered(form.get("servicesOffered"));
   if (!token) {
     return {
       ok: false,
@@ -400,6 +424,9 @@ async function parseSubmitBody(
     notes,
     contractorName,
     companyName,
+    phone,
+    email,
+    servicesOffered,
     photos,
     audio,
   };
@@ -444,6 +471,9 @@ async function processSubmission(input: Extract<ParsedSubmit, { ok: true }>) {
     status: "pending",
     contractor_name: input.contractorName || formatted.draft.contractorName,
     company_name: input.companyName || null,
+    phone: input.phone || null,
+    email: input.email || null,
+    services_offered: input.servicesOffered,
     notes_text: input.notes || null,
     draft_json: formatted.draft,
     ai_mode: formatted.mode,
@@ -1030,6 +1060,13 @@ function formPage(input: {
       <input id="contractorName" name="contractorName" type="text" maxlength="120" autocomplete="name" />
       <label for="companyName">Company (optional)</label>
       <input id="companyName" name="companyName" type="text" maxlength="120" />
+      <label for="phone">Phone (optional)</label>
+      <input id="phone" name="phone" type="tel" maxlength="40" autocomplete="tel" />
+      <label for="email">Email (optional)</label>
+      <input id="email" name="email" type="email" maxlength="120" autocomplete="email" />
+      <label for="servicesOffered">Other services you offer (optional)</label>
+      <input id="servicesOffered" name="servicesOffered" type="text" maxlength="400" placeholder="e.g. HVAC, plumbing, roofing" />
+      <p class="hint">Comma-separated. Saved for the homeowner only after they approve.</p>
       <label for="notes">What was done / installed</label>
       <textarea id="notes" name="notes" maxlength="8000" placeholder="e.g. Replaced furnace filter, installed Carrier Infinity…">${""}</textarea>
       <label>Voice recording</label>
