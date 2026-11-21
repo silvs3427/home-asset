@@ -39,7 +39,13 @@ git pull origin main
 npx supabase functions deploy invite-submit
 ```
 
-Apply SQL first: `migrations/20261121180000_contractor_invite_submissions.sql` and `migrations/20261121200000_home_contractor_directory.sql` (paste in SQL Editor).
+Apply SQL first (paste in SQL Editor, in order if not already applied):
+
+1. `migrations/20261121180000_contractor_invite_submissions.sql` — invite tables + RLS  
+2. `migrations/20261121400000_invite_submit_service_role.sql` — **service_role grants** + `lookup_contractor_invite_public` RPC (required for the public edge lookup)  
+3. `migrations/20261121200000_home_contractor_directory.sql` — Past contractors directory (if using that feature)
+
+Without (2), the Pages form often shows “Invite lookup failed” even when the link and token look fine.
 
 Enable **GitHub Pages** once (Settings → Pages → Build from GitHub Actions), then merge/deploy so `apps/invite-landing` is live. Or run the **Deploy invite landing** workflow manually.
 

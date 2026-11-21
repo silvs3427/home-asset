@@ -85,7 +85,10 @@ Public path for **non-LightLift** pros: homeowner shares a link from Home → Co
 
 Supabase project hosts cannot serve HTML on GET (rewritten to plain text). Do not point contractors at the raw `/functions/v1/invite-submit` URL for viewing — the phone builds a Pages URL; browser hits on the edge URL `302` to Pages.
 
-1. Paste SQL migrations `20261121180000_contractor_invite_submissions.sql` and `20261121200000_home_contractor_directory.sql` (if not already applied).
+1. Paste SQL migrations (if not already applied), in order:
+   - `20261121180000_contractor_invite_submissions.sql`
+   - `20261121400000_invite_submit_service_role.sql` (service_role grants + public token lookup RPC — fixes “Invite lookup failed” on the Pages form)
+   - `20261121200000_home_contractor_directory.sql` (Past contractors directory, if using that feature)
 2. Enable **GitHub Pages** once: repo **Settings → Pages → Build and deployment → GitHub Actions**. Merge to `main` (or run **Deploy invite landing**) so `https://silvs3427.github.io/home-asset/` is live.
 3. Deploy the edge function (JWT verification off — token gates access):
 

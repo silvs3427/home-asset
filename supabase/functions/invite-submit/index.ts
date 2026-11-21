@@ -208,25 +208,110 @@ type LoadedInvite = {
   message: string;
 };
 
+function classifyInviteLookupError(error: {
+  message?: string;
+  code?: string;
+}): LoadedInvite {
+  const msg = (error.message || "").toLowerCase();
+  const code = String(error.code || "");
+  const schemaOrPerm =
+    code === "PGRST205" ||
+    code === "42501" ||
+    code === "42P01" ||
+    msg.includes("schema cache") ||
+    msg.includes("does not exist") ||
+    msg.includes("permission denied") ||
+    msg.includes("could not find the table") ||
+    msg.includes("could not find the function");
+  console.error(
+    JSON.stringify({
+      msg: "invite_lookup_error",
+      code: error.code ?? null,
+      error: error.message,
+      schemaOrPerm,
+    }),
+  );
+  if (schemaOrPerm) {
+    return {
+      ok: false,
+      status: 503,
+      message:
+        "Invite setup is incomplete on this home. Ask the homeowner to finish database setup and try again.",
+    };
+  }
+  return {
+    ok: false,
+    status: 503,
+    message: "Invite lookup failed. Ask the homeowner to try again later.",
+  };
+}
+
+function loadedInviteFromRpc(raw: unknown): LoadedInvite | null {
+  if (!raw || typeof raw !== "object") return null;
+  const body = raw as Record<string, unknown>;
+  if (body.ok === true) {
+    return {
+      ok: true,
+      inviteId: String(body.inviteId ?? ""),
+      propertyId: String(body.propertyId ?? ""),
+      ownerUserId: String(body.ownerUserId ?? ""),
+      homeLabel: String(body.homeLabel ?? ""),
+      label: body.inviteLabel != null ? String(body.inviteLabel) : null,
+    };
+  }
+  if (body.ok === false) {
+    const code = String(body.code ?? "");
+    const message = String(
+      body.message ?? "This invite link is invalid or was removed.",
+    );
+    const status = code === "revoked" || code === "expired"
+      ? 410
+      : code === "missing_token"
+      ? 400
+      : 404;
+    return { ok: false, status, message };
+  }
+  return null;
+}
+
 async function loadInvite(token: string): Promise<LoadedInvite> {
   const admin = serviceClient();
+
+  // Prefer security-definer RPC (no PostgREST embed / join schema-cache issues).
+  const { data: rpcData, error: rpcError } = await admin.rpc(
+    "lookup_contractor_invite_public",
+    { p_token: token },
+  );
+  if (!rpcError) {
+    const fromRpc = loadedInviteFromRpc(rpcData);
+    if (fromRpc) return fromRpc;
+  } else {
+    // Fall through to table selects when RPC is not deployed yet.
+    const rpcMsg = (rpcError.message || "").toLowerCase();
+    const rpcMissing =
+      rpcError.code === "PGRST202" ||
+      rpcMsg.includes("could not find the function") ||
+      rpcMsg.includes("does not exist");
+    if (!rpcMissing) {
+      return classifyInviteLookupError(rpcError);
+    }
+    console.error(
+      JSON.stringify({
+        msg: "invite_lookup_rpc_missing_fallback",
+        error: rpcError.message,
+      }),
+    );
+  }
+
+  // Fallback: two-step select (no embed) — works once tables + service_role grants exist.
   const { data, error } = await admin
     .from("contractor_invites")
-    .select(
-      "id, property_id, label, expires_at, revoked_at, properties!inner(name, address_line1, city, owner_user_id)",
-    )
+    .select("id, property_id, label, expires_at, revoked_at")
     .eq("token", token)
     .maybeSingle();
 
   if (error) {
-    console.error(
-      JSON.stringify({ msg: "invite_lookup_error", error: error.message }),
-    );
-    return {
-      ok: false,
-      status: 503,
-      message: "Invite lookup failed. Ask the homeowner to try again later.",
-    };
+    return classifyInviteLookupError(error);
   }
   if (!data) {
     return {
@@ -250,21 +335,15 @@ async function loadInvite(token: string): Promise<LoadedInvite> {
     };
   }
 
-  const rawProp = data.properties as
-    | {
-      name: string;
-      address_line1: string;
-      city: string;
-      owner_user_id: string;
-    }
-    | Array<{
-      name: string;
-      address_line1: string;
-      city: string;
-      owner_user_id: string;
-    }>
-    | null;
-  const prop = Array.isArray(rawProp) ? rawProp[0] : rawProp;
+  const { data: prop, error: propError } = await admin
+    .from("properties")
+    .select("name, address_line1, city, owner_user_id")
+    .eq("id", data.property_id)
+    .maybeSingle();
+
+  if (propError) {
+    return classifyInviteLookupError(propError);
+  }
   if (!prop) {
     return {
       ok: false,
