@@ -163,8 +163,33 @@ Deno.serve(async (req) => {
 
   const parsed = RequestSchema.safeParse(rawBody);
   if (!parsed.success) {
+    const reason = parsed.error.issues.map((i) => i.message).join("; ");
+    const rawAction =
+      rawBody &&
+      typeof rawBody === "object" &&
+      "action" in rawBody &&
+      typeof (rawBody as { action?: unknown }).action === "string"
+        ? (rawBody as { action: string }).action
+        : null;
+    const knownActions = [
+      "status",
+      "scan",
+      "howto",
+      "contractor-format",
+      "email-intake",
+      "asset-intake",
+      "permits-suggest",
+    ] as const;
+    const staleDeploy =
+      rawAction != null &&
+      !(knownActions as readonly string[]).includes(rawAction);
     return errorResponse(400, "invalid_request_body", "Invalid request body", {
-      reason: parsed.error.issues.map((i) => i.message).join("; "),
+      reason,
+      hint: staleDeploy
+        ? `Unknown action "${rawAction}". Supported: ${knownActions.join(", ")}. If the phone expects asset-intake, redeploy this function from latest main (npx supabase functions deploy ai-assist).`
+        : reason.includes("Unrecognized key")
+          ? "Request fields do not match this function version. Redeploy ai-assist from latest main."
+          : undefined,
     });
   }
 

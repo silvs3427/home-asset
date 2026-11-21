@@ -14,7 +14,8 @@ import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
 /**
- * Homeowner home: Ask HomeAsset → View Assets → Notifications → Settings.
+ * Homeowner home:
+ * Ask HomeAsset → View Assets → Add or Update an Asset → Notifications → Settings.
  * HomeAsset is homeowner-only — no contractor face / mode on this screen.
  */
 export default function HomeShellScreen() {
@@ -75,6 +76,16 @@ export default function HomeShellScreen() {
               ]}
             >
               <Text style={styles.secondaryLabel}>View Assets</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/ai/add-update")}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Add or Update an Asset</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"

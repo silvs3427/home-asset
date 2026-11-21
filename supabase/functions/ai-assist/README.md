@@ -30,25 +30,38 @@ Without any AI key (or with live flag off), the function returns **mock** catalo
 
 ## Deploy
 
-```bash
-supabase functions deploy ai-assist
+**Phone error like** `expected one of "status"|"scan"|…` **without** `asset-intake`, or `Unrecognized keys: "sourceKind"…` means this function is **stale** — the app already speaks the new contract; redeploy (no phone rebuild).
+
+### PowerShell (Windows) — redeploy after merge
+
+```powershell
+cd C:\Users\Silv3\OneDrive\Desktop\code\home-asset
+
+# One-time if not linked:
+# npx supabase login
+# npx supabase link --project-ref iiyhogiwqqotlrsjlqud
+
+git pull origin main
+npx supabase functions deploy ai-assist
 ```
 
-Set the secret (CLI or Dashboard):
+Then on the phone: retry **Draft asset** / Format with Ask HomeAsset (same install — JS already calls `action: "asset-intake"`).
 
-```bash
+Set the secret (CLI or Dashboard) if not already set:
+
+```powershell
 # Preferred — same name as LightLift:
-supabase secrets set GEMINI_API_KEY=your-gemini-key
+npx supabase secrets set GEMINI_API_KEY=your-gemini-key
 
 # Or OpenAI-compatible:
-# supabase secrets set OPENAI_API_KEY=your-openai-key
+# npx supabase secrets set OPENAI_API_KEY=your-openai-key
 ```
 
 Optional:
 
-```bash
-supabase secrets set GEMINI_MODEL=gemini-2.5-flash
-supabase secrets set AI_ASSIST_LIVE=true
+```powershell
+npx supabase secrets set GEMINI_MODEL=gemini-2.5-flash
+npx supabase secrets set AI_ASSIST_LIVE=true
 ```
 
 ## Contract
