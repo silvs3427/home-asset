@@ -184,6 +184,8 @@ type AssetRow = {
   purchase_date: string | null;
   install_date: string | null;
   installer_vendor: string | null;
+  last_serviced_at: string | null;
+  confirmed_by_contractor_name: string | null;
   location: string | null;
   notes: string | null;
   warranty_end_date: string | null;
@@ -269,6 +271,8 @@ function assetFromRow(row: AssetRow): PublicAsset {
     purchaseDate: row.purchase_date,
     installDate: row.install_date,
     installerVendor: row.installer_vendor,
+    lastServicedAt: row.last_serviced_at ?? null,
+    confirmedByContractorName: row.confirmed_by_contractor_name ?? null,
     location: row.location,
     notes: row.notes,
     warrantyEndDate: row.warranty_end_date,
@@ -782,6 +786,9 @@ export async function cloudCreateAsset(
         purchase_date: input.purchaseDate || null,
         install_date: input.installDate || null,
         installer_vendor: input.installerVendor?.trim() || null,
+        last_serviced_at: input.lastServicedAt || null,
+        confirmed_by_contractor_name:
+          input.confirmedByContractorName?.trim() || null,
         location: input.location?.trim() || null,
         notes: input.notes?.trim() || null,
         warranty_end_date: input.warrantyEndDate || null,
@@ -833,6 +840,11 @@ export async function cloudUpdateAsset(
       patch.install_date = input.installDate || null;
     if (input.installerVendor !== undefined)
       patch.installer_vendor = input.installerVendor?.trim() || null;
+    if (input.lastServicedAt !== undefined)
+      patch.last_serviced_at = input.lastServicedAt || null;
+    if (input.confirmedByContractorName !== undefined)
+      patch.confirmed_by_contractor_name =
+        input.confirmedByContractorName?.trim() || null;
     if (input.location !== undefined)
       patch.location = input.location?.trim() || null;
     if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
@@ -2180,8 +2192,25 @@ type MediaRow = {
   created_at: string;
 };
 
+/**
+ * Contractor-facing HTML is on GitHub Pages (not the edge URL).
+ * Supabase project hosts rewrite GET text/html → text/plain, so opening
+ * /functions/v1/invite-submit in a browser shows source instead of a page.
+ * Override with EXPO_PUBLIC_INVITE_LANDING_URL if the Pages URL changes.
+ */
+const DEFAULT_INVITE_LANDING_BASE = "https://silvs3427.github.io/home-asset/";
+
+function inviteLandingBaseUrl(): string {
+  const fromEnv = process.env.EXPO_PUBLIC_INVITE_LANDING_URL?.trim();
+  const raw = fromEnv || DEFAULT_INVITE_LANDING_BASE;
+  return raw.endsWith("/") ? raw : `${raw}/`;
+}
+
 function inviteUrlForToken(token: string): string {
-  return `${getSupabasePublicUrl()}/functions/v1/invite-submit?t=${encodeURIComponent(token)}`;
+  const landing = new URL(inviteLandingBaseUrl());
+  landing.searchParams.set("t", token);
+  landing.searchParams.set("api", getSupabasePublicUrl());
+  return landing.toString();
 }
 
 function inviteFromRow(row: InviteRow): PublicContractorInvite {
@@ -2497,34 +2526,27 @@ export async function cloudApproveContractorSubmission(
     )) {
       const base = submission.draft.assetsSuggested[index];
       if (!base) continue;
-      const category = (base.category || "other") as AssetCategory;
+      const contractorName =
+        submission.contractorName ||
+        submission.companyName ||
+        submission.draft.contractorName ||
+        null;
+      const workDate =
+        submission.draft.workDate &&
+        /^\d{4}-\d{2}-\d{2}$/.test(submission.draft.workDate)
+          ? submission.draft.workDate
+          : null;
+      // Keep homeowner open categories (e.g. "Pool gear"); do not coerce to legacy enum.
+      const categoryRaw = (base.category || "Other").trim() || "Other";
       const created = await cloudCreateAsset(accessToken, propertyId, {
         name: base.name,
-        category: [
-          "hvac",
-          "roof",
-          "appliance",
-          "generator",
-          "water_heater",
-          "plumbing",
-          "electrical",
-          "kids_gear",
-          "vehicle",
-          "other",
-        ].includes(category)
-          ? category
-          : "other",
+        category: categoryRaw.slice(0, 80),
         manufacturer: base.manufacturer,
         model: base.model,
-        installerVendor:
-          submission.contractorName ||
-          submission.companyName ||
-          submission.draft.contractorName,
-        installDate:
-          submission.draft.workDate &&
-          /^\d{4}-\d{2}-\d{2}$/.test(submission.draft.workDate)
-            ? submission.draft.workDate
-            : null,
+        installerVendor: contractorName,
+        installDate: workDate,
+        lastServicedAt: workDate,
+        confirmedByContractorName: contractorName,
         notes: base.notes,
         provenance: "contractor",
       });

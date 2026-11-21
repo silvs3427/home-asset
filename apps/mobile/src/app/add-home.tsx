@@ -12,6 +12,7 @@ import {
   KeyboardAwareScroll,
   KeyboardAwareTextInput,
 } from "@/components/KeyboardAwareScroll";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 
 /**
@@ -57,17 +58,7 @@ export default function AddHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Add home</Text>
-        <View style={styles.backSpacer} />
-      </View>
+      <ScreenHeader title="Add home" />
 
       <KeyboardAwareScroll contentContainerStyle={styles.body}>
         <Field label="Home name" value={name} onChangeText={setName} placeholder="e.g. Oak Street" />
@@ -157,41 +148,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F2F5FA",
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  back: {
-    paddingVertical: 8,
-    minWidth: 56,
-  },
-  backSpacer: {
-    minWidth: 56,
-  },
-  backLabel: {
-    color: "#1E4D96",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  brand: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#002D72",
-  },
   body: {
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 40,
-  },
-  copy: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#3D4F66",
-    marginBottom: 12,
   },
   field: {
     marginTop: 10,

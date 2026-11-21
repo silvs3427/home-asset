@@ -1,0 +1,44 @@
+name: Deploy invite landing
+
+# Public HTML for contractor invite links.
+# Supabase project hostnames rewrite GET text/html → text/plain, so the
+# submit UI is hosted on GitHub Pages instead of the edge function.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/invite-landing/**"
+      - ".github/workflows/invite-landing-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-invite-landing
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/invite-landing
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

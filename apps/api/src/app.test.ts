@@ -506,6 +506,52 @@ describe("HomeAsset API — asset registry", () => {
     assert.equal(body.asset.warrantyEndDate, "2040-05-01");
     assert.equal(body.asset.warrantyTerm, "20 years");
   });
+
+  it("stores last serviced date and contractor confirmation on an asset", async () => {
+    const app = createApp();
+    const auth = await signup(app, "service-audit@example.com");
+    const home = await createHome(app, auth.accessToken, "Service Home");
+    const created = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({
+        name: "Furnace",
+        category: "HVAC",
+        lastServicedAt: "2026-03-15",
+        confirmedByContractorName: "Cool Air Co",
+      }),
+    });
+    assert.equal(created.status, 201);
+    const body = (await created.json()) as {
+      asset: {
+        lastServicedAt: string;
+        confirmedByContractorName: string;
+      };
+    };
+    assert.equal(body.asset.lastServicedAt, "2026-03-15");
+    assert.equal(body.asset.confirmedByContractorName, "Cool Air Co");
+
+    const exported = await app.request(`/properties/${home.id}/export`, {
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    assert.equal(exported.status, 200);
+    const exportBody = (await exported.json()) as {
+      packet: {
+        assets: Array<{
+          lastServicedAt: string | null;
+          confirmedByContractorName: string | null;
+        }>;
+      };
+    };
+    assert.equal(exportBody.packet.assets[0]?.lastServicedAt, "2026-03-15");
+    assert.equal(
+      exportBody.packet.assets[0]?.confirmedByContractorName,
+      "Cool Air Co",
+    );
+  });
 });
 
 type DocumentBody = {

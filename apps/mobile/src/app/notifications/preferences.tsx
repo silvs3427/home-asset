@@ -1,4 +1,4 @@
-import { Redirect, useFocusEffect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,6 +18,7 @@ import {
   updateNotificationPreferences,
   type NotificationPreferences,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 import {
@@ -32,7 +33,6 @@ import {
  * Default export required by Expo Router for this route file.
  */
 export default function NotificationPreferencesScreen() {
-  const router = useRouter();
   const { user, accessToken } = useAuth();
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [leadDaysText, setLeadDaysText] = useState("3");
@@ -136,17 +136,7 @@ export default function NotificationPreferencesScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Push & in-app</Text>
-        <View style={styles.spacer} />
-      </View>
+      <ScreenHeader title="Push & in-app" />
 
       <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {loading || !prefs ? (

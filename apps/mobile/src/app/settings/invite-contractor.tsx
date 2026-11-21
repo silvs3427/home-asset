@@ -16,14 +16,44 @@ import {
 } from "@/components/KeyboardAwareScroll";
 import {
   createContractorInvite,
+  formatPropertyAddress,
   listContractorInvites,
   listContractorSubmissions,
   revokeContractorInvite,
   type PublicContractorInvite,
+  type PublicProperty,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { SUPABASE_CONFIGURED } from "@/lib/config";
 import { colors } from "@/lib/theme";
+
+/** Home name / address for share body + email subject. */
+function workLocationLabel(property: PublicProperty): string {
+  const name = property.name?.trim() || "";
+  const address = formatPropertyAddress(property).trim();
+  if (name && address) {
+    const nameInAddress = address.toLowerCase().includes(name.toLowerCase());
+    return nameInAddress ? address : `${name} — ${address}`;
+  }
+  return address || name || "your home";
+}
+
+function shareInvite(property: PublicProperty, inviteUrl: string) {
+  const where = workLocationLabel(property);
+  const subject = `HomeAsset work submit — ${where}`;
+  return Share.share(
+    {
+      message: `Submit finished work for ${where} in HomeAsset:\n${inviteUrl}`,
+      url: inviteUrl,
+      title: subject,
+    },
+    {
+      subject,
+      dialogTitle: "Share contractor invite",
+    },
+  );
+}
 
 /**
  * Homeowner creates/shares a submission link for a non-LightLift pro.
@@ -84,10 +114,7 @@ export default function InviteContractorScreen() {
         { label: label.trim() || null, expiresInDays: 14 },
       );
       setLabel("");
-      await Share.share({
-        message: `Submit finished work for ${activeProperty.name} in HomeAsset:\n${invite.inviteUrl}`,
-        url: invite.inviteUrl,
-      });
+      await shareInvite(activeProperty, invite.inviteUrl);
       await load();
     } catch (err) {
       setError(
@@ -101,10 +128,7 @@ export default function InviteContractorScreen() {
   async function onShare(invite: PublicContractorInvite) {
     if (!activeProperty) return;
     try {
-      await Share.share({
-        message: `Submit finished work for ${activeProperty.name} in HomeAsset:\n${invite.inviteUrl}`,
-        url: invite.inviteUrl,
-      });
+      await shareInvite(activeProperty, invite.inviteUrl);
     } catch {
       // user cancelled
     }
@@ -147,17 +171,7 @@ export default function InviteContractorScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Invite a contractor</Text>
-        <View style={styles.spacer} />
-      </View>
+      <ScreenHeader title="Invite a contractor" />
 
       <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {!SUPABASE_CONFIGURED ? (

@@ -18,6 +18,7 @@ import {
   categoryLabel,
   type AiScanDraft,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { pickFromCamera, pickFromLibrary } from "@/lib/documents";
 
@@ -106,13 +107,7 @@ export default function AiScanScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button">
-          <Text style={styles.back}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Scan product</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader title="Scan product" />
 
       <KeyboardAwareScroll contentContainerStyle={styles.body}>
         <Text style={styles.label}>Hint (optional)</Text>

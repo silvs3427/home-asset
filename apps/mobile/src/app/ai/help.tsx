@@ -1,4 +1,4 @@
-import { Redirect, useRouter } from "expo-router";
+import { Redirect } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -12,6 +12,7 @@ import {
   KeyboardAwareScroll,
   KeyboardAwareTextInput,
 } from "@/components/KeyboardAwareScroll";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { aiAskHowto, type AiHowToResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { pickAudioFile } from "@/lib/documents";
@@ -23,7 +24,6 @@ import { colors } from "@/lib/theme";
  * Add/update assets live on Home → Add or Update an Asset.
  */
 export default function AskHomeAssetScreen() {
-  const router = useRouter();
   const { user, accessToken, activeProperty } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [voiceName, setVoiceName] = useState<string | null>(null);
@@ -82,17 +82,7 @@ export default function AskHomeAssetScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Close</Text>
-        </Pressable>
-        <Text style={styles.brand}>Ask HomeAsset</Text>
-        <View style={styles.spacer} />
-      </View>
+      <ScreenHeader title="Ask HomeAsset" backLabel="Close" />
 
       <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {!canUseHomeTools ? (
