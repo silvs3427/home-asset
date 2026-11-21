@@ -24,7 +24,8 @@ import { colors } from "@/lib/theme";
  */
 export default function SignInScreen() {
   const { user, signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup">("signup");
+  // Existing accounts first — Create account is the secondary bottom action.
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,98 +63,108 @@ export default function SignInScreen() {
     }
   }
 
+  function switchMode() {
+    setError(null);
+    setErrorKind(null);
+    setMode(mode === "signup" ? "login" : "signup");
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.wrap}
       >
-        <Text style={styles.brand}>HomeAsset</Text>
-        <Text style={styles.tagline}>
-          Your home&apos;s lasting record — on your phone, under your control.
-        </Text>
+        <View style={styles.main}>
+          <Text style={styles.brand}>HomeAsset</Text>
+          <Text style={styles.tagline}>
+            Your home&apos;s lasting record — on your phone, under your control.
+          </Text>
 
-        <View style={styles.form}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            placeholder="you@example.com"
-            placeholderTextColor="#8A9BB0"
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-          />
+          <View style={styles.form}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              placeholder="you@example.com"
+              placeholderTextColor="#8A9BB0"
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+            />
 
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            secureTextEntry
-            autoComplete={mode === "signup" ? "new-password" : "password"}
-            placeholder="At least 8 characters"
-            placeholderTextColor="#8A9BB0"
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-          />
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              secureTextEntry
+              autoComplete={mode === "signup" ? "new-password" : "password"}
+              placeholder={
+                mode === "signup" ? "At least 8 characters" : "Your password"
+              }
+              placeholderTextColor="#8A9BB0"
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+            />
 
-          {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorKind}>
-                {errorKind === "network"
-                  ? SUPABASE_CONFIGURED
-                    ? "Network — phone cannot reach Supabase"
-                    : "Network — phone cannot reach the API"
-                  : errorKind === "auth"
-                    ? "Sign-in rejected"
-                    : "Could not continue"}
-              </Text>
-              <Text style={styles.error}>{error}</Text>
-            </View>
-          ) : null}
+            {error ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorKind}>
+                  {errorKind === "network"
+                    ? SUPABASE_CONFIGURED
+                      ? "Network — phone cannot reach Supabase"
+                      : "Network — phone cannot reach the API"
+                    : errorKind === "auth"
+                      ? "Sign-in rejected"
+                      : "Could not continue"}
+                </Text>
+                <Text style={styles.error}>{error}</Text>
+              </View>
+            ) : null}
 
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={onSubmit}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && styles.pressed,
+                busy && styles.disabled,
+              ]}
+            >
+              {busy ? (
+                <ActivityIndicator color={colors.onBrand} />
+              ) : (
+                <Text style={styles.primaryLabel}>
+                  {mode === "signup" ? "Create account" : "Sign in"}
+                </Text>
+              )}
+            </Pressable>
+          </View>
+
+          <Text style={styles.apiHint}>
+            {SUPABASE_CONFIGURED
+              ? "Cloud account (Supabase). No laptop API or Wi‑Fi IP needed for sign-up / sign-in / AI. For testing, Confirm email should be OFF in the Supabase Auth settings."
+              : API_BASE_URL
+                ? `Local demo API (no Supabase on this install). Target: ${API_BASE_URL}\nPhone preview should use Supabase instead — set EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY in Expo preview env and rebuild. Never use localhost on a phone.`
+                : "No cloud connection on this install. Add EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY to the Expo preview environment and rebuild the preview APK."}
+          </Text>
+        </View>
+
+        <View style={styles.bottomActions}>
           <Pressable
             accessibilityRole="button"
-            disabled={busy}
-            onPress={onSubmit}
+            onPress={switchMode}
             style={({ pressed }) => [
-              styles.primaryBtn,
+              styles.secondaryBtn,
               pressed && styles.pressed,
-              busy && styles.disabled,
             ]}
           >
-            {busy ? (
-              <ActivityIndicator color={colors.onBrand} />
-            ) : (
-              <Text style={styles.primaryLabel}>
-                {mode === "signup" ? "Create account" : "Sign in"}
-              </Text>
-            )}
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              setError(null);
-              setMode(mode === "signup" ? "login" : "signup");
-            }}
-            style={styles.switchBtn}
-          >
-            <Text style={styles.switchLabel}>
-              {mode === "signup"
-                ? "Already have an account? Sign in"
-                : "New here? Create an account"}
+            <Text style={styles.secondaryLabel}>
+              {mode === "signup" ? "Sign in" : "Create account"}
             </Text>
           </Pressable>
         </View>
-
-        <Text style={styles.apiHint}>
-          {SUPABASE_CONFIGURED
-            ? "Cloud account (Supabase). No laptop API or Wi‑Fi IP needed for sign-up / sign-in / AI. For testing, Confirm email should be OFF in the Supabase Auth settings."
-            : API_BASE_URL
-              ? `Local demo API (no Supabase on this install). Target: ${API_BASE_URL}\nPhone preview should use Supabase instead — set EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY in Expo preview env and rebuild. Never use localhost on a phone.`
-              : "No cloud connection on this install. Add EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY to the Expo preview environment and rebuild the preview APK."}
-        </Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -168,6 +179,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 32,
+    paddingBottom: 16,
+  },
+  main: {
+    flex: 1,
     justifyContent: "center",
   },
   brand: {
@@ -235,15 +250,22 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.6,
   },
-  switchBtn: {
-    marginTop: 16,
-    alignItems: "center",
-    padding: 8,
+  bottomActions: {
+    paddingTop: 8,
+    paddingBottom: 8,
   },
-  switchLabel: {
-    color: colors.brandMuted,
-    fontSize: 14,
-    fontWeight: "500",
+  secondaryBtn: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  secondaryLabel: {
+    color: colors.brand,
+    fontSize: 16,
+    fontWeight: "600",
   },
   apiHint: {
     marginTop: 24,
