@@ -2180,8 +2180,25 @@ type MediaRow = {
   created_at: string;
 };
 
+/**
+ * Contractor-facing HTML is on GitHub Pages (not the edge URL).
+ * Supabase project hosts rewrite GET text/html → text/plain, so opening
+ * /functions/v1/invite-submit in a browser shows source instead of a page.
+ * Override with EXPO_PUBLIC_INVITE_LANDING_URL if the Pages URL changes.
+ */
+const DEFAULT_INVITE_LANDING_BASE = "https://silvs3427.github.io/home-asset/";
+
+function inviteLandingBaseUrl(): string {
+  const fromEnv = process.env.EXPO_PUBLIC_INVITE_LANDING_URL?.trim();
+  const raw = fromEnv || DEFAULT_INVITE_LANDING_BASE;
+  return raw.endsWith("/") ? raw : `${raw}/`;
+}
+
 function inviteUrlForToken(token: string): string {
-  return `${getSupabasePublicUrl()}/functions/v1/invite-submit?t=${encodeURIComponent(token)}`;
+  const landing = new URL(inviteLandingBaseUrl());
+  landing.searchParams.set("t", token);
+  landing.searchParams.set("api", getSupabasePublicUrl());
+  return landing.toString();
 }
 
 function inviteFromRow(row: InviteRow): PublicContractorInvite {

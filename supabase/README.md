@@ -78,10 +78,13 @@ Without a key, the function returns **mock** catalog drafts so demos still work.
 
 ## Contractor invite submit (`invite-submit`)
 
-Public page for **non-LightLift** pros: homeowner shares a link from Settings → Invite a contractor; the pro opens it in a browser (voice + photos + text); Ask HomeAsset formats a **pending** draft; homeowner approves in the app.
+Public path for **non-LightLift** pros: homeowner shares a link from Settings → Invite a contractor; the pro opens the **GitHub Pages** landing (`apps/invite-landing`) in a browser (voice + photos + text); the page calls this edge function; Ask HomeAsset formats a **pending** draft; homeowner approves in the app.
 
-1. Paste SQL migration `20261121180000_contractor_invite_submissions.sql`.
-2. Deploy (JWT verification off — token gates access):
+Supabase project hosts cannot serve HTML on GET (rewritten to plain text). Do not point contractors at the raw `/functions/v1/invite-submit` URL for viewing — the phone builds a Pages URL; browser hits on the edge URL `302` to Pages.
+
+1. Paste SQL migration `20261121180000_contractor_invite_submissions.sql` (if not already applied).
+2. Enable **GitHub Pages** once: repo **Settings → Pages → Build and deployment → GitHub Actions**. Merge to `main` (or run **Deploy invite landing**) so `https://silvs3427.github.io/home-asset/` is live.
+3. Deploy the edge function (JWT verification off — token gates access):
 
 ```bash
 npx supabase functions deploy invite-submit
