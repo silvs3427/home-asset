@@ -1600,8 +1600,9 @@ async function maybeCloudRecallCheckAfterAssetSave(
 
 /**
  * Cloud-path recall match using fixture public lists (no LAN API).
- * Upserts notices, creates alerts, and writes in-app notifications.
- * Does not write assets/documents — alerts only, home-scoped via RLS.
+ * Upserts notices, creates alerts, writes in-app notifications, and
+ * requests Expo push via edge `send-push` when prefs allow (secret stays
+ * server-side). Does not write assets/documents — alerts only, RLS-scoped.
  */
 export async function cloudRunRecallCheck(
   _accessToken: string,
@@ -1616,6 +1617,7 @@ export async function cloudRunRecallCheck(
     alertsCreated: number;
     alertsExisting: number;
     notificationsCreated: number;
+    pushesAttempted: number;
   };
   unreadCount: number;
   openCount?: number;
@@ -1635,6 +1637,7 @@ export async function cloudRunRecallCheck(
       alertsCreated: 0,
       alertsExisting: 0,
       notificationsCreated: 0,
+      pushesAttempted: 0,
     };
 
     // Seed / refresh fixture notices (idempotent by source+external_id).
@@ -1691,11 +1694,12 @@ export async function cloudRunRecallCheck(
 
     const { data: prefsRow } = await supabase
       .from("notification_preferences")
-      .select("recalls_enabled, in_app_enabled")
+      .select("recalls_enabled, in_app_enabled, push_enabled")
       .eq("user_id", session.user.id)
       .maybeSingle();
     const recallsEnabled = prefsRow?.recalls_enabled !== false;
     const inAppEnabled = prefsRow?.in_app_enabled !== false;
+    const pushEnabled = prefsRow?.push_enabled !== false;
 
     for (const propertyId of propertyIds) {
       const { data: assets, error: assetErr } = await supabase
@@ -1767,30 +1771,87 @@ export async function cloudRunRecallCheck(
             }
           }
 
-          if (!notifiedAt && recallsEnabled && inAppEnabled) {
+          // Prefs: Safety recall alerts must be on. Then in-app and/or push.
+          if (!notifiedAt && recallsEnabled && (inAppEnabled || pushEnabled)) {
             const now = new Date().toISOString();
             const dedupe = `recall_alert:${alertId}:${asset.id}`;
-            const { error: noteErr } = await supabase.from("notifications").upsert(
-              {
-                user_id: session.user.id,
-                property_id: propertyId,
-                kind: "recall_alert",
-                title: `Safety recall: ${asset.name}`,
-                body: `${hit.entry.title}. Open the asset to acknowledge or dismiss.`,
-                related_asset_id: asset.id,
-                related_entity_id: alertId,
-                dedupe_key: dedupe,
-                push_status: "skipped",
-                created_at: now,
-              },
-              { onConflict: "user_id,dedupe_key", ignoreDuplicates: true },
-            );
-            if (!noteErr) {
+            const title = `Safety recall: ${asset.name}`;
+            const body = `${hit.entry.title}. Open the asset to acknowledge or dismiss.`;
+            let notificationId: string | null = null;
+            let notified = false;
+            const initialPushStatus = pushEnabled ? "pending" : "skipped";
+
+            if (inAppEnabled) {
+              const { data: noteRow, error: noteErr } = await supabase
+                .from("notifications")
+                .upsert(
+                  {
+                    user_id: session.user.id,
+                    property_id: propertyId,
+                    kind: "recall_alert",
+                    title,
+                    body,
+                    related_asset_id: asset.id,
+                    related_entity_id: alertId,
+                    dedupe_key: dedupe,
+                    push_status: initialPushStatus,
+                    created_at: now,
+                  },
+                  { onConflict: "user_id,dedupe_key" },
+                )
+                .select("id")
+                .single();
+              if (noteErr) {
+                console.error(
+                  "[cloud:recalls] in-app notice failed",
+                  noteErr.message,
+                );
+              } else if (noteRow?.id) {
+                notificationId = String(noteRow.id);
+                result.notificationsCreated += 1;
+                notified = true;
+              }
+            }
+
+            if (pushEnabled) {
+              result.pushesAttempted += 1;
+              try {
+                const { invokeSendPush } = await import("./pushEdge");
+                await invokeSendPush({
+                  kind: "recall_alert",
+                  title,
+                  body,
+                  notificationId,
+                  propertyId,
+                  relatedAssetId: asset.id,
+                  relatedEntityId: alertId,
+                });
+                notified = true;
+              } catch (pushErr) {
+                console.error(
+                  "[cloud:recalls] push edge failed",
+                  pushErr instanceof Error ? pushErr.message : pushErr,
+                );
+                if (notificationId) {
+                  await supabase
+                    .from("notifications")
+                    .update({
+                      push_status: "failed",
+                      push_sent_at: now,
+                    })
+                    .eq("id", notificationId)
+                    .eq("user_id", session.user.id);
+                }
+                // In-app notice (if any) still counts; do not throw.
+                if (notificationId) notified = true;
+              }
+            }
+
+            if (notified) {
               await supabase
                 .from("asset_recall_alerts")
                 .update({ notified_at: now, updated_at: now })
                 .eq("id", alertId);
-              result.notificationsCreated += 1;
             }
           }
         }

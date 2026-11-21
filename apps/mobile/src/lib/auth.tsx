@@ -14,7 +14,6 @@ import {
   login as apiLogin,
   selectProperty as apiSelectProperty,
   signup as apiSignup,
-  switchFace as apiSwitchFace,
   type AppFace,
   type CreatePropertyInput,
   type PublicProperty,
@@ -40,7 +39,6 @@ type AuthState = {
   refreshHomes: () => Promise<void>;
   addHome: (input: CreatePropertyInput) => Promise<PublicProperty>;
   selectHome: (propertyId: string) => Promise<void>;
-  setFace: (face: AppFace) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -190,17 +188,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [accessToken],
   );
 
-  const setFace = useCallback(
-    async (face: AppFace) => {
-      if (!accessToken) throw new Error("Sign in required.");
-      const res = await apiSwitchFace(accessToken, face, true);
-      await saveToken(res.accessToken);
-      setAccessToken(res.accessToken);
-      setUser(res.user);
-    },
-    [accessToken],
-  );
-
   const value = useMemo(
     () => ({
       ready,
@@ -214,7 +201,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshHomes,
       addHome,
       selectHome,
-      setFace,
     }),
     [
       ready,
@@ -228,7 +214,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshHomes,
       addHome,
       selectHome,
-      setFace,
     ],
   );
 

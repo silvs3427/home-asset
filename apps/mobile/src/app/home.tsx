@@ -15,7 +15,7 @@ import { colors } from "@/lib/theme";
 
 /**
  * Homeowner home: Ask HomeAsset → View Assets → Notifications → Settings.
- * No FAB / Documents / competing CTAs on this screen.
+ * HomeAsset is homeowner-only — no contractor face / mode on this screen.
  */
 export default function HomeShellScreen() {
   const router = useRouter();
@@ -26,8 +26,6 @@ export default function HomeShellScreen() {
   if (!user) {
     return <Redirect href="/sign-in" />;
   }
-
-  const isHomeownerFace = user.activeFace === "homeowner";
 
   async function onSelectHome(propertyId: string) {
     if (propertyId === activeProperty?.id) return;
@@ -49,127 +47,15 @@ export default function HomeShellScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.eyebrow}>
-          {isHomeownerFace ? "Homeowner" : "Contractor"}
-        </Text>
+        <Text style={styles.eyebrow}>Homeowner</Text>
 
-        {isHomeownerFace ? (
+        {activeProperty ? (
           <>
-            {activeProperty ? (
-              <>
-                <Text style={styles.title}>{activeProperty.name}</Text>
-                <Text style={styles.address}>
-                  {formatPropertyAddress(activeProperty)}
-                </Text>
+            <Text style={styles.title}>{activeProperty.name}</Text>
+            <Text style={styles.address}>
+              {formatPropertyAddress(activeProperty)}
+            </Text>
 
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/ai/help")}
-                  style={({ pressed }) => [
-                    styles.primaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.primaryLabel}>Ask HomeAsset</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/assets")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>View Assets</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/reminders")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>Notifications</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/settings")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>Settings</Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <Text style={styles.title}>Add your first home</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/add-home")}
-                  style={({ pressed }) => [
-                    styles.primaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.primaryLabel}>Add home</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/settings")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>Settings</Text>
-                </Pressable>
-              </>
-            )}
-
-            {properties.length > 1 ? (
-              <View style={styles.switcher}>
-                <Text style={styles.sectionLabel}>Your homes</Text>
-                {properties.map((property) => {
-                  const selected = property.id === activeProperty?.id;
-                  const busy = switchingId === property.id;
-                  return (
-                    <Pressable
-                      key={property.id}
-                      accessibilityRole="button"
-                      disabled={busy}
-                      onPress={() => {
-                        void onSelectHome(property.id);
-                      }}
-                      style={[
-                        styles.homeRow,
-                        selected && styles.homeRowSelected,
-                      ]}
-                    >
-                      <View style={styles.homeRowText}>
-                        <Text style={styles.homeRowName}>{property.name}</Text>
-                        <Text style={styles.homeRowAddress}>
-                          {formatPropertyAddress(property)}
-                        </Text>
-                      </View>
-                      {busy ? (
-                        <ActivityIndicator color={colors.brand} />
-                      ) : selected ? (
-                        <Text style={styles.homeRowBadge}>Current</Text>
-                      ) : (
-                        <Text style={styles.homeRowAction}>Switch</Text>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <Text style={styles.title}>Contractor</Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push("/ai/help")}
@@ -179,6 +65,50 @@ export default function HomeShellScreen() {
               ]}
             >
               <Text style={styles.primaryLabel}>Ask HomeAsset</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/assets")}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>View Assets</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/reminders")}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Notifications</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/settings")}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Settings</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={styles.title}>Add your first home</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/add-home")}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.primaryLabel}>Add home</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -192,6 +122,44 @@ export default function HomeShellScreen() {
             </Pressable>
           </>
         )}
+
+        {properties.length > 1 ? (
+          <View style={styles.switcher}>
+            <Text style={styles.sectionLabel}>Your homes</Text>
+            {properties.map((property) => {
+              const selected = property.id === activeProperty?.id;
+              const busy = switchingId === property.id;
+              return (
+                <Pressable
+                  key={property.id}
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => {
+                    void onSelectHome(property.id);
+                  }}
+                  style={[
+                    styles.homeRow,
+                    selected && styles.homeRowSelected,
+                  ]}
+                >
+                  <View style={styles.homeRowText}>
+                    <Text style={styles.homeRowName}>{property.name}</Text>
+                    <Text style={styles.homeRowAddress}>
+                      {formatPropertyAddress(property)}
+                    </Text>
+                  </View>
+                  {busy ? (
+                    <ActivityIndicator color={colors.brand} />
+                  ) : selected ? (
+                    <Text style={styles.homeRowBadge}>Current</Text>
+                  ) : (
+                    <Text style={styles.homeRowAction}>Switch</Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>

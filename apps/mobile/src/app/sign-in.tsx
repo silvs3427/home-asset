@@ -12,11 +12,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth";
-import { ApiError, type AppFace } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { API_BASE_URL, SUPABASE_CONFIGURED } from "@/lib/config";
+import { colors } from "@/lib/theme";
 
 /**
- * Everyday email + password sign-in (D13).
+ * Everyday email + password sign-in.
+ * HomeAsset is homeowner-only — signup never offers a contractor role.
  * With Supabase URL + anon key: phone uses Supabase Auth directly (LightLift-style;
  * no LAN API). Without Supabase: local Hono + SQLite demo path.
  */
@@ -25,7 +27,6 @@ export default function SignInScreen() {
   const [mode, setMode] = useState<"login" | "signup">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [startingFace, setStartingFace] = useState<AppFace>("homeowner");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<"network" | "auth" | "other" | null>(
@@ -42,7 +43,7 @@ export default function SignInScreen() {
     setBusy(true);
     try {
       if (mode === "signup") {
-        await signUp(email.trim(), password, startingFace);
+        await signUp(email.trim(), password, "homeowner");
       } else {
         await signIn(email.trim(), password);
       }
@@ -96,39 +97,6 @@ export default function SignInScreen() {
             onChangeText={setPassword}
           />
 
-          {mode === "signup" ? (
-            <View style={styles.faceBlock}>
-              <Text style={styles.label}>I&apos;m signing up as</Text>
-              <View style={styles.faceRow}>
-                {(
-                  [
-                    ["homeowner", "Homeowner"],
-                    ["contractor", "Contractor"],
-                  ] as const
-                ).map(([value, label]) => {
-                  const selected = startingFace === value;
-                  return (
-                    <Pressable
-                      key={value}
-                      accessibilityRole="button"
-                      onPress={() => setStartingFace(value)}
-                      style={[styles.faceChip, selected && styles.faceChipOn]}
-                    >
-                      <Text
-                        style={[
-                          styles.faceChipLabel,
-                          selected && styles.faceChipLabelOn,
-                        ]}
-                      >
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          ) : null}
-
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorKind}>
@@ -155,14 +123,10 @@ export default function SignInScreen() {
             ]}
           >
             {busy ? (
-              <ActivityIndicator color="#F3F6F4" />
+              <ActivityIndicator color={colors.onBrand} />
             ) : (
               <Text style={styles.primaryLabel}>
-                {mode === "signup"
-                  ? startingFace === "homeowner"
-                    ? "Create homeowner account"
-                    : "Create contractor account"
-                  : "Sign in"}
+                {mode === "signup" ? "Create account" : "Sign in"}
               </Text>
             )}
           </Pressable>
@@ -190,7 +154,6 @@ export default function SignInScreen() {
               ? `Local demo API (no Supabase on this install). Target: ${API_BASE_URL}\nPhone preview should use Supabase instead — set EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY in Expo preview env and rebuild. Never use localhost on a phone.`
               : "No cloud connection on this install. Add EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY to the Expo preview environment and rebuild the preview APK."}
         </Text>
-
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -199,7 +162,7 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: colors.bg,
   },
   wrap: {
     flex: 1,
@@ -210,14 +173,14 @@ const styles = StyleSheet.create({
   brand: {
     fontSize: 40,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: colors.brand,
     letterSpacing: -0.5,
   },
   tagline: {
     marginTop: 8,
     fontSize: 16,
     lineHeight: 22,
-    color: "#3D5349",
+    color: colors.copy,
     maxWidth: 320,
   },
   form: {
@@ -228,70 +191,41 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 13,
     fontWeight: "600",
-    color: "#1B3A2F",
+    color: colors.brand,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: "#14241D",
-  },
-  faceBlock: {
-    marginTop: 4,
-  },
-  faceRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 8,
-  },
-  faceChip: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#C5D2CB",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  faceChipOn: {
-    borderColor: "#1B3A2F",
-    backgroundColor: "#1B3A2F",
-  },
-  faceChipLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1B3A2F",
-  },
-  faceChipLabelOn: {
-    color: "#F3F6F4",
+    color: colors.ink,
   },
   errorBox: {
     marginTop: 8,
     gap: 4,
   },
   errorKind: {
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 13,
     fontWeight: "700",
   },
   error: {
-    color: "#8B2E2E",
+    color: colors.danger,
     fontSize: 14,
     lineHeight: 20,
   },
   primaryBtn: {
     marginTop: 16,
-    backgroundColor: "#1B3A2F",
+    backgroundColor: colors.brand,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: colors.onBrand,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -307,7 +241,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   switchLabel: {
-    color: "#2F5B4A",
+    color: colors.brandMuted,
     fontSize: 14,
     fontWeight: "500",
   },
@@ -315,12 +249,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
     fontSize: 12,
     lineHeight: 17,
-    color: "#5A6E64",
-  },
-  privacyNote: {
-    marginTop: 12,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#5A6E64",
+    color: colors.muted,
   },
 });

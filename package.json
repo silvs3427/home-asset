@@ -2,7 +2,7 @@
   "name": "home-asset",
   "private": true,
   "version": "0.1.0",
-  "description": "HomeAsset — durable home memory on the phone (homeowner ledger + contractor submit).",
+  "description": "HomeAsset — durable home memory on the phone for homeowners.",
   "workspaces": [
     "apps/*"
   ],
