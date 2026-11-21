@@ -34,7 +34,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "View Assets",
-    body: "See equipment and installs for this home. Use + to add by hand, or open Add or Update an Asset from Home. Tap an asset to open its record — Documents (photos, files, Find manuals), recalls, and reminders are there. Use Edit on that screen to change fields.",
+    body: "See equipment and installs for this home. Use + to add by hand, or open Add or Update an Asset from Home. Tap an asset to open its record — Documents (photos, files, Find manuals) stay on that screen in both view and Edit, so you can attach without leaving Edit. Recalls and reminders are on the record too.",
   },
   {
     title: "Add or Update an Asset",

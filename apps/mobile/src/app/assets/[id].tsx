@@ -392,7 +392,92 @@ export default function AssetDetailScreen() {
                 }
               />
             </View>
+          </>
+        ) : null}
 
+        {!loading && asset && editing ? (
+          <>
+            <Field label="Name" value={name} onChangeText={setName} />
+            <Text style={styles.label}>Category</Text>
+            <View style={styles.chips}>
+              {ASSET_CATEGORIES.map((item) => {
+                const selected = item.value === category;
+                return (
+                  <Pressable
+                    key={item.value}
+                    accessibilityRole="button"
+                    onPress={() => setCategory(item.value)}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipLabel,
+                        selected && styles.chipLabelSelected,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Field
+              label="Manufacturer"
+              value={manufacturer}
+              onChangeText={setManufacturer}
+            />
+            <Field label="Model" value={model} onChangeText={setModel} />
+            <Field
+              label="Serial"
+              value={serial}
+              onChangeText={setSerial}
+              autoCapitalize="characters"
+            />
+            <Field
+              label="Purchase date (YYYY-MM-DD)"
+              value={purchaseDate}
+              onChangeText={setPurchaseDate}
+              autoCapitalize="none"
+            />
+            <Field
+              label="Install date (YYYY-MM-DD)"
+              value={installDate}
+              onChangeText={setInstallDate}
+              autoCapitalize="none"
+            />
+            <Field
+              label="Warranty end date (YYYY-MM-DD)"
+              value={warrantyEndDate}
+              onChangeText={setWarrantyEndDate}
+              autoCapitalize="none"
+            />
+            <Field
+              label="Warranty term"
+              value={warrantyTerm}
+              onChangeText={setWarrantyTerm}
+              placeholder="e.g. 10 years, lifetime"
+            />
+            <Field
+              label="Installer / vendor"
+              value={installerVendor}
+              onChangeText={setInstallerVendor}
+            />
+            <Field
+              label="Location"
+              value={location}
+              onChangeText={setLocation}
+            />
+            <Field
+              label="Notes"
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+            />
+          </>
+        ) : null}
+
+        {!loading && asset ? (
+          <>
             <Text style={styles.sectionHeading}>Documents</Text>
             <Text style={styles.sectionCopy}>
               Manuals, receipts, warranties, and photos for this asset.
@@ -400,16 +485,16 @@ export default function AssetDetailScreen() {
 
             {manualsSuggestPath({
               assetId: asset.id,
-              manufacturer: asset.manufacturer,
-              model: asset.model,
+              manufacturer: editing ? manufacturer : asset.manufacturer,
+              model: editing ? model : asset.model,
             }) ? (
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
                   const path = manualsSuggestPath({
                     assetId: asset.id,
-                    manufacturer: asset.manufacturer,
-                    model: asset.model,
+                    manufacturer: editing ? manufacturer : asset.manufacturer,
+                    model: editing ? model : asset.model,
                   });
                   if (path) router.push(path);
                 }}
@@ -561,6 +646,11 @@ export default function AssetDetailScreen() {
               ))}
             </View>
 
+          </>
+        ) : null}
+
+        {!loading && asset && !editing ? (
+          <>
             <Text style={styles.sectionHeading}>Safety recalls</Text>
             <Pressable
               accessibilityRole="button"
@@ -762,82 +852,6 @@ export default function AssetDetailScreen() {
 
         {!loading && asset && editing ? (
           <>
-            <Field label="Name" value={name} onChangeText={setName} />
-            <Text style={styles.label}>Category</Text>
-            <View style={styles.chips}>
-              {ASSET_CATEGORIES.map((item) => {
-                const selected = item.value === category;
-                return (
-                  <Pressable
-                    key={item.value}
-                    accessibilityRole="button"
-                    onPress={() => setCategory(item.value)}
-                    style={[styles.chip, selected && styles.chipSelected]}
-                  >
-                    <Text
-                      style={[
-                        styles.chipLabel,
-                        selected && styles.chipLabelSelected,
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Field
-              label="Manufacturer"
-              value={manufacturer}
-              onChangeText={setManufacturer}
-            />
-            <Field label="Model" value={model} onChangeText={setModel} />
-            <Field
-              label="Serial"
-              value={serial}
-              onChangeText={setSerial}
-              autoCapitalize="characters"
-            />
-            <Field
-              label="Purchase date (YYYY-MM-DD)"
-              value={purchaseDate}
-              onChangeText={setPurchaseDate}
-              autoCapitalize="none"
-            />
-            <Field
-              label="Install date (YYYY-MM-DD)"
-              value={installDate}
-              onChangeText={setInstallDate}
-              autoCapitalize="none"
-            />
-            <Field
-              label="Warranty end date (YYYY-MM-DD)"
-              value={warrantyEndDate}
-              onChangeText={setWarrantyEndDate}
-              autoCapitalize="none"
-            />
-            <Field
-              label="Warranty term"
-              value={warrantyTerm}
-              onChangeText={setWarrantyTerm}
-              placeholder="e.g. 10 years, lifetime"
-            />
-            <Field
-              label="Installer / vendor"
-              value={installerVendor}
-              onChangeText={setInstallerVendor}
-            />
-            <Field
-              label="Location"
-              value={location}
-              onChangeText={setLocation}
-            />
-            <Field
-              label="Notes"
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-            />
             <Pressable
               accessibilityRole="button"
               onPress={() => {
