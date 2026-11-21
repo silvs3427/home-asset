@@ -1692,6 +1692,71 @@ function scoreText(haystack: string, question: string): number {
   return hits / words.length;
 }
 
+/**
+ * Reminder / schedule asks vs manuals how-to.
+ * Keep in sync with apps/api/src/lib/ai/reminderSchedule.ts.
+ */
+function isReminderScheduleQuestion(question: string): boolean {
+  const q = question.trim().toLowerCase();
+  if (q.length < 4) return false;
+
+  const mentionsSchedule =
+    /\b(reminder|reminders)\b/.test(q) ||
+    /\b(upcoming|coming up)\b/.test(q) ||
+    /\b(due soon|next due|what'?s due|whats due|anything due|any(thing)? due)\b/.test(
+      q,
+    ) ||
+    /\b(scheduled|schedule)\b/.test(q) ||
+    (/\bmaintenance\b/.test(q) &&
+      /\b(coming|upcoming|due|schedule|reminder|next|any)\b/.test(q)) ||
+    /\b(do i have|have i got|any).{0,48}\b(maintenance|service|filter).{0,48}\b(reminder|coming|upcoming|due)\b/.test(
+      q,
+    );
+
+  if (!mentionsSchedule) return false;
+
+  const howToOnly =
+    /\b(how (do|to|can|should|would)|steps? (to|for)|procedure|instructions?)\b/.test(
+      q,
+    ) &&
+    !/\b(reminder|reminders|upcoming|coming up|due soon|what'?s due)\b/.test(q);
+  if (howToOnly) return false;
+
+  return true;
+}
+
+function recurrencePlainLabel(recurrence: string | null | undefined): string {
+  switch (recurrence) {
+    case "monthly":
+      return "monthly";
+    case "quarterly":
+      return "quarterly";
+    case "yearly":
+      return "yearly";
+    default:
+      return "one-time";
+  }
+}
+
+function formatReminderLine(input: {
+  title: string;
+  dueDate: string;
+  assetName?: string | null;
+  recurrence?: string | null;
+  notes?: string | null;
+}): string {
+  const parts = [
+    `• ${input.title} — due ${input.dueDate}`,
+    input.assetName ? ` (${input.assetName})` : "",
+    ` · ${recurrencePlainLabel(input.recurrence)}`,
+  ];
+  const line = parts.join("");
+  if (input.notes?.trim()) {
+    return `${line}\n  Notes: ${input.notes.trim()}`;
+  }
+  return line;
+}
+
 async function answerHowTo(input: {
   supabase: ReturnType<typeof createClient>;
   propertyId: string;
@@ -1699,8 +1764,12 @@ async function answerHowTo(input: {
   assetId?: string | null;
   mode: AiMode;
 }) {
+  if (isReminderScheduleQuestion(input.question)) {
+    return answerReminderSchedule(input);
+  }
+
   const citations: Array<{
-    kind: "document" | "asset" | "catalog";
+    kind: "document" | "asset" | "catalog" | "reminder";
     id: string;
     title: string;
   }> = [];
@@ -1709,7 +1778,7 @@ async function answerHowTo(input: {
   let assetQuery = input.supabase
     .from("assets")
     .select(
-      "id, name, category, manufacturer, model, serial, location, install_date, warranty_end_date, notes",
+      "id, name, category, manufacturer, model, serial, location, install_date, last_serviced_at, confirmed_by_contractor_name, warranty_end_date, notes",
     )
     .eq("property_id", input.propertyId);
   if (input.assetId) {
@@ -1730,6 +1799,12 @@ async function answerHowTo(input: {
       asset.serial ? `Serial: ${asset.serial}` : null,
       asset.location ? `Location: ${asset.location}` : null,
       asset.install_date ? `Install date: ${asset.install_date}` : null,
+      asset.last_serviced_at
+        ? `Last serviced: ${asset.last_serviced_at}`
+        : null,
+      asset.confirmed_by_contractor_name
+        ? `Confirmed by contractor: ${asset.confirmed_by_contractor_name}`
+        : null,
       asset.warranty_end_date
         ? `Warranty ends: ${asset.warranty_end_date}`
         : null,
@@ -1823,6 +1898,138 @@ async function answerHowTo(input: {
     ].join("\n"),
     citations: citations.slice(0, 8),
     privacy: { writes: false, note: "How-to answers never change your ledger." },
+  };
+}
+
+/**
+ * Home-scoped reminders + related asset service fields via RLS.
+ * Never invents reminders. Empty list is still grounded.
+ */
+async function answerReminderSchedule(input: {
+  supabase: ReturnType<typeof createClient>;
+  propertyId: string;
+  question: string;
+  assetId?: string | null;
+  mode: AiMode;
+}) {
+  let remQuery = input.supabase
+    .from("reminders")
+    .select(
+      "id, title, notes, due_date, recurrence, status, asset_id, last_completed_at",
+    )
+    .eq("property_id", input.propertyId)
+    .eq("status", "active")
+    .order("due_date", { ascending: true });
+  if (input.assetId) {
+    remQuery = remQuery.eq("asset_id", input.assetId);
+  }
+  const { data: reminderRows, error: remError } = await remQuery;
+  if (remError) throw new Error(remError.message);
+
+  let assetQuery = input.supabase
+    .from("assets")
+    .select(
+      "id, name, install_date, last_serviced_at, confirmed_by_contractor_name, warranty_end_date",
+    )
+    .eq("property_id", input.propertyId);
+  if (input.assetId) {
+    assetQuery = assetQuery.eq("id", input.assetId);
+  }
+  const { data: assets, error: assetError } = await assetQuery;
+  if (assetError) throw new Error(assetError.message);
+  if (input.assetId && (!assets || assets.length === 0)) {
+    throw new Error("ASSET_NOT_FOUND");
+  }
+
+  const nameById = new Map(
+    (assets ?? []).map((a) => [String(a.id), String(a.name)]),
+  );
+
+  const citations: Array<{
+    kind: "document" | "asset" | "catalog" | "reminder";
+    id: string;
+    title: string;
+  }> = [];
+  const lines: string[] = [];
+  const reminders = reminderRows ?? [];
+
+  if (reminders.length > 0) {
+    lines.push("Upcoming maintenance reminders for this home:");
+    lines.push("");
+    for (const reminder of reminders.slice(0, 20)) {
+      lines.push(
+        formatReminderLine({
+          title: String(reminder.title),
+          dueDate: String(reminder.due_date),
+          assetName: nameById.get(String(reminder.asset_id)) ?? null,
+          recurrence: String(reminder.recurrence ?? "none"),
+          notes: (reminder.notes as string | null) ?? null,
+        }),
+      );
+      citations.push({
+        kind: "reminder",
+        id: String(reminder.id),
+        title: String(reminder.title),
+      });
+    }
+  } else {
+    lines.push(
+      "This home has no upcoming maintenance reminders saved.",
+      "Add one from Notifications → Add reminder. Ask HomeAsset only lists reminders you already saved — it does not invent them.",
+    );
+  }
+
+  const serviceFacts: string[] = [];
+  for (const asset of assets ?? []) {
+    const facts = [
+      asset.last_serviced_at
+        ? `Last serviced: ${asset.last_serviced_at}`
+        : null,
+      asset.confirmed_by_contractor_name
+        ? `Confirmed by contractor: ${asset.confirmed_by_contractor_name}`
+        : null,
+      asset.install_date ? `Install date: ${asset.install_date}` : null,
+      asset.warranty_end_date
+        ? `Warranty ends: ${asset.warranty_end_date}`
+        : null,
+    ].filter(Boolean);
+    if (facts.length === 0) continue;
+    serviceFacts.push(`• ${asset.name}: ${facts.join(" · ")}`);
+    citations.push({
+      kind: "asset",
+      id: String(asset.id),
+      title: String(asset.name),
+    });
+  }
+
+  if (serviceFacts.length > 0) {
+    lines.push("");
+    lines.push("Related asset service fields on this home:");
+    lines.push(...serviceFacts.slice(0, 12));
+  }
+
+  lines.push("");
+  lines.push(
+    "Open Notifications to mark a reminder done or add more. Asking never changes your ledger.",
+  );
+
+  const seen = new Set<string>();
+  const uniqueCitations = citations.filter((c) => {
+    const key = `${c.kind}:${c.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return {
+    mode: input.mode,
+    grounded: true,
+    answer: lines.join("\n"),
+    citations: uniqueCitations.slice(0, 12),
+    privacy: {
+      writes: false,
+      note: "Reminder answers never change your ledger.",
+    },
   };
 }
 

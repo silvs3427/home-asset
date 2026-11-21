@@ -1,11 +1,16 @@
 import { readDocumentBytes, listDocumentsForProperty } from "../documents.js";
 import { getAssetForProperty, listAssetsForProperty } from "../assets.js";
+import { listRemindersForProperty } from "../reminders.js";
 import { getCatalogProduct } from "./catalog.js";
 import { resolveAiMode, type AiMode } from "./provider.js";
+import {
+  formatReminderLine,
+  isReminderScheduleQuestion,
+} from "./reminderSchedule.js";
 import type { AssetRecord, DocumentRecord } from "../types.js";
 
 export type HowToCitation = {
-  kind: "document" | "asset" | "catalog";
+  kind: "document" | "asset" | "catalog" | "reminder";
   id: string;
   title: string;
 };
@@ -70,8 +75,9 @@ function assetLedgerBlurb(asset: AssetRecord): string {
 }
 
 /**
- * Answer a simple how-to using stored manuals + the home's asset facts only.
- * Never invents open-web advice when nothing is grounded.
+ * Answer home / ledger asks. Reminder/schedule questions read this home's
+ * reminders (+ related asset service fields) under ownership checks — never
+ * invent. Manuals / how-to stay on the grounded manuals path.
  */
 export async function answerHowTo(input: {
   propertyId: string;
@@ -81,6 +87,16 @@ export async function answerHowTo(input: {
 }): Promise<HowToAnswer> {
   const mode = resolveAiMode();
   const question = input.question.trim();
+
+  if (isReminderScheduleQuestion(question)) {
+    return answerReminderSchedule({
+      propertyId: input.propertyId,
+      ownerUserId: input.ownerUserId,
+      assetId: input.assetId,
+      mode,
+    });
+  }
+
   const citations: HowToCitation[] = [];
   const snippets: string[] = [];
 
@@ -244,4 +260,103 @@ function dedupeCitations(citations: HowToCitation[]): HowToCitation[] {
     out.push(c);
   }
   return out;
+}
+
+/**
+ * List upcoming reminders + related asset service fields for this home only.
+ * Grounded even when the list is empty — we read the ledger, we do not invent.
+ */
+function answerReminderSchedule(input: {
+  propertyId: string;
+  ownerUserId: string;
+  assetId?: string | null;
+  mode: AiMode;
+}): HowToAnswer {
+  const reminders = listRemindersForProperty(
+    input.propertyId,
+    input.ownerUserId,
+    {
+      assetId: input.assetId ?? undefined,
+      includeCompleted: false,
+    },
+  );
+
+  let assets: AssetRecord[] = [];
+  if (input.assetId) {
+    const asset = getAssetForProperty(
+      input.assetId,
+      input.propertyId,
+      input.ownerUserId,
+    );
+    if (!asset) throw new Error("ASSET_NOT_FOUND");
+    assets = [asset];
+  } else {
+    assets = listAssetsForProperty(input.propertyId, input.ownerUserId);
+  }
+
+  const citations: HowToCitation[] = [];
+  const lines: string[] = [];
+
+  if (reminders.length > 0) {
+    lines.push("Upcoming maintenance reminders for this home:");
+    lines.push("");
+    for (const reminder of reminders.slice(0, 20)) {
+      lines.push(
+        formatReminderLine({
+          title: reminder.title,
+          dueDate: reminder.dueDate,
+          assetName: reminder.assetName,
+          recurrence: reminder.recurrence,
+          notes: reminder.notes,
+        }),
+      );
+      citations.push({
+        kind: "reminder",
+        id: reminder.id,
+        title: reminder.title,
+      });
+    }
+  } else {
+    lines.push(
+      "This home has no upcoming maintenance reminders saved.",
+      "Add one from Notifications → Add reminder. Ask HomeAsset only lists reminders you already saved — it does not invent them.",
+    );
+  }
+
+  const serviceFacts: string[] = [];
+  for (const asset of assets) {
+    const facts = [
+      asset.lastServicedAt ? `Last serviced: ${asset.lastServicedAt}` : null,
+      asset.confirmedByContractorName
+        ? `Confirmed by contractor: ${asset.confirmedByContractorName}`
+        : null,
+      asset.installDate ? `Install date: ${asset.installDate}` : null,
+      asset.warrantyEndDate ? `Warranty ends: ${asset.warrantyEndDate}` : null,
+    ].filter(Boolean);
+    if (facts.length === 0) continue;
+    serviceFacts.push(`• ${asset.name}: ${facts.join(" · ")}`);
+    citations.push({ kind: "asset", id: asset.id, title: asset.name });
+  }
+
+  if (serviceFacts.length > 0) {
+    lines.push("");
+    lines.push("Related asset service fields on this home:");
+    lines.push(...serviceFacts.slice(0, 12));
+  }
+
+  lines.push("");
+  lines.push(
+    "Open Notifications to mark a reminder done or add more. Asking never changes your ledger.",
+  );
+
+  return {
+    mode: input.mode,
+    grounded: true,
+    answer: lines.join("\n"),
+    citations: dedupeCitations(citations).slice(0, 12),
+    privacy: {
+      writes: false,
+      note: "Reminder answers never change your ledger.",
+    },
+  };
 }

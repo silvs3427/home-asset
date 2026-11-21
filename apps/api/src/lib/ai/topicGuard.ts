@@ -29,7 +29,7 @@ const GENERAL_CHAT_PATTERNS: RegExp[] = [
 ];
 
 const HOME_POSITIVE =
-  /\b(home|house|hvac|furnace|roof|generator|appliance|water heater|plumbing|electrical|warranty|manual|recall|maintenance|filter|thermostat|contractor|invoice|permit|asset|serial|install|garage|basement|attic|leak|breaker|outlet|smoke detector|carbon monoxide|kids? gear|vehicle|sump|septic|well pump)\b/i;
+  /\b(home|house|hvac|furnace|roof|generator|appliance|water heater|plumbing|electrical|warranty|manual|recall|maintenance|reminder|reminders|schedule|due|filter|thermostat|contractor|invoice|permit|asset|serial|install|garage|basement|attic|leak|breaker|outlet|smoke detector|carbon monoxide|kids? gear|vehicle|sump|septic|well pump)\b/i;
 
 export type TopicGuardResult =
   | { allowed: true }
