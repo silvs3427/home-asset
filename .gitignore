@@ -36,6 +36,11 @@ android/.gradle/
 *.p12
 *.mobileprovision
 
+# Firebase FCM private keys (never commit). google-services.json is handled
+# under apps/mobile/.gitignore — use EAS file env or force-add if you prefer.
+*firebase-adminsdk*.json
+fcm-service-account*.json
+
 # Local tooling
 .cache/
 tmp/

@@ -16,6 +16,7 @@ Mobile Expo specifics live in [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
 - Prefer cloud Supabase for phone testing (URL + anon key).
 - `EXPO_PUBLIC_API_URL` / LAN IP is fallback for SQLite demo without Supabase only.
 - Recall lock-screen push on cloud: edge `send-push` + secret `EXPO_ACCESS_TOKEN` (never `EXPO_PUBLIC_*`). Phone still matches fixtures and writes in-app notices via RLS; edge only sends Expo.
+- Android push registration needs Firebase `google-services.json` via `android.googleServicesFile` (`GOOGLE_SERVICES_JSON` EAS file env or local file). FCM V1 service account goes to Expo Credentials (not the phone). New APK after first wiring — see `apps/mobile/README.md`.
 
 ## Homeowner-only product (do not regress)
 

@@ -178,6 +178,18 @@ export async function registerForPushNotifications(
           "Push native modules are unavailable here. Soft-disabled — use a development build for live push; in-app notices still work.",
       };
     }
+    // Android FCM: missing google-services.json / googleServicesFile in the APK.
+    if (
+      /Firebase Messaging|googleServicesFile|Default FirebaseApp|FirebaseApp is not initialized/i.test(
+        message,
+      )
+    ) {
+      return {
+        ok: false,
+        reason:
+          "This Android install was built without Firebase Messaging (google-services). Add google-services.json, rebuild the preview APK, and install the new build. In-app notices still work. Steps: apps/mobile/README.md → Android lock-screen push (FCM).",
+      };
+    }
     return { ok: false, reason: message };
   }
 }

@@ -64,3 +64,77 @@ Do **not** set `EXPO_PUBLIC_API_URL` for preview (that caused phones to try `loc
 Dev/test: turn **Confirm email OFF** in Supabase Auth so sign-up returns a session immediately.
 
 See [`.env.example`](./.env.example) and [`../../supabase/README.md`](../../supabase/README.md).
+
+## Android lock-screen push (FCM)
+
+Android preview installs need a small Firebase config file baked into the APK
+before **Register this phone for push** works. Without it you see:
+“Unable to get Firebase Messaging instance… googleServicesFile…”.
+
+**New phone install required** after this is set up (native FCM config).
+In-app Notifications still work on the old install.
+
+There are **two** Firebase pieces (easy to mix up):
+
+| Piece | What it does | Where it goes |
+| --- | --- | --- |
+| `google-services.json` | Lets **this phone** get a push token | Inside the APK (via app config) |
+| FCM V1 **service account** JSON | Lets **Expo’s servers** deliver Android pushes | Expo project → Credentials (never in the phone app) |
+
+Package name for HomeAsset Android: **`com.homeasset.app`**.
+
+### A. Create the Firebase Android app (browser)
+
+1. Open [Firebase Console](https://console.firebase.google.com/) → create or pick a project (name it HomeAsset is fine).
+2. Add an **Android** app. Android package name: `com.homeasset.app` (must match exactly).
+3. Download **`google-services.json`**.
+4. (For delivery later) Project settings → **Service accounts** → **Generate new private key**. Save that JSON somewhere private (Downloads is fine). This file is a **secret** — do not put it in GitHub.
+
+### B. Give the phone build `google-services.json` (pick one)
+
+**Option 1 — EAS file secret (preferred; file stays off GitHub)**
+
+From PowerShell (replace the path with where the download landed):
+
+```powershell
+cd apps\mobile
+npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value "C:\Users\YOU\Downloads\google-services.json" --environment development --visibility secret
+npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value "C:\Users\YOU\Downloads\google-services.json" --environment preview --visibility secret
+npx eas-cli@latest env:set --name GOOGLE_SERVICES_JSON --type file --value "C:\Users\YOU\Downloads\google-services.json" --environment production --visibility secret
+```
+
+Or on the Expo website: Project → **Environment variables** → **Add** → type **File**, name `GOOGLE_SERVICES_JSON`, environments `development` / `preview` / `production`, upload the same `google-services.json`.
+
+`app.config.js` reads `GOOGLE_SERVICES_JSON` (alias `GOOGLE_SERVICES_FILE`) and sets `android.googleServicesFile`.
+
+**Option 2 — Local file next to the app**
+
+Copy the download to `apps/mobile/google-services.json`. That path is gitignored by default. Either keep using Option 1 for cloud builds, or force-add it if you are comfortable committing public Firebase client IDs (`git add -f apps/mobile/google-services.json`).
+
+### C. Upload the FCM V1 service account to Expo (delivery)
+
+Needed so Expo can **send** Android lock-screen pushes (separate from registering the token on the phone).
+
+**UI:** [expo.dev](https://expo.dev) → HomeAsset project → **Credentials** → Android → `com.homeasset.app` → **FCM V1 service account key** → upload the private-key JSON from step A.4.
+
+**Or CLI:**
+
+```powershell
+cd apps\mobile
+npx eas-cli@latest credentials
+```
+
+Choose Android → your build profile / `com.homeasset.app` → Google Service Account → **FCM V1** → upload the private-key JSON.
+
+### D. Rebuild and reinstall the preview APK
+
+```powershell
+cd apps\mobile
+npx eas-cli@latest build -p android --profile preview
+```
+
+When the build finishes, install the **new** APK (uninstall the old HomeAsset preview first if the phone keeps the old one). Then:
+
+Settings → **Push & in-app** → turn Push on → **Register this phone for push**.
+
+Live lock-screen delivery still needs the cloud sender secret `EXPO_ACCESS_TOKEN` on Supabase edge `send-push` — see [`../../supabase/functions/send-push/README.md`](../../supabase/functions/send-push/README.md). That part does **not** need another phone rebuild once registration works.
