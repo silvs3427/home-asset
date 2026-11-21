@@ -122,13 +122,13 @@ const styles = StyleSheet.create({
   secondaryBtn: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.brand,
+    borderColor: colors.accent,
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: "center",
   },
   secondaryLabel: {
-    color: colors.brand,
+    color: colors.accent,
     fontSize: 16,
     fontWeight: "600",
   },

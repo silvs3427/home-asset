@@ -1,20 +1,23 @@
 /**
  * HomeAsset mobile color tokens — use these everywhere; no one-off palette drifts.
- * Sage ledger look: soft mint ground, deep forest brand, muted copy.
+ * Mets-inspired brand: royal blue primary, orange accents, cool light ground.
+ * Official-ish Mets blues/oranges tuned for readable UI contrast (not purple/indigo).
  */
 export const colors = {
-  bg: "#F3F6F4",
+  bg: "#F2F5FA",
   surface: "#FFFFFF",
-  brand: "#1B3A2F",
-  brandMuted: "#2F5B4A",
-  ink: "#14241D",
-  copy: "#3D5349",
-  muted: "#5A6E64",
-  border: "#C5D2CB",
-  borderSoft: "#E2EAE5",
-  placeholder: "#8AA094",
-  danger: "#8B2E2E",
-  onBrand: "#F3F6F4",
+  brand: "#002D72",
+  brandMuted: "#1E4D96",
+  accent: "#FF5910",
+  ink: "#0B1B33",
+  copy: "#3D4F66",
+  muted: "#5C6E84",
+  border: "#C5D0DE",
+  borderSoft: "#E6EBF3",
+  placeholder: "#8A9BB0",
+  danger: "#B42318",
+  onBrand: "#FFFFFF",
+  onAccent: "#FFFFFF",
 } as const;
 
 export type ThemeColor = keyof typeof colors;

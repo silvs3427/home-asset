@@ -249,7 +249,7 @@ export default function PropertyDocumentsScreen() {
               style={styles.input}
               value={title}
               onChangeText={setTitle}
-              placeholderTextColor="#7A8A82"
+              placeholderTextColor="#8A9BB0"
             />
             <Text style={styles.label}>Type</Text>
             <View style={styles.chips}>
@@ -281,7 +281,7 @@ export default function PropertyDocumentsScreen() {
               onChangeText={setDocumentDate}
               autoCapitalize="none"
               placeholder="optional"
-              placeholderTextColor="#7A8A82"
+              placeholderTextColor="#8A9BB0"
             />
             <Pressable
               accessibilityRole="button"
@@ -296,7 +296,7 @@ export default function PropertyDocumentsScreen() {
               ]}
             >
               {busy ? (
-                <ActivityIndicator color="#F3F6F4" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.primaryLabel}>Save to this home</Text>
               )}
@@ -329,7 +329,7 @@ export default function PropertyDocumentsScreen() {
         ) : null}
 
         {loading ? (
-          <ActivityIndicator style={styles.loader} color="#1B3A2F" />
+          <ActivityIndicator style={styles.loader} color="#002D72" />
         ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -378,7 +378,7 @@ export default function PropertyDocumentsScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: "#F2F5FA",
   },
   header: {
     paddingHorizontal: 24,
@@ -396,14 +396,14 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: "#1E4D96",
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: "#002D72",
   },
   body: {
     paddingHorizontal: 24,
@@ -415,46 +415,46 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   title: {
     marginTop: 8,
     fontSize: 28,
     fontWeight: "700",
-    color: "#14241D",
+    color: "#0B1B33",
     letterSpacing: -0.4,
   },
   copy: {
     marginTop: 12,
     fontSize: 16,
     lineHeight: 24,
-    color: "#3D5349",
+    color: "#3D4F66",
   },
   actions: {
     marginTop: 20,
     gap: 10,
   },
   primaryBtn: {
-    backgroundColor: "#1B3A2F",
+    backgroundColor: "#002D72",
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
   },
   secondaryBtn: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#1B3A2F",
+    borderColor: "#FF5910",
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   secondaryLabel: {
-    color: "#1B3A2F",
+    color: "#FF5910",
     fontSize: 16,
     fontWeight: "600",
   },
@@ -473,30 +473,30 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   pendingName: {
     marginTop: 4,
     marginBottom: 8,
     fontSize: 14,
-    color: "#3D5349",
+    color: "#3D4F66",
   },
   label: {
     marginTop: 12,
     fontSize: 13,
     fontWeight: "600",
-    color: "#1B3A2F",
+    color: "#002D72",
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: "#C5D0DE",
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: "#14241D",
+    color: "#0B1B33",
   },
   chips: {
     flexDirection: "row",
@@ -505,30 +505,30 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: "#C5D0DE",
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   chipSelected: {
-    borderColor: "#1B3A2F",
-    backgroundColor: "#1B3A2F",
+    borderColor: "#002D72",
+    backgroundColor: "#002D72",
   },
   chipLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#2F5B4A",
+    color: "#1E4D96",
   },
   chipLabelSelected: {
-    color: "#F3F6F4",
+    color: "#FFFFFF",
   },
   cancelBtn: {
     marginTop: 12,
     paddingVertical: 8,
   },
   cancelLabel: {
-    color: "#2F5B4A",
+    color: "#1E4D96",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   exportLabel: {
-    color: "#2F5B4A",
+    color: "#1E4D96",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -545,21 +545,21 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 14,
     lineHeight: 20,
-    color: "#3D5349",
+    color: "#3D4F66",
   },
   loader: {
     marginTop: 28,
   },
   error: {
     marginTop: 16,
-    color: "#8B2E2E",
+    color: "#B42318",
     fontSize: 14,
   },
   empty: {
     marginTop: 24,
     fontSize: 15,
     lineHeight: 22,
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   list: {
     marginTop: 20,
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
   },
   row: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: "#C5D0DE",
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     padding: 14,
@@ -582,27 +582,27 @@ const styles = StyleSheet.create({
   rowName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#14241D",
+    color: "#0B1B33",
   },
   rowMeta: {
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   rowAction: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#2F5B4A",
+    color: "#1E4D96",
   },
   rowDanger: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#8B2E2E",
+    color: "#B42318",
   },
   footnote: {
     marginTop: 28,
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
 });

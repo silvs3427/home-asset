@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rowUnread: {
-    borderColor: colors.brand,
+    borderColor: colors.accent,
   },
   rowText: {
     gap: 4,
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
   due: {
     fontSize: 13,
     fontWeight: "700",
-    color: colors.brand,
+    color: colors.accent,
   },
   rowName: {
     fontSize: 17,

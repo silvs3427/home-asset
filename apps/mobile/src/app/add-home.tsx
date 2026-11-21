@@ -124,7 +124,7 @@ export default function AddHomeScreen() {
             ]}
           >
             {busy ? (
-              <ActivityIndicator color="#F3F6F4" />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.primaryLabel}>Save home</Text>
             )}
@@ -150,7 +150,7 @@ function Field(props: {
         value={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
-        placeholderTextColor="#7A8A82"
+        placeholderTextColor="#8A9BB0"
         autoComplete={props.autoComplete}
       />
     </View>
@@ -160,7 +160,7 @@ function Field(props: {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#F3F6F4",
+    backgroundColor: "#F2F5FA",
   },
   flex: {
     flex: 1,
@@ -181,14 +181,14 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   backLabel: {
-    color: "#2F5B4A",
+    color: "#1E4D96",
     fontSize: 14,
     fontWeight: "600",
   },
   brand: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: "#002D72",
   },
   body: {
     paddingHorizontal: 24,
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   copy: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#3D5349",
+    color: "#3D4F66",
     marginBottom: 12,
   },
   field: {
@@ -207,18 +207,18 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1B3A2F",
+    color: "#002D72",
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: "#C5D0DE",
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: "#14241D",
+    color: "#0B1B33",
   },
   row: {
     flexDirection: "row",
@@ -229,18 +229,18 @@ const styles = StyleSheet.create({
   },
   error: {
     marginTop: 14,
-    color: "#8B2E2E",
+    color: "#B42318",
     fontSize: 14,
   },
   primaryBtn: {
     marginTop: 24,
-    backgroundColor: "#1B3A2F",
+    backgroundColor: "#002D72",
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   primaryLabel: {
-    color: "#F3F6F4",
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
   },

@@ -80,7 +80,7 @@ export default function SignInScreen() {
             autoComplete="email"
             keyboardType="email-address"
             placeholder="you@example.com"
-            placeholderTextColor="#7A8A82"
+            placeholderTextColor="#8A9BB0"
             style={styles.input}
             value={email}
             onChangeText={setEmail}
@@ -91,7 +91,7 @@ export default function SignInScreen() {
             secureTextEntry
             autoComplete={mode === "signup" ? "new-password" : "password"}
             placeholder="At least 8 characters"
-            placeholderTextColor="#7A8A82"
+            placeholderTextColor="#8A9BB0"
             style={styles.input}
             value={password}
             onChangeText={setPassword}

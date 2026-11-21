@@ -234,13 +234,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.brand,
+    borderColor: colors.accent,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
   secondaryLabel: {
-    color: colors.brand,
+    color: colors.accent,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   homeRowSelected: {
-    borderColor: colors.brand,
+    borderColor: colors.accent,
   },
   homeRowText: {
     flex: 1,
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   homeRowBadge: {
     fontSize: 12,
     fontWeight: "700",
-    color: colors.brand,
+    color: colors.accent,
   },
   homeRowAction: {
     fontSize: 13,

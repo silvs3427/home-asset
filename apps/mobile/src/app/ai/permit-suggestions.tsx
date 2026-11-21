@@ -118,7 +118,7 @@ export default function PermitSuggestionsScreen() {
         </Pressable>
 
         {busy ? (
-          <ActivityIndicator style={{ marginTop: 16 }} color="#1B3A2F" />
+          <ActivityIndicator style={{ marginTop: 16 }} color="#002D72" />
         ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -202,7 +202,7 @@ export default function PermitSuggestionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F3F6F4" },
+  safe: { flex: 1, backgroundColor: "#F2F5FA" },
   header: {
     paddingHorizontal: 24,
     paddingTop: 12,
@@ -211,79 +211,79 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  back: { color: "#2F5B4A", fontSize: 14, fontWeight: "600", width: 56 },
-  brand: { fontSize: 18, fontWeight: "700", color: "#1B3A2F" },
+  back: { color: "#1E4D96", fontSize: 14, fontWeight: "600", width: 56 },
+  brand: { fontSize: 18, fontWeight: "700", color: "#002D72" },
   headerSpacer: { width: 56 },
   body: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
-  copy: { fontSize: 16, lineHeight: 24, color: "#3D5349" },
+  copy: { fontSize: 16, lineHeight: 24, color: "#3D4F66" },
   address: {
     marginTop: 10,
     fontSize: 15,
     lineHeight: 22,
     fontWeight: "600",
-    color: "#14241D",
+    color: "#0B1B33",
   },
   privacy: {
     marginTop: 10,
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   primaryBtn: {
     marginTop: 16,
-    backgroundColor: "#1B3A2F",
+    backgroundColor: "#002D72",
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
   },
-  primaryLabel: { color: "#F3F6F4", fontSize: 16, fontWeight: "600" },
+  primaryLabel: { color: "#FFFFFF", fontSize: 16, fontWeight: "600" },
   pressed: { opacity: 0.9 },
   disabled: { opacity: 0.45 },
-  error: { marginTop: 14, color: "#8B2E2E", fontSize: 14 },
+  error: { marginTop: 14, color: "#B42318", fontSize: 14 },
   draftBox: { marginTop: 24 },
   sectionLabel: {
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   fieldValue: {
     marginTop: 12,
     fontSize: 15,
     lineHeight: 22,
-    color: "#14241D",
+    color: "#0B1B33",
   },
   rowCard: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: "#C5D2CB",
+    borderColor: "#C5D0DE",
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     padding: 12,
     flexDirection: "row",
     gap: 10,
   },
-  rowCardOn: { borderColor: "#1B3A2F" },
+  rowCardOn: { borderColor: "#002D72" },
   check: {
     width: 22,
     fontSize: 18,
     fontWeight: "700",
-    color: "#1B3A2F",
+    color: "#002D72",
   },
-  rowTitle: { fontSize: 15, fontWeight: "600", color: "#14241D" },
+  rowTitle: { fontSize: 15, fontWeight: "600", color: "#0B1B33" },
   rowTitleSmall: {
     marginTop: 8,
     fontSize: 14,
     fontWeight: "600",
-    color: "#14241D",
+    color: "#0B1B33",
   },
   rowMeta: {
     marginTop: 4,
     fontSize: 13,
     lineHeight: 18,
-    color: "#5A6E64",
+    color: "#5C6E84",
   },
   linkBtn: { marginTop: 12, paddingVertical: 8, alignItems: "center" },
-  linkLabel: { color: "#2F5B4A", fontSize: 14, fontWeight: "600" },
+  linkLabel: { color: "#1E4D96", fontSize: 14, fontWeight: "600" },
 });
