@@ -1556,6 +1556,112 @@ describe("HomeAsset API — AI assist (EPIC 6)", () => {
     __resetAiAssistRateLimitForTests();
   });
 
+  it("answers Support without auth inventing facts and redirects ledger asks", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "ai-support@example.com");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    const unauth = await app.request("/ai/support", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ question: "How do I sign out?" }),
+    });
+    assert.equal(unauth.status, 401);
+
+    const signedOut = await app.request("/ai/support", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ question: "How do I sign out?" }),
+    });
+    assert.equal(signedOut.status, 200);
+    const signedBody = (await signedOut.json()) as {
+      answer: string;
+      escalate: boolean;
+      nextSteps: string[];
+      privacy: { writes: boolean };
+    };
+    assert.equal(signedBody.privacy.writes, false);
+    assert.equal(signedBody.escalate, false);
+    assert.match(signedBody.answer, /Settings/i);
+    assert.ok(signedBody.nextSteps.length >= 1);
+
+    const ledger = await app.request("/ai/support", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        question: "What oil change interval is in my generator manual?",
+      }),
+    });
+    assert.equal(ledger.status, 200);
+    const ledgerBody = (await ledger.json()) as { answer: string };
+    assert.match(ledgerBody.answer, /Ask HomeAsset/i);
+
+    const frustrated = await app.request("/ai/support", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        question: "I'm frustrated — the app is stuck and nothing works",
+      }),
+    });
+    assert.equal(frustrated.status, 200);
+    const frBody = (await frustrated.json()) as {
+      escalate: boolean;
+      answer: string;
+    };
+    assert.equal(frBody.escalate, true);
+    assert.match(frBody.answer, /sorry|frustrating/i);
+  });
+
+  it("enforces Support burst limits separately from Ask HomeAsset", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    process.env.SUPPORT_ASSIST_BURST_LIMIT = "2";
+    process.env.SUPPORT_ASSIST_BURST_WINDOW_SECONDS = "60";
+    process.env.SUPPORT_ASSIST_DAILY_CAP = "25";
+    const { __resetAiAssistRateLimitForTests } = await import(
+      "./lib/ai/rateLimit.js"
+    );
+    __resetAiAssistRateLimitForTests();
+
+    const app = createApp();
+    const auth = await signup(app, "ai-support-limit@example.com");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+
+    for (let i = 0; i < 2; i += 1) {
+      const ok = await app.request("/ai/support", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ question: `How do I sign out? attempt ${i}` }),
+      });
+      assert.equal(ok.status, 200, `support ${i} should succeed`);
+    }
+
+    const blocked = await app.request("/ai/support", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ question: "How do I sign out again?" }),
+    });
+    assert.equal(blocked.status, 429);
+    const blockedBody = (await blocked.json()) as {
+      error: string;
+      code: string;
+      message: string;
+    };
+    assert.equal(blockedBody.error, "rate_limited");
+    assert.match(blockedBody.message, /Support|short pause/i);
+
+    delete process.env.SUPPORT_ASSIST_BURST_LIMIT;
+    delete process.env.SUPPORT_ASSIST_BURST_WINDOW_SECONDS;
+    delete process.env.SUPPORT_ASSIST_DAILY_CAP;
+    __resetAiAssistRateLimitForTests();
+  });
+
   it("formats contractor notes as a draft without writing the ledger", async () => {
     process.env.AI_FORCE_MOCK = "1";
     const app = createApp();

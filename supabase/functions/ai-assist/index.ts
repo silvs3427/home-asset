@@ -26,6 +26,14 @@ import {
 } from "../_shared/catalog.ts";
 import { enforceRateLimit } from "../_shared/rateLimitStub.ts";
 import {
+  assessSupportTopic,
+  buildSupportUserPrompt,
+  mockSupportAnswer,
+  parseSupportModelJson,
+  SUPPORT_SYSTEM_BLURB,
+  type SupportAssistReply,
+} from "../_shared/supportAssist.ts";
+import {
   assessAskHomeAssetTopic,
   HOME_SCOPE_SYSTEM_BLURB,
 } from "../_shared/topicGuard.ts";
@@ -71,6 +79,7 @@ const RequestSchema = z
       "status",
       "scan",
       "howto",
+      "support",
       "contractor-format",
       "email-intake",
       "asset-intake",
@@ -78,6 +87,8 @@ const RequestSchema = z
       "permits-suggest",
     ]),
     propertyId: z.string().uuid().optional(),
+    /** Optional display label for Support warmth — never invent ledger facts from it. */
+    homeLabel: z.string().max(200).optional().nullable(),
     hint: z.string().max(500).optional().nullable(),
     filename: z.string().max(200).optional().nullable(),
     question: z.string().max(1000).optional(),
@@ -198,9 +209,11 @@ Deno.serve(async (req) => {
       "status",
       "scan",
       "howto",
+      "support",
       "contractor-format",
       "email-intake",
       "asset-intake",
+      "suggest-manuals",
       "permits-suggest",
     ] as const;
     const staleDeploy =
@@ -219,7 +232,8 @@ Deno.serve(async (req) => {
   const body = parsed.data;
   const live = resolveLiveConfig();
 
-  // Soft topic reject before burning quota (howto + free-text intakes).
+  // Soft topic reject before burning quota (howto + support + free-text intakes).
+  let supportRedirectToAsk = false;
   if (body.action === "howto") {
     const topic = assessAskHomeAssetTopic(body.question);
     if (!topic.allowed) {
@@ -236,6 +250,23 @@ Deno.serve(async (req) => {
         },
       });
     }
+  } else if (body.action === "support") {
+    const topic = assessSupportTopic(body.question);
+    if (!topic.allowed) {
+      return jsonResponse({
+        mode: live.mode,
+        refused: true,
+        code: "off_topic",
+        answer: topic.message,
+        escalate: false,
+        nextSteps: ["Home → Ask HomeAsset for ledger help"],
+        privacy: {
+          writes: false,
+          note: "Support replies never change your ledger or account settings.",
+        },
+      });
+    }
+    supportRedirectToAsk = topic.redirectToAsk === true;
   } else if (body.action === "contractor-format") {
     const topic = assessAskHomeAssetTopic(body.inputText);
     if (!topic.allowed) {
@@ -255,31 +286,33 @@ Deno.serve(async (req) => {
     }
   }
 
+  const rateRoute =
+    body.action === "support" ? "support-assist" : "ai-assist";
   const rate = await enforceRateLimit({
     key: user.id,
-    route: "ai-assist",
+    route: rateRoute,
     supabase,
     skip: body.action === "status",
   });
   if (!rate.allowed) {
     const code: ErrorCode =
       rate.reason === "daily_cap" ? "daily_cap" : "rate_limited";
-    return errorResponse(
-      429,
-      code,
-      rate.message ??
-        (rate.reason === "daily_cap"
+    const fallback =
+      rateRoute === "support-assist"
+        ? rate.reason === "daily_cap"
+          ? `You've reached today's Support limit (${rate.dailyCap} messages).`
+          : "Support needs a short pause — try again in a moment."
+        : rate.reason === "daily_cap"
           ? `You've reached today's Ask HomeAsset limit (${rate.dailyCap} asks).`
-          : "Ask HomeAsset needs a short pause — try again in a moment."),
-      {
-        extra: {
-          retry_after: rate.retryAfterSeconds,
-          daily_cap: rate.dailyCap,
-          daily_remaining: rate.dailyRemaining,
-          reason: rate.reason,
-        },
+          : "Ask HomeAsset needs a short pause — try again in a moment.";
+    return errorResponse(429, code, rate.message ?? fallback, {
+      extra: {
+        retry_after: rate.retryAfterSeconds,
+        daily_cap: rate.dailyCap,
+        daily_remaining: rate.dailyRemaining,
+        reason: rate.reason,
       },
-    );
+    });
   }
 
   try {
@@ -291,18 +324,19 @@ Deno.serve(async (req) => {
           capabilities: {
             scan: true,
             howto: true,
+            support: true,
             contractorFormat: true,
             emailIntake: true,
             assetIntake: true,
             suggestManuals: true,
             permitsSuggest: true,
             submitToLedger: false,
-            note: "Confirm / approve writes happen on the phone via Supabase RLS — never silently.",
+            note: "Confirm / approve writes happen on the phone via Supabase RLS — never silently. Support is separate from Ask HomeAsset.",
           },
           limits: {
             burstLimit: rate.burstLimit,
             dailyCap: rate.dailyCap,
-            note: "Server-enforced per signed-in user. Home help only — not a general coding assistant.",
+            note: "Server-enforced per signed-in user. Ask HomeAsset = home help; Support = app/account help — separate caps, not unlimited AI.",
           },
           privacy: {
             writes: false,
@@ -372,6 +406,36 @@ Deno.serve(async (req) => {
           mode: live.mode,
         });
         return jsonResponse(howto);
+      }
+
+      case "support": {
+        if (!body.question?.trim()) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "question required",
+          );
+        }
+        // Optional home ownership check — never invent ledger facts from the label.
+        if (body.propertyId) {
+          await assertPropertyOwned(supabase, body.propertyId, user.id);
+        }
+        const support = await answerCustomerSupport({
+          question: body.question.trim(),
+          homeLabel: body.homeLabel,
+          live,
+          redirectToAsk: supportRedirectToAsk,
+        });
+        console.info(
+          JSON.stringify({
+            msg: "support_assist_reply",
+            userId: user.id,
+            mode: support.mode,
+            escalate: support.escalate,
+            refused: support.refused === true,
+          }),
+        );
+        return jsonResponse(support);
       }
 
       case "contractor-format": {
@@ -1755,6 +1819,47 @@ function formatReminderLine(input: {
     return `${line}\n  Notes: ${input.notes.trim()}`;
   }
   return line;
+}
+
+/**
+ * Product / account Support — warm, privacy-first, no inventing account facts.
+ * Separate from Ask HomeAsset ledger grounding.
+ */
+async function answerCustomerSupport(input: {
+  question: string;
+  homeLabel?: string | null;
+  live: LiveConfig;
+  redirectToAsk?: boolean;
+}): Promise<SupportAssistReply> {
+  if (input.redirectToAsk) {
+    return mockSupportAnswer(input.question, {
+      redirectToAsk: true,
+      mode: input.live.mode,
+    });
+  }
+
+  if (input.live.mode === "live") {
+    try {
+      const content = await chatJsonText({
+        live: input.live,
+        system: SUPPORT_SYSTEM_BLURB,
+        user: buildSupportUserPrompt({
+          question: input.question,
+          homeLabel: input.homeLabel,
+        }),
+      });
+      return parseSupportModelJson(content, input.question, "live");
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          msg: "support_assist_live_fallback_mock",
+          detail: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
+
+  return mockSupportAnswer(input.question, { mode: "mock" });
 }
 
 async function answerHowTo(input: {

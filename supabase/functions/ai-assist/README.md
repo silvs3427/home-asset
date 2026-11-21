@@ -1,6 +1,6 @@
 # ai-assist
 
-Server-side AI for HomeAsset (scan / how-to / contractor format / email intake / multi-source asset intake / permit hints).
+Server-side AI for HomeAsset (scan / how-to / **support** / contractor format / email intake / multi-source asset intake / permit hints).
 
 **Same pattern as LightLift** (`parse-voice-invoice` / `find-truck-part`):
 
@@ -19,14 +19,17 @@ Server-side AI for HomeAsset (scan / how-to / contractor format / email intake /
 | `AI_MODEL` | No | OpenAI model when using OpenAI keys (default `gpt-4o-mini`) |
 | `AI_BASE_URL` | No | OpenAI-compatible base (default `https://api.openai.com/v1`) |
 | `AI_ASSIST_LIVE` | No | Default on when a key is set; set `false` to force mock |
-| `AI_ASSIST_BURST_LIMIT` | No | Default `10` asks per burst window |
+| `AI_ASSIST_BURST_LIMIT` | No | Default `10` asks per burst window (Ask HomeAsset) |
 | `AI_ASSIST_BURST_WINDOW_SECONDS` | No | Default `60` |
-| `AI_ASSIST_DAILY_CAP` | No | Default `40` asks per UTC day per user |
+| `AI_ASSIST_DAILY_CAP` | No | Default `40` asks per UTC day per user (Ask HomeAsset) |
+| `SUPPORT_ASSIST_BURST_LIMIT` | No | Default `8` Support messages per burst window |
+| `SUPPORT_ASSIST_BURST_WINDOW_SECONDS` | No | Default `60` |
+| `SUPPORT_ASSIST_DAILY_CAP` | No | Default `25` Support messages per UTC day |
 | `UPSTASH_REDIS_REST_URL` / `TOKEN` | No | Optional Redis backend for caps |
 
 Without any AI key (or with live flag off), the function returns **mock** catalog drafts so demos still work. Live mode turns on when a key is present.
 
-**Usage limits:** each signed-in user is capped (defaults above). Apply migration `20261121140000_ai_assist_rate_limits.sql` so daily caps stay durable across edge cold starts. Off-topic coding / general-chat asks are soft-refused with a clear message and do not need a phone rebuild.
+**Usage limits:** Ask HomeAsset and Support use **separate** per-user caps (defaults above). Apply migrations `20261121140000_ai_assist_rate_limits.sql` and `20261121400000_support_assist_rate_limits.sql` so daily caps stay durable across edge cold starts. Off-topic coding / general-chat asks are soft-refused with a clear message and do not need a phone rebuild.
 
 ## Deploy
 
@@ -73,6 +76,7 @@ npx supabase secrets set AI_ASSIST_LIVE=true
 | `status` | — | `{ aiMode, provider, capabilities, privacy }` |
 | `scan` | `propertyId`, `hint?`, `filename?` | `{ draft, aiMode, manualContents }` |
 | `howto` | `propertyId`, `question`, `assetId?` | how-to / manuals answer, or reminder-schedule list from this home’s RLS reminders + asset service fields (no invent) + citations |
+| `support` | `question`, `propertyId?`, `homeLabel?` | warm app/account Support reply (`answer`, `escalate`, `nextSteps`) — separate quota; never invents account facts; never writes |
 | `contractor-format` | `inputText`, `inputKind?` | format draft (no writes) |
 | `email-intake` | `propertyId`, `emailText` | email intake draft |
 | `asset-intake` | `propertyId`, `sourceKind`, `text?`, `hint?`, `filename?`, `imageBase64?`, `mediaMimeType?`, `existingAssets?` | one-asset Add/Update draft + missing fields (multimodal OCR for photos/PDFs) |
@@ -88,6 +92,7 @@ npx supabase secrets set AI_ASSIST_LIVE=true
 - Photo/PDF bytes are used only to draft fields; they are not written to the ledger until the homeowner confirms (and intake does not auto-store the attachment as a document)
 - How-to answers only use the user’s stored manuals + asset facts (plus catalog fallback)
 - Ask HomeAsset is home-scoped (ledger / equipment / manuals / maintenance / recalls / intake) — not a general coding assistant
+- Support (`action: "support"`) is app/account help from Settings → Support — distinct from Ask HomeAsset; separate rate bucket; no inventing account facts; escalate flag when stuck
 - Rate and daily caps are enforced on the server; the phone cannot bypass them
 
 ## Debugging

@@ -15,6 +15,7 @@ export type AiEdgeAction =
   | "status"
   | "scan"
   | "howto"
+  | "support"
   | "contractor-format"
   | "email-intake"
   | "asset-intake"

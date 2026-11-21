@@ -1,6 +1,7 @@
 /**
- * Local-API parity for Ask HomeAsset rate / daily caps.
+ * Local-API parity for Ask HomeAsset + Support rate / daily caps.
  * Same defaults as the edge function (in-memory for SQLite demo / CI).
+ * Buckets are namespaced so Support does not steal Ask HomeAsset quota.
  */
 
 export type AiRateLimitReason = "burst" | "daily_cap";
@@ -40,22 +41,53 @@ export function getAiAssistLimits(): {
   };
 }
 
-export function burstLimitMessage(): string {
+export function getSupportAssistLimits(): {
+  burstLimit: number;
+  windowSeconds: number;
+  dailyCap: number;
+} {
+  return {
+    burstLimit: readPositiveInt(process.env.SUPPORT_ASSIST_BURST_LIMIT, 8),
+    windowSeconds: readPositiveInt(
+      process.env.SUPPORT_ASSIST_BURST_WINDOW_SECONDS,
+      60,
+    ),
+    dailyCap: readPositiveInt(process.env.SUPPORT_ASSIST_DAILY_CAP, 25),
+  };
+}
+
+export function burstLimitMessage(kind: "ask" | "support" = "ask"): string {
+  if (kind === "support") {
+    return "Support needs a short pause — too many messages in a minute. Try again in a moment.";
+  }
   return "Ask HomeAsset needs a short pause — too many asks in a minute. Try again in a moment.";
 }
 
-export function dailyCapMessage(dailyCap: number): string {
+export function dailyCapMessage(
+  dailyCap: number,
+  kind: "ask" | "support" = "ask",
+): string {
+  if (kind === "support") {
+    return (
+      `You've reached today's Support limit (${dailyCap} messages). ` +
+      "It resets tomorrow (UTC). Support is for app help — not unlimited AI."
+    );
+  }
   return (
     `You've reached today's Ask HomeAsset limit (${dailyCap} asks). ` +
     "It resets tomorrow (UTC). Ask HomeAsset is for home help only — not unlimited AI."
   );
 }
 
-export function consumeAiAssistQuota(userId: string): AiRateLimitResult {
-  const { burstLimit, windowSeconds, dailyCap } = getAiAssistLimits();
+function consumeQuota(
+  storeKey: string,
+  limits: { burstLimit: number; windowSeconds: number; dailyCap: number },
+  kind: "ask" | "support",
+): AiRateLimitResult {
+  const { burstLimit, windowSeconds, dailyCap } = limits;
   const now = Date.now();
   const today = new Date(now).toISOString().slice(0, 10);
-  let bucket = memoryStore.get(userId);
+  let bucket = memoryStore.get(storeKey);
   if (!bucket) {
     bucket = {
       burstWindowStartedAtMs: now,
@@ -63,7 +95,7 @@ export function consumeAiAssistQuota(userId: string): AiRateLimitResult {
       dayKey: today,
       dayCount: 0,
     };
-    memoryStore.set(userId, bucket);
+    memoryStore.set(storeKey, bucket);
   }
 
   if (bucket.dayKey !== today) {
@@ -80,7 +112,7 @@ export function consumeAiAssistQuota(userId: string): AiRateLimitResult {
     return {
       allowed: false,
       reason: "daily_cap",
-      message: dailyCapMessage(dailyCap),
+      message: dailyCapMessage(dailyCap, kind),
       remaining: Math.max(burstLimit - bucket.burstCount, 0),
       dailyRemaining: 0,
       dailyCap,
@@ -93,7 +125,7 @@ export function consumeAiAssistQuota(userId: string): AiRateLimitResult {
     return {
       allowed: false,
       reason: "burst",
-      message: burstLimitMessage(),
+      message: burstLimitMessage(kind),
       remaining: 0,
       dailyRemaining: Math.max(dailyCap - bucket.dayCount, 0),
       dailyCap,
@@ -117,6 +149,14 @@ export function consumeAiAssistQuota(userId: string): AiRateLimitResult {
     burstLimit,
     retryAfterSeconds: null,
   };
+}
+
+export function consumeAiAssistQuota(userId: string): AiRateLimitResult {
+  return consumeQuota(`ask:${userId}`, getAiAssistLimits(), "ask");
+}
+
+export function consumeSupportAssistQuota(userId: string): AiRateLimitResult {
+  return consumeQuota(`support:${userId}`, getSupportAssistLimits(), "support");
 }
 
 /** Test helper. */

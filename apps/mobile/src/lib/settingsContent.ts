@@ -30,7 +30,11 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Ask HomeAsset",
-    body: "Talk or Text — type what you need or attach a voice note. Ask HomeAsset answers home and ledger questions (equipment, manuals, maintenance reminders and schedule from what you saved, recalls). Reminder questions list this home’s upcoming reminders and related service fields — they do not invent tasks or open manuals. How-to / manual questions still use your saved manuals. It is not a general coding or chat assistant. Fair-use limits apply: about 10 asks per minute and 40 per day per signed-in account, enforced on the server. Asking never writes the ledger.",
+    body: "Talk or Text — type what you need or attach a voice note. Ask HomeAsset answers home and ledger questions (equipment, manuals, maintenance reminders and schedule from what you saved, recalls). Reminder questions list this home’s upcoming reminders and related service fields — they do not invent tasks or open manuals. How-to / manual questions still use your saved manuals. It is not a general coding or chat assistant. Fair-use limits apply: about 10 asks per minute and 40 per day per signed-in account, enforced on the server. Asking never writes the ledger. For app or account help (sign-in, Settings, notifications, getting unstuck), use Settings → Support instead.",
+  },
+  {
+    title: "Support",
+    body: "Settings → Support. Warm help for the HomeAsset app and your account — acknowledge what’s frustrating, give clear next steps, and offer a path for a person when you’re still stuck. Separate from Ask HomeAsset (ledger/equipment). Signed-in only; fair-use caps about 8 messages per minute and 25 per day (server-enforced, separate from Ask HomeAsset). Support never invents account facts or changes your ledger.",
   },
   {
     title: "View Assets",
@@ -50,7 +54,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Settings",
-    body: "Add another home, How to use, Privacy, Security (including app lock), push & in-app delivery prefs, and sign out. Contractor invite and review live under Home → Contractors.",
+    body: "Add another home, How to use, Support, Privacy, Security (including app lock), push & in-app delivery prefs, and sign out. Contractor invite and review live under Home → Contractors.",
   },
   {
     title: "App lock",
@@ -89,11 +93,15 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "AI and your data",
-    body: "How-to answers use manuals and facts already on the home when possible. Asset intake and scans create drafts only. When you attach a photo or PDF for Add or update, that file is sent to the server AI helper so it can read the label — it is not auto-saved as an official document. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; add/update and scan wait for your confirm. Ask HomeAsset stays on home help (ledger, equipment, manuals, maintenance, recalls, intake) — not coding projects or unrelated chat.",
+    body: "How-to answers use manuals and facts already on the home when possible. Asset intake and scans create drafts only. When you attach a photo or PDF for Add or update, that file is sent to the server AI helper so it can read the label — it is not auto-saved as an official document. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; add/update and scan wait for your confirm. Ask HomeAsset stays on home help (ledger, equipment, manuals, maintenance, recalls, intake) — not coding projects or unrelated chat. Support (Settings → Support) uses the same server AI keys for app/account help only — it does not invent account facts or change settings or the ledger.",
   },
   {
     title: "Ask HomeAsset limits",
     body: "To keep costs fair and the feature focused, each signed-in account has server-side caps (about 10 asks per minute and 40 per day). Limits reset the next day (UTC). Hitting a limit or an off-topic ask shows a plain message — nothing silent happens to your ledger.",
+  },
+  {
+    title: "Support limits",
+    body: "Support has its own server-side caps (about 8 messages per minute and 25 per day) so it does not use up Ask HomeAsset’s home-help budget. Limits reset the next day (UTC). Off-topic or rate-limit replies are plain messages — Support never silently changes your account or ledger.",
   },
 ];
 
@@ -104,7 +112,7 @@ export const SECURITY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Server rules, not phone trust",
-    body: "Cloud data is protected so each signed-in user only reaches their own homes and ledger rows. The phone never holds a privileged “admin” key. Official writes are checked on the server. Ask HomeAsset rate and topic rules are enforced on the server too — the phone cannot bypass them.",
+    body: "Cloud data is protected so each signed-in user only reaches their own homes and ledger rows. The phone never holds a privileged “admin” key. Official writes are checked on the server. Ask HomeAsset and Support rate and topic rules are enforced on the server too — the phone cannot bypass them.",
   },
   {
     title: "Session on the device",
@@ -120,6 +128,6 @@ export const SECURITY_SECTIONS: ContentSection[] = [
   },
   {
     title: "What you can do",
-    body: "Keep app lock on for shared or borrowed phones, pick an idle time that fits you, use a strong password, sign out from Settings when needed, and only confirm drafts you trust. Report anything that looks wrong — we treat privacy and security as product requirements, not afterthoughts.",
+    body: "Keep app lock on for shared or borrowed phones, pick an idle time that fits you, use a strong password, sign out from Settings when needed, and only confirm drafts you trust. For app trouble, use Settings → Support. Report anything that looks wrong — we treat privacy and security as product requirements, not afterthoughts.",
   },
 ];

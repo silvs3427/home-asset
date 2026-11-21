@@ -1418,6 +1418,17 @@ export type AiHowToResponse = {
   privacy: { writes: false; note: string };
 };
 
+/** Settings → Support — product/account help (not ledger Ask HomeAsset). */
+export type AiSupportResponse = {
+  mode: "mock" | "live";
+  answer: string;
+  escalate: boolean;
+  nextSteps: string[];
+  refused?: boolean;
+  code?: string;
+  privacy: { writes: false; note: string };
+};
+
 export type ContractorFormatResponse = {
   mode: "mock" | "live";
   draft: {
@@ -1609,6 +1620,38 @@ export async function aiAskHowto(
     method: "POST",
     headers: authHeaders(accessToken),
     body: JSON.stringify(input),
+  });
+  return parseJson(res);
+}
+
+/**
+ * AI customer support (Settings → Support).
+ * Signed-in; optional active home label for warmth — never invents account facts.
+ */
+export async function aiAskSupport(
+  accessToken: string,
+  input: {
+    question: string;
+    propertyId?: string | null;
+    homeLabel?: string | null;
+  },
+): Promise<AiSupportResponse> {
+  if (useCloud()) {
+    const { invokeAiAssist } = await import("./aiEdge");
+    return invokeAiAssist<AiSupportResponse>("support", {
+      question: input.question,
+      propertyId: input.propertyId ?? undefined,
+      homeLabel: input.homeLabel ?? null,
+    });
+  }
+  const res = await fetch(`${API_BASE_URL}/ai/support`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify({
+      question: input.question,
+      propertyId: input.propertyId ?? null,
+      homeLabel: input.homeLabel ?? null,
+    }),
   });
   return parseJson(res);
 }

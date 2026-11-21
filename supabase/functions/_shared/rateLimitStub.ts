@@ -1,12 +1,17 @@
 /**
- * Ask HomeAsset rate limits (per signed-in user).
+ * Per-user rate limits for Ask HomeAsset (`ai-assist`) and Support (`support-assist`).
  *
- * Defaults (overridable via Edge secrets / env):
+ * Ask HomeAsset defaults (overridable via Edge secrets / env):
  *   AI_ASSIST_BURST_LIMIT=10
  *   AI_ASSIST_BURST_WINDOW_SECONDS=60
  *   AI_ASSIST_DAILY_CAP=40
  *
- * Preferred backend: Postgres RPC `consume_ai_assist_quota` (durable).
+ * Support defaults (separate bucket — does not steal Ask HomeAsset quota):
+ *   SUPPORT_ASSIST_BURST_LIMIT=8
+ *   SUPPORT_ASSIST_BURST_WINDOW_SECONDS=60
+ *   SUPPORT_ASSIST_DAILY_CAP=25
+ *
+ * Preferred backend: Postgres RPC (durable).
  * Fallback: in-memory Map (best-effort per isolate) when RPC is unavailable.
  * Optional: Upstash Redis REST when UPSTASH_REDIS_REST_URL + TOKEN are set.
  */
@@ -66,11 +71,35 @@ export function defaultAiAssistLimits(): {
   };
 }
 
-export function burstLimitMessage(): string {
+export function defaultSupportAssistLimits(): {
+  burstLimit: number;
+  windowSeconds: number;
+  dailyCap: number;
+} {
+  return {
+    burstLimit: readPositiveInt(Deno.env.get("SUPPORT_ASSIST_BURST_LIMIT"), 8),
+    windowSeconds: readPositiveInt(
+      Deno.env.get("SUPPORT_ASSIST_BURST_WINDOW_SECONDS"),
+      60,
+    ),
+    dailyCap: readPositiveInt(Deno.env.get("SUPPORT_ASSIST_DAILY_CAP"), 25),
+  };
+}
+
+export function burstLimitMessage(route = "ai-assist"): string {
+  if (route === "support-assist") {
+    return "Support needs a short pause — too many messages in a minute. Try again in a moment.";
+  }
   return "Ask HomeAsset needs a short pause — too many asks in a minute. Try again in a moment.";
 }
 
-export function dailyCapMessage(dailyCap: number): string {
+export function dailyCapMessage(dailyCap: number, route = "ai-assist"): string {
+  if (route === "support-assist") {
+    return (
+      `You've reached today's Support limit (${dailyCap} messages). ` +
+      "It resets tomorrow (UTC). Support is for app help — not unlimited AI."
+    );
+  }
   return (
     `You've reached today's Ask HomeAsset limit (${dailyCap} asks). ` +
     "It resets tomorrow (UTC). Ask HomeAsset is for home help only — not unlimited AI."
@@ -87,7 +116,10 @@ export async function enforceRateLimitStub(
 export async function enforceRateLimit(
   input: RateLimitInput,
 ): Promise<RateLimitResult> {
-  const defaults = defaultAiAssistLimits();
+  const defaults =
+    input.route === "support-assist"
+      ? defaultSupportAssistLimits()
+      : defaultAiAssistLimits();
   const burstLimit = input.limit ?? defaults.burstLimit;
   const windowSeconds = input.windowSeconds ?? defaults.windowSeconds;
   const dailyCap = input.dailyCap ?? defaults.dailyCap;
@@ -106,21 +138,28 @@ export async function enforceRateLimit(
     };
   }
 
-  // Namespace by route so send-push and ai-assist do not share one bucket.
+  // Namespace by route so send-push, ai-assist, and support-assist do not share one bucket.
   const storeKey = `${input.route}:${input.key}`;
 
   const upstash = await tryUpstash(
     storeKey,
+    input.route,
     burstLimit,
     windowSeconds,
     dailyCap,
   );
   if (upstash) return upstash;
 
-  // Durable Postgres quota is Ask HomeAsset–only (ai-assist + supabase client).
-  if (input.supabase && input.route === "ai-assist") {
+  // Durable Postgres quotas (Ask HomeAsset vs Support).
+  const rpcName =
+    input.route === "support-assist"
+      ? "consume_support_assist_quota"
+      : input.route === "ai-assist"
+        ? "consume_ai_assist_quota"
+        : null;
+  if (input.supabase && rpcName) {
     try {
-      const { data, error } = await input.supabase.rpc("consume_ai_assist_quota", {
+      const { data, error } = await input.supabase.rpc(rpcName, {
         p_burst_limit: burstLimit,
         p_burst_window_seconds: windowSeconds,
         p_daily_cap: dailyCap,
@@ -135,14 +174,14 @@ export async function enforceRateLimit(
             : allowed
               ? null
               : reason === "daily_cap"
-                ? dailyCapMessage(dailyCap)
-                : burstLimitMessage();
+                ? dailyCapMessage(dailyCap, input.route)
+                : burstLimitMessage(input.route);
         console.info(
           JSON.stringify({
             msg: allowed ? "rate_limit_allow" : "rate_limit_deny",
             backend: "postgres",
             route: input.route,
-                    keyHash: hashKey(storeKey),
+            keyHash: hashKey(storeKey),
             reason,
             burstLimit,
             dailyCap,
@@ -231,7 +270,7 @@ function consumeMemory(
       allowed: false,
       backend: "memory",
       reason: "daily_cap",
-      message: dailyCapMessage(dailyCap),
+      message: dailyCapMessage(dailyCap, route),
       remaining: Math.max(burstLimit - bucket.burstCount, 0),
       dailyRemaining: 0,
       dailyCap,
@@ -259,7 +298,7 @@ function consumeMemory(
       allowed: false,
       backend: "memory",
       reason: "burst",
-      message: burstLimitMessage(),
+      message: burstLimitMessage(route),
       remaining: 0,
       dailyRemaining: Math.max(dailyCap - bucket.dayCount, 0),
       dailyCap,
@@ -295,6 +334,7 @@ function consumeMemory(
 
 async function tryUpstash(
   key: string,
+  route: string,
   burstLimit: number,
   windowSeconds: number,
   dailyCap: number,
@@ -320,7 +360,7 @@ async function tryUpstash(
         allowed: false,
         backend: "upstash",
         reason: "daily_cap",
-        message: dailyCapMessage(dailyCap),
+        message: dailyCapMessage(dailyCap, route),
         remaining: null,
         dailyRemaining: 0,
         dailyCap,
@@ -342,7 +382,7 @@ async function tryUpstash(
         allowed: false,
         backend: "upstash",
         reason: "burst",
-        message: burstLimitMessage(),
+        message: burstLimitMessage(route),
         remaining: 0,
         dailyRemaining: Math.max(dailyCap - dayCount, 0),
         dailyCap,
