@@ -3,13 +3,15 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import {
   aiConfirmEmailIntake,
   aiEmailIntake,
@@ -93,9 +95,9 @@ export default function EmailIntakeScreen() {
     <SafeAreaView style={styles.safe}>
       <ScreenHeader title="Email intake" />
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         <Text style={styles.label}>Pasted email</Text>
-        <TextInput
+        <KeyboardAwareTextInput
           value={emailText}
           onChangeText={setEmailText}
           placeholder={
@@ -210,7 +212,7 @@ export default function EmailIntakeScreen() {
             </Pressable>
           </View>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }

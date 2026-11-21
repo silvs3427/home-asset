@@ -29,16 +29,6 @@ export default function SettingsScreen() {
           onPress={() => router.push("/add-home")}
         />
 
-        <Text style={styles.sectionLabel}>Contractors</Text>
-        <NavRow
-          label="Invite a contractor"
-          onPress={() => router.push("/settings/invite-contractor")}
-        />
-        <NavRow
-          label="Review contractor submits"
-          onPress={() => router.push("/contractor-submissions")}
-        />
-
         <Text style={styles.sectionLabel}>Guide</Text>
         <NavRow
           label="How to use"

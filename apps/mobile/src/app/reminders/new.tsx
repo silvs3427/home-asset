@@ -3,14 +3,16 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import {
   REMINDER_RECURRENCES,
   createReminder,
@@ -169,10 +171,7 @@ export default function NewReminderScreen() {
         }
       />
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        keyboardShouldPersistTaps="handled"
-      >
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>
         <Text style={styles.title}>Add reminder</Text>
 
@@ -291,7 +290,7 @@ export default function NewReminderScreen() {
             </Pressable>
           </>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }
@@ -306,7 +305,7 @@ function Field(props: {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{props.label}</Text>
-      <TextInput
+      <KeyboardAwareTextInput
         style={[styles.input, props.multiline && styles.inputMultiline]}
         value={props.value}
         onChangeText={props.onChangeText}

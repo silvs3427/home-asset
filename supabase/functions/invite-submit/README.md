@@ -2,11 +2,11 @@
 
 Public contractor submission API for **homeowner-sent invite links** (non-LightLift pros).
 
-- Homeowner creates a link in the phone app (Settings → Invite a contractor).
+- Homeowner creates a link in the phone app (Home → Contractors → Invite a contractor).
 - Pro opens the **HTML landing page** (GitHub Pages — not the raw edge URL).
-- Landing talks to this function: GET JSON for invite metadata, POST multipart for submit.
+- Landing talks to this function: GET JSON for invite metadata, POST multipart for submit (notes, voice, photos; optional phone, email, services).
 - Ask HomeAsset formats a draft (server-side AI keys) and stores a **pending** submission.
-- Homeowner approves / edits / declines in the app — nothing becomes official silently.
+- Homeowner approves / edits / declines in the app — nothing becomes official silently; approved contact can enter the past-contractor directory.
 
 **Why not HTML from the edge?** Supabase project hostnames rewrite `GET` `text/html` → `text/plain` (browsers show source). The usable page is `apps/invite-landing/` on GitHub Pages. This function still **302-redirects** browser GETs to that landing so old edge links keep working.
 
@@ -39,7 +39,7 @@ git pull origin main
 npx supabase functions deploy invite-submit
 ```
 
-Apply SQL first: `migrations/20261121180000_contractor_invite_submissions.sql` (paste in SQL Editor).
+Apply SQL first: `migrations/20261121180000_contractor_invite_submissions.sql` and `migrations/20261121200000_home_contractor_directory.sql` (paste in SQL Editor).
 
 Enable **GitHub Pages** once (Settings → Pages → Build from GitHub Actions), then merge/deploy so `apps/invite-landing` is live. Or run the **Deploy invite landing** workflow manually.
 
@@ -59,13 +59,13 @@ https://YOUR_PROJECT.supabase.co/functions/v1/invite-submit?t=TOKEN
 
 - `GET` + `Accept: application/json` — invite metadata for the landing page
 - `GET` from a browser — `302` to the GitHub Pages landing
-- `POST` `multipart/form-data` — submit (fields: `token`, optional `notes` / `contractorName` / `companyName`, files `photos` / `audio`)
-- `POST` `application/json` — `{ token, notes?, contractorName?, companyName? }` for smoke tests without files
+- `POST` `multipart/form-data` — submit (fields: `token`, optional `notes` / `contractorName` / `companyName` / `phone` / `email` / `servicesOffered`, files `photos` / `audio`)
+- `POST` `application/json` — `{ token, notes?, contractorName?, companyName?, phone?, email?, servicesOffered? }` for smoke tests without files
 
 ## Privacy
 
 - Token must be valid, not revoked, and not expired.
 - Does **not** expose the home ledger to the contractor (only a short home label).
-- Writes a **pending** row only; ledger assets wait for homeowner approve in the app.
+- Writes a **pending** row only; ledger assets and directory contact wait for homeowner approve in the app.
 - AI keys never leave the edge.
 - Landing only accepts `api` hosts under `*.supabase.co` (HTTPS).
