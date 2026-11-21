@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
 /**
- * Settings: Add home, guide (How to use / Privacy / Security),
+ * Settings: Add home, guide (How to use / Support / Privacy / Security),
  * alert delivery prefs, sign out.
  * HomeAsset is homeowner-only — no face switch.
  */
@@ -33,6 +33,10 @@ export default function SettingsScreen() {
         <NavRow
           label="How to use"
           onPress={() => router.push("/settings/how-to-use")}
+        />
+        <NavRow
+          label="Support"
+          onPress={() => router.push("/settings/support")}
         />
         <NavRow
           label="Privacy"

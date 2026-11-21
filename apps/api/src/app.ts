@@ -5,7 +5,7 @@ import { logger } from "hono/logger";
 import { config } from "./config.js";
 import { getDb } from "./db/client.js";
 import { authRoutes } from "./routes/auth.js";
-import { contractorAiRoutes } from "./routes/ai.js";
+import { contractorAiRoutes, supportAiRoutes } from "./routes/ai.js";
 import { healthRoutes } from "./routes/health.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { meRoutes } from "./routes/me.js";
@@ -53,6 +53,7 @@ export function createApp() {
   app.route("/me/notifications", notificationRoutes);
   app.route("/properties", propertyRoutes);
   app.route("/ai/contractor", contractorAiRoutes);
+  app.route("/ai/support", supportAiRoutes);
   app.route("/jobs", jobRoutes);
 
   app.get("/", (c) =>

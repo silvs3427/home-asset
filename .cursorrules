@@ -23,8 +23,8 @@ Phone-first home memory for **homeowners only** — no in-app contractor mode/fa
 
 ## Keep How to use in sync
 
-- When you ship a **user-facing** feature (or move where it lives in the UI), update `apps/mobile/src/lib/settingsContent.ts` (`HOW_TO_USE_SECTIONS`, and Privacy/Security sections if promises change). That copy powers Settings → How to use / Privacy / Security.
-- Home CTAs (top→bottom): **Ask HomeAsset** → **View Assets** → **Add or Update an Asset** → **Contractors** → **Notifications** → **Settings**. Ask HomeAsset (`/ai/help`) is Talk or Text; Add or Update covers scan / PDF / free-text. Contractors hub: invite, review submissions, past directory. No floating FAB when that home button exists.
+- When you ship a **user-facing** feature (or move where it lives in the UI), update `apps/mobile/src/lib/settingsContent.ts` (`HOW_TO_USE_SECTIONS`, and Privacy/Security sections if promises change). That copy powers Settings → How to use / Privacy / Security / Support.
+- Home CTAs (top→bottom): **Ask HomeAsset** → **View Assets** → **Add or Update an Asset** → **Contractors** → **Notifications** → **Settings**. Ask HomeAsset (`/ai/help`) is Talk or Text; Add or Update covers scan / PDF / free-text. Contractors hub: invite, review submissions, past directory. **Support** lives under Settings → Support (app/account help — distinct from Ask HomeAsset; separate rate caps). No floating FAB when that home button exists.
 - Do **not** put long instructional / privacy commentary on feature screens — How to use owns that. One Notifications surface for reminders + notices; delivery prefs stay under Settings.
 - Colors: use shared tokens in `apps/mobile/src/lib/theme.ts` — no one-off palette drifts.
 - “Suggest from permits” is not a primary CTA (off Home; no new home decided yet).

@@ -25,7 +25,11 @@ import {
   identifyProduct,
   resolveAiMode,
 } from "../lib/ai/provider.js";
-import { consumeAiAssistQuota } from "../lib/ai/rateLimit.js";
+import {
+  consumeAiAssistQuota,
+  consumeSupportAssistQuota,
+} from "../lib/ai/rateLimit.js";
+import { answerCustomerSupport } from "../lib/ai/supportAssist.js";
 import { assessAskHomeAssetTopic } from "../lib/ai/topicGuard.js";
 import { getPropertyForUser } from "../lib/properties.js";
 import { normalizeLabelValue } from "../lib/propertyLabels.js";
@@ -987,4 +991,62 @@ contractorAiRoutes.get("/status", (c) => {
       homeownerApproveRequired: true,
     },
   });
+});
+
+/**
+ * Account-level AI customer support (Settings → Support).
+ * Distinct from Ask HomeAsset ledger Q&A. Signed-in only; optional home label.
+ */
+export const supportAiRoutes = new Hono<{ Variables: AuthVariables }>();
+
+supportAiRoutes.use("*", requireAuth);
+
+const supportSchema = z.object({
+  question: z.string().trim().min(1).max(1000),
+  homeLabel: z.string().trim().max(200).optional().nullable(),
+  propertyId: z.string().uuid().optional().nullable(),
+});
+
+supportAiRoutes.post("/", async (c) => {
+  const claims = c.get("claims");
+  const body = await c.req.json().catch(() => null);
+  const parsed = supportSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "invalid_input",
+        message: "Type a short Support message.",
+      },
+      400,
+    );
+  }
+
+  if (parsed.data.propertyId) {
+    try {
+      assertPropertyOwnedByUser(parsed.data.propertyId, claims.sub);
+    } catch {
+      return c.json({ error: "not_found", message: "Home not found." }, 404);
+    }
+  }
+
+  const rate = consumeSupportAssistQuota(claims.sub);
+  if (!rate.allowed) {
+    return c.json(
+      {
+        error: "rate_limited",
+        code: rate.reason ?? "rate_limited",
+        message: rate.message,
+        retry_after: rate.retryAfterSeconds,
+        daily_cap: rate.dailyCap,
+        daily_remaining: rate.dailyRemaining,
+      },
+      429,
+    );
+  }
+
+  const result = await answerCustomerSupport({
+    question: parsed.data.question,
+    homeLabel: parsed.data.homeLabel,
+  });
+  return c.json(result);
 });
