@@ -88,6 +88,13 @@ export type PublicAsset = {
   purchaseDate: string | null;
   installDate: string | null;
   installerVendor: string | null;
+  /** Most recent service date (YYYY-MM-DD). */
+  lastServicedAt: string | null;
+  /**
+   * Audit mark: named contractor who confirmed the work (home-sale confidence).
+   * Homeowner records or fills from an approved invite draft — no contractor login.
+   */
+  confirmedByContractorName: string | null;
   location: string | null;
   notes: string | null;
   warrantyEndDate: string | null;
@@ -106,6 +113,8 @@ export type CreateAssetInput = {
   purchaseDate?: string | null;
   installDate?: string | null;
   installerVendor?: string | null;
+  lastServicedAt?: string | null;
+  confirmedByContractorName?: string | null;
   location?: string | null;
   notes?: string | null;
   warrantyEndDate?: string | null;
@@ -1841,6 +1850,10 @@ export async function aiConfirmEmailIntake(
     )) {
       const base = held.assetsSuggested[index];
       if (!base) continue;
+      const workDate =
+        held.workDate && /^\d{4}-\d{2}-\d{2}$/.test(held.workDate)
+          ? held.workDate
+          : null;
       const created = await cloudCreateAsset(accessToken, propertyId, {
         name: base.name,
         category: base.category as AssetCategory,
@@ -1848,10 +1861,9 @@ export async function aiConfirmEmailIntake(
         model: base.model,
         serial: base.serial,
         installerVendor: held.contractorName,
-        installDate:
-          held.workDate && /^\d{4}-\d{2}-\d{2}$/.test(held.workDate)
-            ? held.workDate
-            : null,
+        installDate: workDate,
+        lastServicedAt: workDate,
+        confirmedByContractorName: held.contractorName,
         notes: base.notes,
       });
       assets.push(created.asset);

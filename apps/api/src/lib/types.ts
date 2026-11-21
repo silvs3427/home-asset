@@ -81,6 +81,13 @@ export type AssetRecord = {
   purchaseDate: string | null;
   installDate: string | null;
   installerVendor: string | null;
+  /** Most recent service date (YYYY-MM-DD). */
+  lastServicedAt: string | null;
+  /**
+   * Audit mark for home-sale confidence: named contractor who confirmed
+   * the work. Homeowner-set (or filled on approve of an invite draft).
+   */
+  confirmedByContractorName: string | null;
   location: string | null;
   notes: string | null;
   warrantyEndDate: string | null;
@@ -102,6 +109,8 @@ export type PublicAsset = {
   purchaseDate: string | null;
   installDate: string | null;
   installerVendor: string | null;
+  lastServicedAt: string | null;
+  confirmedByContractorName: string | null;
   location: string | null;
   notes: string | null;
   warrantyEndDate: string | null;
@@ -215,6 +224,8 @@ export function toPublicAsset(asset: AssetRecord): PublicAsset {
     purchaseDate: asset.purchaseDate,
     installDate: asset.installDate,
     installerVendor: asset.installerVendor,
+    lastServicedAt: asset.lastServicedAt,
+    confirmedByContractorName: asset.confirmedByContractorName,
     location: asset.location,
     notes: asset.notes,
     warrantyEndDate: asset.warrantyEndDate,

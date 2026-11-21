@@ -59,6 +59,10 @@ function assetLedgerBlurb(asset: AssetRecord): string {
     asset.serial ? `Serial: ${asset.serial}` : null,
     asset.location ? `Location: ${asset.location}` : null,
     asset.installDate ? `Install date: ${asset.installDate}` : null,
+    asset.lastServicedAt ? `Last serviced: ${asset.lastServicedAt}` : null,
+    asset.confirmedByContractorName
+      ? `Confirmed by contractor: ${asset.confirmedByContractorName}`
+      : null,
     asset.warrantyEndDate ? `Warranty ends: ${asset.warrantyEndDate}` : null,
     asset.notes ? `Notes: ${asset.notes}` : null,
   ].filter(Boolean);
