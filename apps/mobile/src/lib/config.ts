@@ -6,7 +6,8 @@ import { isSupabaseConfiguredOnDevice } from "./supabase";
  *
  * When EXPO_PUBLIC_SUPABASE_URL + anon key are set, the phone talks to Supabase
  * Auth / Postgres / Storage / edge `ai-assist` directly — no laptop API or LAN
- * IP is required for signup, login, homes, assets, docs, reminders, notices, or AI.
+ * IP is required for signup, login, homes, assets, docs, reminders, recalls,
+ * notices, or AI.
  *
  * Set EXPO_PUBLIC_API_URL only for local SQLite demo without Supabase.
  * Never bake localhost into preview/production EAS builds (LightLift pattern).

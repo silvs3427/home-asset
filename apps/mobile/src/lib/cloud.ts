@@ -202,9 +202,34 @@ function extractErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+function isUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = "code" in err ? String((err as { code?: unknown }).code ?? "") : "";
+  if (code === "23505") return true;
+  const message = extractErrorMessage(err, "").toLowerCase();
+  return (
+    message.includes("duplicate key") ||
+    message.includes("unique constraint") ||
+    message.includes("already exists")
+  );
+}
+
 function mapCloudError(err: unknown, fallback: string): never {
   const message = extractErrorMessage(err, fallback);
   const lower = message.toLowerCase();
+  if (
+    lower.includes("recall_notices") ||
+    lower.includes("asset_recall_alerts") ||
+    (lower.includes("recall") &&
+      (lower.includes("schema cache") ||
+        lower.includes("does not exist") ||
+        lower.includes("could not find the table")))
+  ) {
+    throw new ApiError(
+      "Safety recall tables are missing. In Supabase SQL Editor, run supabase/migrations/20261120000000_epic7_recalls.sql (after the init schema), then try Check safety recalls again.",
+      "server",
+    );
+  }
   if (
     lower.includes("schema cache") ||
     lower.includes("could not find the table") ||
@@ -214,7 +239,7 @@ function mapCloudError(err: unknown, fallback: string): never {
     (lower.includes("profiles") && lower.includes("does not exist"))
   ) {
     throw new ApiError(
-      "HomeAsset cloud setup is incomplete. In Supabase SQL Editor, run supabase/migrations/20261118000000_init_schema.sql, then 20261121000000_bootstrap_new_user.sql (LightLift-style Auth bootstrap).",
+      "HomeAsset cloud setup is incomplete. In Supabase SQL Editor, run in order: 20261118000000_init_schema.sql, 20261120000000_epic7_recalls.sql, then 20261121000000_bootstrap_new_user.sql (LightLift-style Auth bootstrap).",
       "server",
     );
   }
@@ -643,7 +668,11 @@ export async function cloudCreateAsset(
       .select("*")
       .single();
     if (error) mapCloudError(error, "Could not add asset.");
-    return { asset: assetFromRow(data as AssetRow) };
+    const asset = assetFromRow(data as AssetRow);
+    // Best-effort safety match after the homeowner saved identifiers — not a
+    // silent ledger invent. Failures must not block the asset create.
+    await maybeCloudRecallCheckAfterAssetSave(propertyId, asset);
+    return { asset };
   } catch (err) {
     if (err instanceof ApiError) throw err;
     mapCloudError(err, "Could not add asset.");
@@ -690,7 +719,9 @@ export async function cloudUpdateAsset(
       .select("*")
       .single();
     if (error) mapCloudError(error, "Could not update asset.");
-    return { asset: assetFromRow(data as AssetRow) };
+    const asset = assetFromRow(data as AssetRow);
+    await maybeCloudRecallCheckAfterAssetSave(propertyId, asset);
+    return { asset };
   } catch (err) {
     if (err instanceof ApiError) throw err;
     mapCloudError(err, "Could not update asset.");
@@ -1551,8 +1582,26 @@ export async function cloudDismissRecallAlert(
 }
 
 /**
+ * After the homeowner saves manufacturer+model, match free public lists for
+ * that home. Best-effort only — never blocks asset create/update, never invents
+ * assets/docs (alerts + in-app notices only).
+ */
+async function maybeCloudRecallCheckAfterAssetSave(
+  propertyId: string,
+  asset: PublicAsset,
+): Promise<void> {
+  if (!asset.manufacturer?.trim() || !asset.model?.trim()) return;
+  try {
+    await cloudRunRecallCheck("", propertyId);
+  } catch {
+    // Swallow: asset save already succeeded; Check safety recalls remains.
+  }
+}
+
+/**
  * Cloud-path recall match using fixture public lists (no LAN API).
  * Upserts notices, creates alerts, and writes in-app notifications.
+ * Does not write assets/documents — alerts only, home-scoped via RLS.
  */
 export async function cloudRunRecallCheck(
   _accessToken: string,
@@ -1588,41 +1637,47 @@ export async function cloudRunRecallCheck(
       notificationsCreated: 0,
     };
 
-    // Upsert fixture notices (idempotent by source+external_id).
+    // Seed / refresh fixture notices (idempotent by source+external_id).
+    // Upsert avoids select-then-insert races when two accounts check at once.
     const noticeIdByExternal = new Map<string, string>();
     for (const entry of MOBILE_RECALL_FIXTURES) {
-      const { data: existing } = await supabase
-        .from("recall_notices")
-        .select("id")
-        .eq("source", entry.source)
-        .eq("external_id", entry.externalId)
-        .maybeSingle();
-      if (existing?.id) {
-        noticeIdByExternal.set(entry.externalId, String(existing.id));
-        continue;
-      }
       const now = new Date().toISOString();
-      const { data: inserted, error } = await supabase
+      const { data: upserted, error } = await supabase
         .from("recall_notices")
-        .insert({
-          external_id: entry.externalId,
-          source: entry.source,
-          title: entry.title,
-          summary: entry.summary,
-          hazard: entry.hazard,
-          manufacturer: entry.manufacturer,
-          model: entry.model,
-          serial_pattern: entry.serialPattern,
-          product_type: entry.productType,
-          recall_date: entry.recallDate,
-          source_url: entry.sourceUrl,
-          created_at: now,
-          updated_at: now,
-        })
+        .upsert(
+          {
+            external_id: entry.externalId,
+            source: entry.source,
+            title: entry.title,
+            summary: entry.summary,
+            hazard: entry.hazard,
+            manufacturer: entry.manufacturer,
+            model: entry.model,
+            serial_pattern: entry.serialPattern,
+            product_type: entry.productType,
+            recall_date: entry.recallDate,
+            source_url: entry.sourceUrl,
+            updated_at: now,
+          },
+          { onConflict: "source,external_id" },
+        )
         .select("id")
         .single();
-      if (error) mapCloudError(error, "Could not store recall notice.");
-      noticeIdByExternal.set(entry.externalId, String(inserted.id));
+      if (error) {
+        // Race / missing return: re-read by natural key.
+        const { data: existing, error: readErr } = await supabase
+          .from("recall_notices")
+          .select("id")
+          .eq("source", entry.source)
+          .eq("external_id", entry.externalId)
+          .maybeSingle();
+        if (readErr || !existing?.id) {
+          mapCloudError(error, "Could not store recall notice.");
+        }
+        noticeIdByExternal.set(entry.externalId, String(existing!.id));
+        continue;
+      }
+      noticeIdByExternal.set(entry.externalId, String(upserted.id));
     }
 
     let propQuery = supabase
@@ -1670,6 +1725,7 @@ export async function cloudRunRecallCheck(
             .maybeSingle();
 
           let alertId: string;
+          let notifiedAt: string | null = existingAlert?.notified_at ?? null;
           if (existingAlert?.id) {
             result.alertsExisting += 1;
             alertId = String(existingAlert.id);
@@ -1686,14 +1742,32 @@ export async function cloudRunRecallCheck(
                 created_at: now,
                 updated_at: now,
               })
-              .select("id")
+              .select("id, notified_at")
               .single();
-            if (createErr) mapCloudError(createErr, "Could not create recall alert.");
-            alertId = String(created.id);
-            result.alertsCreated += 1;
+            if (createErr) {
+              if (!isUniqueViolation(createErr)) {
+                mapCloudError(createErr, "Could not create recall alert.");
+              }
+              const { data: raced, error: racedErr } = await supabase
+                .from("asset_recall_alerts")
+                .select("id, notified_at")
+                .eq("asset_id", asset.id)
+                .eq("recall_notice_id", noticeId)
+                .maybeSingle();
+              if (racedErr || !raced?.id) {
+                mapCloudError(createErr, "Could not create recall alert.");
+              }
+              result.alertsExisting += 1;
+              alertId = String(raced!.id);
+              notifiedAt = raced!.notified_at ?? null;
+            } else {
+              alertId = String(created.id);
+              notifiedAt = created.notified_at ?? null;
+              result.alertsCreated += 1;
+            }
           }
 
-          if (!existingAlert?.notified_at && recallsEnabled && inAppEnabled) {
+          if (!notifiedAt && recallsEnabled && inAppEnabled) {
             const now = new Date().toISOString();
             const dedupe = `recall_alert:${alertId}:${asset.id}`;
             const { error: noteErr } = await supabase.from("notifications").upsert(

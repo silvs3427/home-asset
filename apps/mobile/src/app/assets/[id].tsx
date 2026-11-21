@@ -143,6 +143,19 @@ export default function AssetDetailScreen() {
             loadReminders(),
             loadRecalls(),
           ]);
+          // Quiet match when manufacturer+model exist so cloud preview demos
+          // show alerts without remembering Check (still homeowner-opened).
+          if (
+            res.asset.manufacturer?.trim() &&
+            res.asset.model?.trim()
+          ) {
+            try {
+              await runPropertyRecallCheck(accessToken, activeProperty.id);
+              if (!cancelled) await loadRecalls();
+            } catch {
+              // Listing already loaded; Check button remains for retry.
+            }
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -432,7 +445,8 @@ export default function AssetDetailScreen() {
             </Pressable>
             {recallAlerts.length === 0 ? (
               <Text style={styles.emptyDocs}>
-                No recall matches yet. Add manufacturer/model, then check.
+                No recall matches yet. Add manufacturer and model (e.g. Generac /
+                GP6500), then check — or save and reopen this asset.
               </Text>
             ) : (
               <View style={styles.docList}>
