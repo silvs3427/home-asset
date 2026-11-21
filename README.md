@@ -145,7 +145,7 @@ npx eas-cli@latest build -p android --profile preview
 
 Download/install the APK from the Expo build page (**Install**). Expo Go tunnel is temporary testing only — not the production install path. Details: [`apps/mobile/README.md`](./apps/mobile/README.md).
 
-**Android lock-screen push:** preview builds need Firebase `google-services.json` wired into the APK (`android.googleServicesFile` via EAS file env `GOOGLE_SERVICES_JSON`, or a local `apps/mobile/google-services.json`). Without it, Register for push fails with “Firebase Messaging / googleServicesFile” — the app should still **open**. Missing/invalid files are soft-skipped at build time. **New APK install required** after a valid file is added. Crash-on-open recovery + Firebase steps: [`apps/mobile/README.md`](./apps/mobile/README.md#android-lock-screen-push-fcm).
+**Android lock-screen push:** preview/production EAS Android builds require Firebase `google-services.json` (`android.googleServicesFile` via EAS file env `GOOGLE_SERVICES_JSON` with visibility **sensitive**, or a local `apps/mobile/google-services.json`). Expo Go still soft-skips. EAS Android builds **fail** if the file is missing so we do not ship another APK without FCM. **New APK install required** after a valid file is added. Steps: [`apps/mobile/README.md`](./apps/mobile/README.md#android-lock-screen-push-fcm).
 
 ## Tests & CI
 

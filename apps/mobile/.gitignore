@@ -40,9 +40,10 @@ yarn-error.*
 /ios
 /android
 
-# Firebase / FCM — do not commit private keys.
-# google-services.json is optional to commit (Expo says public IDs only);
-# prefer the EAS file env GOOGLE_SERVICES_JSON for preview builds. See README.
+# Firebase / FCM — do not commit private keys or invent a fake google-services.json.
+# google-services.json is optional to commit (Expo says public client IDs only);
+# prefer EAS file env GOOGLE_SERVICES_JSON (visibility sensitive) for preview.
+# See README → Android lock-screen push (FCM).
 google-services.json
 *firebase-adminsdk*.json
 fcm-service-account*.json
