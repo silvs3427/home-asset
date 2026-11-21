@@ -33,6 +33,10 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          # Enable Pages on first deploy when Source is GitHub Actions
+          # (avoids "Get Pages site failed… enablement:false").
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
