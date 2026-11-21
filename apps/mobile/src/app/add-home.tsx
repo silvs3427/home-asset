@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 
 /**
@@ -61,17 +62,7 @@ export default function AddHomeScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.flex}
       >
-        <View style={styles.header}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={styles.back}
-          >
-            <Text style={styles.backLabel}>Back</Text>
-          </Pressable>
-          <Text style={styles.brand}>Add home</Text>
-          <View style={styles.backSpacer} />
-        </View>
+        <ScreenHeader title="Add home" />
 
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <Field label="Home name" value={name} onChangeText={setName} placeholder="e.g. Oak Street" />

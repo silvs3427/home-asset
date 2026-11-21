@@ -13,6 +13,7 @@ import {
   listContractorSubmissions,
   type PublicContractorSubmission,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { SUPABASE_CONFIGURED } from "@/lib/config";
 import { colors } from "@/lib/theme";
@@ -63,17 +64,7 @@ export default function ContractorSubmissionsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Contractor submits</Text>
-        <View style={styles.spacer} />
-      </View>
+      <ScreenHeader title="Contractor submits" />
 
       <ScrollView contentContainerStyle={styles.body}>
         {error ? <Text style={styles.error}>{error}</Text> : null}

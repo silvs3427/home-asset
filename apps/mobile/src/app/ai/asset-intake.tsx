@@ -21,6 +21,7 @@ import {
   type AssetIntakeSourceKind,
   type AssetIntakeSuggested,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { OpenLabelField } from "@/components/OpenLabelField";
 import {
@@ -220,13 +221,7 @@ export default function AssetIntakeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button">
-          <Text style={styles.back}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Add or update</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader title="Add or update" />
 
       <ScrollView
         contentContainerStyle={styles.body}

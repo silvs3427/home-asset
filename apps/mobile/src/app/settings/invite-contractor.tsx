@@ -21,6 +21,7 @@ import {
   type PublicContractorInvite,
   type PublicProperty,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { SUPABASE_CONFIGURED } from "@/lib/config";
 import { colors } from "@/lib/theme";
@@ -168,17 +169,7 @@ export default function InviteContractorScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Text style={styles.backLabel}>Back</Text>
-        </Pressable>
-        <Text style={styles.brand}>Invite a contractor</Text>
-        <View style={styles.spacer} />
-      </View>
+      <ScreenHeader title="Invite a contractor" />
 
       <ScrollView contentContainerStyle={styles.body}>
         {!SUPABASE_CONFIGURED ? (

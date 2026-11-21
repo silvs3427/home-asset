@@ -22,7 +22,7 @@ export type ContentSection = {
 export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   {
     title: "Home",
-    body: "Shows your current address and five actions, top to bottom: Ask HomeAsset, View Assets, Add or Update an Asset, Notifications, and Settings. Switch homes here when you have more than one.",
+    body: "Shows your current address and five actions, top to bottom: Ask HomeAsset, View Assets, Add or Update an Asset, Notifications, and Settings. Switch homes here when you have more than one. From any other screen, tap Home (orange, top right) to return here.",
   },
   {
     title: "Homes",

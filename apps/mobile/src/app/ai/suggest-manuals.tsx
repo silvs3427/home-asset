@@ -14,6 +14,7 @@ import {
   aiSuggestManuals,
   type SuggestManualsDraft,
 } from "@/lib/api";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
@@ -123,13 +124,7 @@ export default function SuggestManualsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Pressable onPress={onSkip} accessibilityRole="button">
-          <Text style={styles.back}>Skip</Text>
-        </Pressable>
-        <Text style={styles.brand}>Suggested docs</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader title="Suggested docs" backLabel="Skip" onBack={onSkip} />
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.copy}>
