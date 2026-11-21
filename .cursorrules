@@ -1,0 +1,29 @@
+# HomeAsset — agent rules
+
+Phone-first home memory for homeowners. Contractors may submit work into the homeowner’s ledger later; **homeowners own the record.** Stack: Expo (React Native) + optional Hono API + Supabase Postgres with RLS.
+
+## Prefer LightLift patterns
+
+- **Auth → account bootstrap:** after signup/sign-in when a session exists, call the security-definer RPC `bootstrap_new_user` (client-driven). Do **not** ship Auth SQL triggers as the only way to create profiles. Build the right pattern first even if slower.
+- **Cloud phone path:** Supabase URL + anon key only — no laptop/localhost API and no LAN IP required for preview signup/core ledger once configured.
+- **AI keys:** edge/server secrets only (`GEMINI_API_KEY` preferred, same name as LightLift). Never put AI or service-role keys in `EXPO_PUBLIC_*` or on the device.
+
+## Security first
+
+- RLS on every homeowner ledger table; least privilege.
+- Users may only bootstrap / read / update **their own** profile (`auth.uid()`). No broad insert policies that let one user create another’s profile.
+- No service-role key on the phone. Parameterized queries / bound RPC args only.
+- Don’t trust the client for tenancy, ownership, or “official” writes.
+
+## Privacy
+
+- Homeowner control; least data shared.
+- Approve-before-official — no silent auto-adds to the ledger.
+- Call out privacy tradeoffs when asking product decisions.
+
+## Keep short
+
+- Plain language for founder-facing notes (what to run in SQL Editor, whether a rebuild is needed).
+- Strict TypeScript; Expo Router under `apps/mobile/src/app/`.
+- Local SQLite remains the CI/demo default until Supabase secrets are set.
+- Log failures with context; no silent `catch` on Auth/bootstrap.

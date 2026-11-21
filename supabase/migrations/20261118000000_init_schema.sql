@@ -182,36 +182,11 @@ create index if not exists idx_notifications_user_created
   on public.notifications (user_id, created_at desc);
 
 -- ---------------------------------------------------------------------------
--- Auto-create profile when someone signs up (email/password via Supabase Auth)
+-- Auth → profile: LightLift model (explicit RPC), not an Auth SQL trigger.
+-- Run migrations/20261121000000_bootstrap_new_user.sql after this file.
+-- That migration defines public.bootstrap_new_user and drops any Auth trigger.
 -- ---------------------------------------------------------------------------
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.profiles (id, email, faces_json, active_face)
-  values (
-    new.id,
-    lower(coalesce(new.email, '')),
-    coalesce(new.raw_user_meta_data -> 'faces', '["homeowner"]'::jsonb),
-    coalesce(new.raw_user_meta_data ->> 'starting_face', 'homeowner')
-  )
-  on conflict (id) do nothing;
-
-  insert into public.notification_preferences (user_id)
-  values (new.id)
-  on conflict (user_id) do nothing;
-
-  return new;
-end;
-$$;
-
 drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
 
 -- ---------------------------------------------------------------------------
 -- Helpers for RLS: does auth.uid() own this property?

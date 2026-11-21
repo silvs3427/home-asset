@@ -1,5 +1,7 @@
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
+Repo-wide Auth/security rules: [`../../.cursorrules`](../../.cursorrules) and [`../../AGENTS.md`](../../AGENTS.md). Cloud signup must call LightLift-style `bootstrap_new_user` (see `src/lib/cloud.ts`) — never Auth-trigger-only profile creation.
+
 ## Expo has changed — do not trust your training data
 
 Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:

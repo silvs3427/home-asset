@@ -36,6 +36,11 @@ function profileToUser(row: ProfileRow): UserRecord {
   };
 }
 
+function rowFromRpc(data: unknown): ProfileRow | null {
+  const row = (Array.isArray(data) ? data[0] : data) as ProfileRow | null;
+  return row?.id ? row : null;
+}
+
 async function fetchProfile(userId: string): Promise<UserRecord | null> {
   const client = isSupabaseServiceConfigured()
     ? getSupabaseService()
@@ -52,6 +57,11 @@ async function fetchProfile(userId: string): Promise<UserRecord | null> {
   return profileToUser(data as ProfileRow);
 }
 
+/**
+ * LightLift-style bootstrap: call security-definer RPC with the signed-in
+ * anon session when possible. Service-role upsert is server-only fallback
+ * (never used on the phone).
+ */
 async function ensureProfile(input: {
   id: string;
   email: string;
@@ -60,13 +70,24 @@ async function ensureProfile(input: {
   const existing = await fetchProfile(input.id);
   if (existing) return existing;
 
+  const anon = getSupabaseAnon();
+  const { data: rpcData, error: rpcError } = await anon.rpc(
+    "bootstrap_new_user",
+    {
+      p_email: normalizeEmail(input.email),
+      p_starting_face: input.startingFace,
+    },
+  );
+  if (!rpcError) {
+    const row = rowFromRpc(rpcData);
+    if (row) return profileToUser(row);
+  }
+
   if (!isSupabaseServiceConfigured()) {
-    // Trigger on auth.users should create the row; brief wait + re-read.
-    await new Promise((r) => setTimeout(r, 250));
-    const again = await fetchProfile(input.id);
-    if (again) return again;
     throw new Error(
-      "SUPABASE_PROFILE_MISSING: run supabase/migrations/001_homeasset_schema.sql and set SUPABASE_SERVICE_ROLE_KEY for server bootstrap.",
+      `SUPABASE_PROFILE_MISSING: run supabase/migrations/20261121000000_bootstrap_new_user.sql (LightLift-style RPC).${
+        rpcError ? ` RPC: ${rpcError.message}` : ""
+      }`,
     );
   }
 
@@ -98,7 +119,7 @@ async function ensureProfile(input: {
 
 /**
  * Sign up with Supabase Auth (email + password). Profile row is created by
- * SQL trigger (or service-role upsert as fallback).
+ * LightLift-style bootstrap_new_user RPC (service-role upsert as server fallback).
  */
 export async function supabaseSignUp(input: {
   email: string;
@@ -129,6 +150,13 @@ export async function supabaseSignUp(input: {
   }
   if (!data.user) throw new Error("SUPABASE_SIGNUP:no_user");
 
+  if (data.session) {
+    await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+  }
+
   return ensureProfile({
     id: data.user.id,
     email,
@@ -147,6 +175,13 @@ export async function supabaseSignIn(
     password,
   });
   if (error || !data.user) return null;
+
+  if (data.session) {
+    await supabase.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+  }
 
   const faceMeta = data.user.user_metadata?.starting_face as AppFace | undefined;
   return ensureProfile({
