@@ -18,10 +18,11 @@ HomeAsset’s cloud project ref (from project docs): `iiyhogiwqqotlrsjlqud` → 
 | 2 | `migrations/20261120000000_epic7_recalls.sql` | **Required for phone safety recalls** — `recall_notices` + `asset_recall_alerts` + RLS (safe to re-run) |
 | 3 | `migrations/20261121000000_bootstrap_new_user.sql` | LightLift-style `bootstrap_new_user` RPC; drops Auth trigger / insert-own policy if present |
 | 4 | `migrations/20261121120000_profiles_table_grants.sql` | **Paste now if signup says permission denied for table profiles** — GRANTs + re-assert select/update policies (safe re-run; no app rebuild) |
-| 5 | `migrations/20261121140000_ai_assist_rate_limits.sql` | Ask HomeAsset daily caps (optional but recommended) |
-| 6 | `migrations/20261121180000_contractor_invite_submissions.sql` | **Contractor invite links** — invites, pending submissions, media bucket (required for Settings → Invite a contractor) |
+| 5 | `migrations/20261121140000_ai_assist_rate_limits.sql` | Ask HomeAsset rate / daily caps (server-side) |
+| 6 | `migrations/20261121160000_property_custom_labels.sql` | **Custom reusable categories + document types per home** — open lists (no fixed enums); seeds from existing assets/docs; RLS via `owns_property` |
+| 7 | `migrations/20261121180000_contractor_invite_submissions.sql` | **Contractor invite links** — invites, pending submissions, media bucket (required for Settings → Invite a contractor) |
 
-That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, and adds private Storage buckets for manuals / photos and invite media. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message. **Invite links need migration #6** plus deploying the `invite-submit` edge function.
+That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, and adds private Storage buckets for manuals / photos and invite media. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message. **Custom category / document-type reuse needs migration #6.** **Invite links need migration #7** plus deploying the `invite-submit` edge function.
 
 ### Exact clicks (first-time)
 

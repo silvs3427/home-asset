@@ -432,6 +432,56 @@ describe("HomeAsset API — asset registry", () => {
     assert.equal(res.status, 400);
   });
 
+  it("accepts custom asset categories and remembers them per home", async () => {
+    const app = createApp();
+    const auth = await signup(app, "custom-cat@example.com");
+    const home = await createHome(app, auth.accessToken, "Custom Cat Home");
+    const created = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({ name: "Pool pump", category: "Pool gear" }),
+    });
+    assert.equal(created.status, 201);
+    const createdBody = (await created.json()) as {
+      asset: { category: string };
+    };
+    assert.equal(createdBody.asset.category, "Pool gear");
+
+    const labels = await app.request(
+      `/properties/${home.id}/labels?kind=asset_category`,
+      { headers: { authorization: `Bearer ${auth.accessToken}` } },
+    );
+    assert.equal(labels.status, 200);
+    const labelsBody = (await labels.json()) as {
+      labels: Array<{ value: string }>;
+    };
+    assert.ok(
+      labelsBody.labels.some((row) => row.value === "Pool gear"),
+      "custom category should be reusable for this home",
+    );
+
+    const remember = await app.request(`/properties/${home.id}/labels`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({ kind: "document_type", value: "HOA letter" }),
+    });
+    assert.equal(remember.status, 201);
+    const docLabels = await app.request(
+      `/properties/${home.id}/labels?kind=document_type`,
+      { headers: { authorization: `Bearer ${auth.accessToken}` } },
+    );
+    const docBody = (await docLabels.json()) as {
+      labels: Array<{ value: string }>;
+    };
+    assert.ok(docBody.labels.some((row) => row.value === "HOA letter"));
+  });
+
   it("stores warranty end date and term on an asset", async () => {
     const app = createApp();
     const auth = await signup(app, "warranty@example.com");

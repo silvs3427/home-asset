@@ -63,19 +63,19 @@ export type CreatePropertyInput = {
   country?: string;
 };
 
-export type AssetCategory =
-  | "hvac"
-  | "roof"
-  | "appliance"
-  | "generator"
-  | "water_heater"
-  | "plumbing"
-  | "electrical"
-  | "kids_gear"
-  | "vehicle"
-  | "other";
+/** Open homeowner-defined category (per home). Legacy snake_case may still appear. */
+export type AssetCategory = string;
 
 export type AssetProvenance = "homeowner" | "contractor";
+
+export type PropertyLabelKind = "asset_category" | "document_type";
+
+export type PublicPropertyLabel = {
+  id: string;
+  value: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type PublicAsset = {
   id: string;
@@ -116,13 +116,8 @@ export type CreateAssetInput = {
 
 export type UpdateAssetInput = Partial<CreateAssetInput>;
 
-export type DocumentType =
-  | "manual"
-  | "receipt"
-  | "warranty"
-  | "install_paperwork"
-  | "photo"
-  | "other";
+/** Open homeowner-defined document type (per home). Legacy snake_case may still appear. */
+export type DocumentType = string;
 
 export type DocumentSource = "user" | "ai_fetched" | "contractor";
 
@@ -203,27 +198,38 @@ export type HomePacket = {
   documentDownloadHint: string;
 };
 
-export const ASSET_CATEGORIES: { value: AssetCategory; label: string }[] = [
-  { value: "hvac", label: "HVAC" },
-  { value: "roof", label: "Roof" },
-  { value: "appliance", label: "Appliance" },
-  { value: "generator", label: "Generator" },
-  { value: "water_heater", label: "Water heater" },
-  { value: "plumbing", label: "Plumbing" },
-  { value: "electrical", label: "Electrical" },
-  { value: "kids_gear", label: "Kids' gear" },
-  { value: "vehicle", label: "Vehicle / parts" },
-  { value: "other", label: "Other" },
-];
+/** Legacy display map only — pickers use per-home custom labels, not this list. */
+export const LEGACY_CATEGORY_LABELS: Record<string, string> = {
+  hvac: "HVAC",
+  roof: "Roof",
+  appliance: "Appliance",
+  generator: "Generator",
+  water_heater: "Water heater",
+  plumbing: "Plumbing",
+  electrical: "Electrical",
+  kids_gear: "Kids' gear",
+  vehicle: "Vehicle / parts",
+  other: "Other",
+};
 
-export const DOCUMENT_TYPES: { value: DocumentType; label: string }[] = [
-  { value: "photo", label: "Photo" },
-  { value: "manual", label: "Manual" },
-  { value: "receipt", label: "Receipt" },
-  { value: "warranty", label: "Warranty" },
-  { value: "install_paperwork", label: "Install paperwork" },
-  { value: "other", label: "Other" },
-];
+/** @deprecated Prefer listPropertyLabels; kept for older screens during soft migrate. */
+export const ASSET_CATEGORIES: { value: string; label: string }[] = Object.entries(
+  LEGACY_CATEGORY_LABELS,
+).map(([value, label]) => ({ value, label }));
+
+export const LEGACY_DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  photo: "Photo",
+  manual: "Manual",
+  receipt: "Receipt",
+  warranty: "Warranty",
+  install_paperwork: "Install paperwork",
+  other: "Other",
+};
+
+/** @deprecated Prefer listPropertyLabels; kept for older screens during soft migrate. */
+export const DOCUMENT_TYPES: { value: string; label: string }[] = Object.entries(
+  LEGACY_DOCUMENT_TYPE_LABELS,
+).map(([value, label]) => ({ value, label }));
 
 export const REMINDER_RECURRENCES: {
   value: ReminderRecurrence;
@@ -236,11 +242,17 @@ export const REMINDER_RECURRENCES: {
 ];
 
 export function categoryLabel(category: AssetCategory): string {
-  return ASSET_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+  const key = category.trim().toLowerCase();
+  return LEGACY_CATEGORY_LABELS[key] ?? category.trim();
 }
 
 export function documentTypeLabel(docType: DocumentType): string {
-  return DOCUMENT_TYPES.find((d) => d.value === docType)?.label ?? docType;
+  const key = docType.trim().toLowerCase();
+  return LEGACY_DOCUMENT_TYPE_LABELS[key] ?? docType.trim();
+}
+
+export function normalizeLabelValue(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ").slice(0, 80);
 }
 
 export function documentSourceLabel(source: DocumentSource): string {
@@ -518,6 +530,56 @@ export async function getAsset(
   const res = await fetch(
     `${API_BASE_URL}/properties/${propertyId}/assets/${assetId}`,
     { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function listPropertyLabels(
+  accessToken: string,
+  propertyId: string,
+  kind: PropertyLabelKind,
+): Promise<{
+  propertyId: string;
+  kind: PropertyLabelKind;
+  labels: PublicPropertyLabel[];
+}> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudListPropertyLabels(
+      accessToken,
+      propertyId,
+      kind,
+    );
+  }
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/labels?kind=${encodeURIComponent(kind)}`,
+    { headers: { authorization: `Bearer ${accessToken}` } },
+  );
+  return parseJson(res);
+}
+
+export async function rememberPropertyLabel(
+  accessToken: string,
+  propertyId: string,
+  kind: PropertyLabelKind,
+  value: string,
+): Promise<{ label: PublicPropertyLabel & { kind: PropertyLabelKind } }> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudRememberPropertyLabel(
+      accessToken,
+      propertyId,
+      kind,
+      value,
+    );
+  }
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/labels`,
+    {
+      method: "POST",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ kind, value }),
+    },
   );
   return parseJson(res);
 }

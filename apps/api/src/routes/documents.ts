@@ -8,10 +8,8 @@ import {
   readDocumentBytes,
   updateDocument,
 } from "../lib/documents.js";
-import {
-  DOCUMENT_TYPES,
-  toPublicDocument,
-} from "../lib/types.js";
+import { normalizeLabelValue } from "../lib/propertyLabels.js";
+import { toPublicDocument } from "../lib/types.js";
 import { requireAuth, type AuthVariables } from "../middleware/requireAuth.js";
 
 const optionalDate = z
@@ -21,10 +19,18 @@ const optionalDate = z
   .optional()
   .nullable();
 
+/** Open document type — homeowner-defined, reusable per home after first use. */
+const docTypeSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .transform((v) => normalizeLabelValue(v));
+
 const updateSchema = z
   .object({
     title: z.string().trim().min(1).max(200).optional(),
-    docType: z.enum(DOCUMENT_TYPES as [string, ...string[]]).optional(),
+    docType: docTypeSchema.optional(),
     documentDate: optionalDate,
     assetId: z.string().uuid().optional().nullable(),
   })
@@ -146,7 +152,7 @@ documentRoutes.post("/", async (c) => {
   const meta = z
     .object({
       title: z.string().trim().min(1).max(200),
-      docType: z.enum(DOCUMENT_TYPES as [string, ...string[]]),
+      docType: docTypeSchema,
       documentDate: optionalDate,
       assetId: z.string().uuid().optional().nullable(),
     })
@@ -162,7 +168,7 @@ documentRoutes.post("/", async (c) => {
       {
         error: "invalid_input",
         message:
-          "Add a title and document type (manual, receipt, warranty, install_paperwork, photo, other). Dates use YYYY-MM-DD.",
+          "Add a title and a document type (your own words, up to 80 characters). Dates use YYYY-MM-DD.",
       },
       400,
     );
@@ -172,7 +178,7 @@ documentRoutes.post("/", async (c) => {
     const bytes = Buffer.from(await file.arrayBuffer());
     const document = await createDocument(propertyId, claims.sub, {
       title: meta.data.title,
-      docType: meta.data.docType as (typeof DOCUMENT_TYPES)[number],
+      docType: meta.data.docType,
       documentDate: meta.data.documentDate ?? null,
       assetId: meta.data.assetId ?? null,
       source: "user",
@@ -261,9 +267,7 @@ documentRoutes.patch("/:documentId", async (c) => {
   try {
     const document = updateDocument(documentId, propertyId, claims.sub, {
       ...parsed.data,
-      docType: parsed.data.docType as
-        | (typeof DOCUMENT_TYPES)[number]
-        | undefined,
+      docType: parsed.data.docType,
     });
     return c.json({ document: toPublicDocument(document) });
   } catch (err) {

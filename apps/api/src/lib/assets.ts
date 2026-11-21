@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, unlinkSync } from "node:fs";
 import { documentStoragePath, getDb } from "../db/client.js";
+import { rememberPropertyLabel } from "./propertyLabels.js";
 import { getPropertyForUser } from "./properties.js";
 import type {
   AssetCategory,
@@ -182,6 +183,13 @@ export function createAsset(
       asset.updatedAt,
     );
 
+  rememberPropertyLabel(
+    propertyId,
+    ownerUserId,
+    "asset_category",
+    asset.category,
+  );
+
   return asset;
 }
 
@@ -263,6 +271,15 @@ export function updateAsset(
       updated.id,
       updated.propertyId,
     );
+
+  if (input.category !== undefined) {
+    rememberPropertyLabel(
+      propertyId,
+      ownerUserId,
+      "asset_category",
+      updated.category,
+    );
+  }
 
   return updated;
 }

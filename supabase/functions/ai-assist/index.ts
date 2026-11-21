@@ -53,35 +53,13 @@ type ErrorCode =
   | "upstream_error"
   | "parse_failed";
 
-type AssetCategory =
-  | "hvac"
-  | "roof"
-  | "appliance"
-  | "generator"
-  | "water_heater"
-  | "plumbing"
-  | "electrical"
-  | "kids_gear"
-  | "vehicle"
-  | "other";
-
-const CATEGORIES: AssetCategory[] = [
-  "hvac",
-  "roof",
-  "appliance",
-  "generator",
-  "water_heater",
-  "plumbing",
-  "electrical",
-  "kids_gear",
-  "vehicle",
-  "other",
-];
+/** Open homeowner-defined category label (free text). */
+type AssetCategory = string;
 
 const ExistingAssetSchema = z.object({
   id: z.string().uuid(),
   name: z.string().max(200),
-  category: z.string().max(40),
+  category: z.string().max(80),
   manufacturer: z.string().max(120).nullable().optional(),
   model: z.string().max(120).nullable().optional(),
   serial: z.string().max(120).nullable().optional(),
@@ -737,10 +715,9 @@ async function assertPropertyOwned(
 }
 
 function coerceCategory(raw: unknown): AssetCategory {
-  const value = String(raw ?? "other").toLowerCase().trim();
-  return (CATEGORIES.includes(value as AssetCategory)
-    ? value
-    : "other") as AssetCategory;
+  if (typeof raw !== "string") return "other";
+  const value = raw.trim().replace(/\s+/g, " ").slice(0, 80);
+  return value || "other";
 }
 
 function manualsFromProduct(product: CatalogProduct) {
@@ -1352,7 +1329,7 @@ const ASSET_INTAKE_SYSTEM =
   "capacity:string|null, " +
   "suggestedAsset:{name,category,manufacturer,model,serial,purchaseDate,installDate,installerVendor,location,notes,warrantyEndDate,warrantyTerm}, " +
   "missingFields:string[]}. " +
-  "category must be one of: hvac,roof,appliance,generator,water_heater,plumbing,electrical,kids_gear,vehicle,other. " +
+  "category is a short free-text label the homeowner would recognize (e.g. HVAC, Roof, Dishwasher) — not a fixed enum. " +
   "matchedAssetId must be one of the provided existing asset ids or null. Prefer update when the same equipment already exists. " +
   "Do not invent serial numbers, model numbers, or capacity. Dates YYYY-MM-DD or null. " +
   "Fill only facts grounded in the input or attached media. missingFields = keys still unknown that a homeowner should confirm.";
@@ -1597,7 +1574,7 @@ async function formatEmailIntake(input: {
           "You turn a homeowner's forwarded contractor email into JSON only with keys: " +
           "summary (short), workPerformed, contractorName (string|null), workDate (string|null), " +
           "assetsSuggested (array of {name,category,manufacturer,model,notes}). " +
-          "category must be one of: hvac,roof,appliance,generator,water_heater,plumbing,electrical,kids_gear,vehicle,other. " +
+          "category is a short free-text label the homeowner would recognize (e.g. HVAC, Roof, Dishwasher) — not a fixed enum. " +
           "Do not invent serial numbers. Keep facts grounded in the email.",
         user: text,
       });

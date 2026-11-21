@@ -12,8 +12,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  ASSET_CATEGORIES,
-  DOCUMENT_TYPES,
   acknowledgeRecallAlert,
   categoryLabel,
   completeReminder,
@@ -27,6 +25,7 @@ import {
   listRecallAlerts,
   listReminders,
   manualsSuggestPath,
+  normalizeLabelValue,
   recallAlertStatusLabel,
   recurrenceLabel,
   runPropertyRecallCheck,
@@ -41,6 +40,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
+import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   downloadAndShareDocument,
   pickDocumentFile,
@@ -72,7 +72,7 @@ export default function AssetDetailScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<AssetCategory>("other");
+  const [category, setCategory] = useState<AssetCategory>("");
   const [manufacturer, setManufacturer] = useState("");
   const [model, setModel] = useState("");
   const [serial, setSerial] = useState("");
@@ -86,7 +86,7 @@ export default function AssetDetailScreen() {
 
   const [pending, setPending] = useState<PickedUpload | null>(null);
   const [docTitle, setDocTitle] = useState("");
-  const [docType, setDocType] = useState<DocumentType>("photo");
+  const [docType, setDocType] = useState<DocumentType>("");
   const [docDate, setDocDate] = useState("");
 
   const fillForm = useCallback((next: PublicAsset) => {
@@ -192,12 +192,16 @@ export default function AssetDetailScreen() {
 
   async function onSave() {
     if (!accessToken || !activeProperty || !id) return;
+    if (!normalizeLabelValue(category)) {
+      setError("Add a category (your own words).");
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
       const res = await updateAsset(accessToken, activeProperty.id, id, {
         name: name.trim(),
-        category,
+        category: normalizeLabelValue(category),
         manufacturer: manufacturer.trim() || null,
         model: model.trim() || null,
         serial: serial.trim() || null,
@@ -268,12 +272,18 @@ export default function AssetDetailScreen() {
     setBusy(true);
     setError(null);
     try {
+      const typed = normalizeLabelValue(docType);
+      if (!typed) {
+        setError("Add a document type (your own words).");
+        setBusy(false);
+        return;
+      }
       await uploadDocument(accessToken, activeProperty.id, {
         uri: pending.uri,
         name: pending.name,
         mimeType: pending.mimeType,
         title: docTitle.trim() || pending.name,
-        docType,
+        docType: typed,
         documentDate: docDate.trim() || null,
         assetId: id,
       });
@@ -398,29 +408,17 @@ export default function AssetDetailScreen() {
         {!loading && asset && editing ? (
           <>
             <Field label="Name" value={name} onChangeText={setName} />
-            <Text style={styles.label}>Category</Text>
-            <View style={styles.chips}>
-              {ASSET_CATEGORIES.map((item) => {
-                const selected = item.value === category;
-                return (
-                  <Pressable
-                    key={item.value}
-                    accessibilityRole="button"
-                    onPress={() => setCategory(item.value)}
-                    style={[styles.chip, selected && styles.chipSelected]}
-                  >
-                    <Text
-                      style={[
-                        styles.chipLabel,
-                        selected && styles.chipLabelSelected,
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {accessToken && activeProperty ? (
+              <OpenLabelField
+                accessToken={accessToken}
+                propertyId={activeProperty.id}
+                kind="asset_category"
+                label="Category"
+                value={category}
+                onChange={setCategory}
+                placeholder="e.g. Furnace, Roof, Kids gear"
+              />
+            ) : null}
             <Field
               label="Manufacturer"
               value={manufacturer}
@@ -554,29 +552,17 @@ export default function AssetDetailScreen() {
                 <Text style={styles.factLabel}>Ready to save</Text>
                 <Text style={styles.pendingName}>{pending.name}</Text>
                 <Field label="Title" value={docTitle} onChangeText={setDocTitle} />
-                <Text style={styles.label}>Type</Text>
-                <View style={styles.chips}>
-                  {DOCUMENT_TYPES.map((item) => {
-                    const selected = item.value === docType;
-                    return (
-                      <Pressable
-                        key={item.value}
-                        accessibilityRole="button"
-                        onPress={() => setDocType(item.value)}
-                        style={[styles.chip, selected && styles.chipSelected]}
-                      >
-                        <Text
-                          style={[
-                            styles.chipLabel,
-                            selected && styles.chipLabelSelected,
-                          ]}
-                        >
-                          {item.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                {accessToken && activeProperty ? (
+                  <OpenLabelField
+                    accessToken={accessToken}
+                    propertyId={activeProperty.id}
+                    kind="document_type"
+                    label="Type"
+                    value={docType}
+                    onChange={setDocType}
+                    placeholder="e.g. Photo, Manual, Invoice"
+                  />
+                ) : null}
                 <Field
                   label="Document date (YYYY-MM-DD)"
                   value={docDate}

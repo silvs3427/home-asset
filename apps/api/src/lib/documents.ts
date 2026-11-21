@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { config } from "../config.js";
 import { documentStoragePath, getDb } from "../db/client.js";
 import { assertPropertyOwnedByUser, getAssetForProperty } from "./assets.js";
+import { rememberPropertyLabel } from "./propertyLabels.js";
 import { isSupabaseStorageEnabled } from "./supabase/client.js";
 import {
   downloadDocumentObject,
@@ -211,6 +212,12 @@ export async function createDocument(
         doc.createdAt,
         doc.updatedAt,
       );
+    rememberPropertyLabel(
+      propertyId,
+      ownerUserId,
+      "document_type",
+      doc.docType,
+    );
   } catch (err) {
     if (useSupabase) {
       await removeDocumentObject(storageKey);
@@ -269,6 +276,15 @@ export function updateDocument(
       updated.id,
       updated.propertyId,
     );
+
+  if (input.docType !== undefined) {
+    rememberPropertyLabel(
+      propertyId,
+      ownerUserId,
+      "document_type",
+      updated.docType,
+    );
+  }
 
   return updated;
 }
