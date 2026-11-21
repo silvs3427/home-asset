@@ -1,6 +1,6 @@
 # ai-assist
 
-Server-side AI for HomeAsset (scan / how-to / contractor format / email intake / permit hints).
+Server-side AI for HomeAsset (scan / how-to / contractor format / email intake / multi-source asset intake / permit hints).
 
 **Same pattern as LightLift** (`parse-voice-invoice` / `find-truck-part`):
 
@@ -56,9 +56,10 @@ supabase secrets set AI_ASSIST_LIVE=true
 | `howto` | `propertyId`, `question`, `assetId?` | how-to answer + citations |
 | `contractor-format` | `inputText`, `inputKind?` | format draft (no writes) |
 | `email-intake` | `propertyId`, `emailText` | email intake draft |
+| `asset-intake` | `propertyId`, `sourceKind`, `text?`, `hint?`, `filename?`, `existingAssets?` | one-asset Add/Update draft + missing fields |
 | `permits-suggest` | `propertyId` | permit suggestion draft |
 
-**Confirm / save** (scan confirm, email approve, permit approve) runs on the phone against Supabase Postgres + Storage with the user JWT — those steps do **not** need an AI key.
+**Confirm / save** (scan confirm, email approve, asset intake confirm, permit approve) runs on the phone against Supabase Postgres + Storage with the user JWT — those steps do **not** need an AI key.
 
 ## Privacy
 

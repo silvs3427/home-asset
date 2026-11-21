@@ -54,6 +54,54 @@ export type EmailIntakeFormatResult = {
   };
 };
 
+export type AssetIntakeSourceKind = "photo" | "email" | "invoice" | "notes";
+
+export type AssetIntakeSuggestedFields = {
+  name: string;
+  category: AssetCategory;
+  manufacturer: string | null;
+  model: string | null;
+  serial: string | null;
+  purchaseDate: string | null;
+  installDate: string | null;
+  installerVendor: string | null;
+  location: string | null;
+  notes: string | null;
+  warrantyEndDate: string | null;
+  warrantyTerm: string | null;
+};
+
+export type AssetIntakeMissingField = {
+  key: keyof AssetIntakeSuggestedFields;
+  label: string;
+  reason: string;
+};
+
+export type AssetIntakeFormatResult = {
+  mode: AiMode;
+  intent: "add" | "update";
+  matchedAssetId: string | null;
+  matchedAssetLabel: string | null;
+  identificationLabel: string;
+  confidence: number;
+  suggestedAsset: AssetIntakeSuggestedFields;
+  missingFields: AssetIntakeMissingField[];
+  privacy: {
+    writes: false;
+    confirmRequired: true;
+    note: string;
+  };
+};
+
+export type ExistingAssetLite = {
+  id: string;
+  name: string;
+  category: string;
+  manufacturer?: string | null;
+  model?: string | null;
+  serial?: string | null;
+};
+
 function coerceCategory(value: unknown): AssetCategory {
   if (
     typeof value === "string" &&
@@ -456,6 +504,182 @@ export async function formatEmailIntake(input: {
           .join(" "),
       },
     ],
+    privacy,
+  };
+}
+
+function computeMissingFields(
+  asset: AssetIntakeSuggestedFields,
+): AssetIntakeMissingField[] {
+  const meta: Record<
+    keyof AssetIntakeSuggestedFields,
+    { label: string; reason: string }
+  > = {
+    name: { label: "Name", reason: "What should this asset be called?" },
+    category: { label: "Category", reason: "Which category fits best?" },
+    manufacturer: {
+      label: "Manufacturer",
+      reason: "Brand or maker if you have it.",
+    },
+    model: { label: "Model", reason: "Model number if shown on a label." },
+    serial: {
+      label: "Serial",
+      reason: "Serial helps match manuals and recalls later.",
+    },
+    purchaseDate: {
+      label: "Purchase date",
+      reason: "YYYY-MM-DD if you know when you bought it.",
+    },
+    installDate: {
+      label: "Install date",
+      reason: "YYYY-MM-DD if you know when it was installed.",
+    },
+    installerVendor: {
+      label: "Installer / vendor",
+      reason: "Who installed or sold it?",
+    },
+    location: {
+      label: "Location",
+      reason: "Where in the home (attic, kitchen, exterior…)?",
+    },
+    notes: { label: "Notes", reason: "Anything else worth keeping?" },
+    warrantyEndDate: {
+      label: "Warranty end",
+      reason: "YYYY-MM-DD if you know coverage end.",
+    },
+    warrantyTerm: {
+      label: "Warranty term",
+      reason: "e.g. 10 years parts / 1 year labor.",
+    },
+  };
+  const keys: Array<keyof AssetIntakeSuggestedFields> = [
+    "manufacturer",
+    "model",
+    "serial",
+    "installDate",
+    "location",
+  ];
+  const missing: AssetIntakeMissingField[] = [];
+  for (const key of keys) {
+    const value = asset[key];
+    if (value == null || String(value).trim() === "") {
+      missing.push({
+        key,
+        label: meta[key].label,
+        reason: meta[key].reason,
+      });
+    }
+  }
+  return missing;
+}
+
+function matchExistingAsset(
+  suggested: Pick<
+    AssetIntakeSuggestedFields,
+    "name" | "category" | "manufacturer" | "model" | "serial"
+  >,
+  existing: ExistingAssetLite[],
+): { id: string; label: string } | null {
+  if (existing.length === 0) return null;
+  const norm = (v: string | null | undefined) =>
+    (v ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+  if (suggested.serial) {
+    const serialHit = existing.find(
+      (a) => a.serial && norm(a.serial) === norm(suggested.serial),
+    );
+    if (serialHit) {
+      return {
+        id: serialHit.id,
+        label: `${serialHit.name}${serialHit.manufacturer ? ` · ${serialHit.manufacturer}` : ""}${serialHit.model ? ` ${serialHit.model}` : ""}`,
+      };
+    }
+  }
+
+  if (suggested.manufacturer && suggested.model) {
+    const mm = existing.find(
+      (a) =>
+        norm(a.manufacturer) === norm(suggested.manufacturer) &&
+        norm(a.model) === norm(suggested.model),
+    );
+    if (mm) {
+      return {
+        id: mm.id,
+        label: `${mm.name} · ${mm.manufacturer} ${mm.model}`,
+      };
+    }
+  }
+
+  const nameNorm = norm(suggested.name);
+  const nameHit = existing.find((a) => {
+    const other = norm(a.name);
+    return (
+      other === nameNorm ||
+      (nameNorm.length >= 4 && other.includes(nameNorm)) ||
+      (other.length >= 4 && nameNorm.includes(other))
+    );
+  });
+  if (nameHit && nameHit.category === suggested.category) {
+    return {
+      id: nameHit.id,
+      label: `${nameHit.name}${nameHit.manufacturer ? ` · ${nameHit.manufacturer}` : ""}`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Multi-source Ask HomeAsset intake → one distinct asset draft (Add or Update).
+ * Never writes — homeowner must confirm.
+ */
+export async function formatAssetIntake(input: {
+  sourceKind: AssetIntakeSourceKind;
+  text?: string | null;
+  hint?: string | null;
+  filename?: string | null;
+  existingAssets: ExistingAssetLite[];
+}): Promise<AssetIntakeFormatResult> {
+  const mode = resolveAiMode();
+  const privacy = {
+    writes: false as const,
+    confirmRequired: true as const,
+    note: "Draft only. Nothing is official until you choose Add or Update and confirm.",
+  };
+  const query = [input.hint, input.filename, input.text]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const product = matchCatalogProducts(query || "appliance")[0]!;
+  const installDate = extractLikelyDate(query);
+  const installerVendor = extractContractorName(query);
+  const suggestedAsset: AssetIntakeSuggestedFields = {
+    name: product.name,
+    category: product.category,
+    manufacturer: product.manufacturer,
+    model: product.model,
+    serial: null,
+    purchaseDate: null,
+    installDate:
+      installDate && /^\d{4}-\d{2}-\d{2}$/.test(installDate)
+        ? installDate
+        : null,
+    installerVendor,
+    location: null,
+    notes: `Drafted from ${input.sourceKind} via Ask HomeAsset (${mode}). Confirm before saving.`,
+    warrantyEndDate: null,
+    warrantyTerm: null,
+  };
+  const matched = matchExistingAsset(suggestedAsset, input.existingAssets);
+  return {
+    mode,
+    intent: matched ? "update" : "add",
+    matchedAssetId: matched?.id ?? null,
+    matchedAssetLabel: matched?.label ?? null,
+    identificationLabel: `${product.manufacturer} ${product.model}`,
+    confidence: product.confidence,
+    suggestedAsset,
+    missingFields: computeMissingFields(suggestedAsset),
     privacy,
   };
 }

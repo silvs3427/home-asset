@@ -49,13 +49,23 @@ export default function AskHomeAssetScreen() {
           <>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.replace("/ai/scan")}
+              onPress={() => router.replace("/ai/asset-intake")}
               style={({ pressed }) => [
                 styles.primaryBtn,
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.primaryLabel}>Scan a picture</Text>
+              <Text style={styles.primaryLabel}>Add or update asset</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.replace("/ai/scan")}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>Scan a picture</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
