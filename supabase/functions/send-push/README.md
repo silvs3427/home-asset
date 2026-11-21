@@ -39,7 +39,8 @@ supabase functions deploy send-push
 
 1. Deploy this function (`supabase functions deploy send-push`)
 2. Set `EXPO_ACCESS_TOKEN` in Supabase → Edge Functions → Secrets
-3. On the phone: Settings → Push & in-app → turn on Safety recall alerts + Push → **Register this phone for push**
-4. Add Generac / GP6500 (or Check safety recalls) — expect in-app notice + lock-screen when secret is set
+3. **Android:** the preview APK must include Firebase `google-services.json` or Register for push fails (“Firebase Messaging / googleServicesFile”). Plain steps + PowerShell: [`apps/mobile/README.md`](../../../apps/mobile/README.md#android-lock-screen-push-fcm). That needs a **new APK install**. Also upload the FCM V1 service account under Expo Credentials so Expo can deliver Android pushes.
+4. On the phone: Settings → Push & in-app → turn on Safety recall alerts + Push → **Register this phone for push**
+5. Add Generac / GP6500 (or Check safety recalls) — expect in-app notice + lock-screen when secret is set
 
-**Phone rebuild?** No for this JS/edge work alone if the install already registers Expo push tokens. Expo Go may soft-disable native push — use the existing preview/dev build that already has push modules.
+**Phone rebuild?** No for this JS/edge work alone if the install already registers Expo push tokens. **Yes** when adding Android FCM / `google-services.json` for the first time. Expo Go soft-disables native push — use the preview APK.

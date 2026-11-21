@@ -145,6 +145,8 @@ npx eas-cli@latest build -p android --profile preview
 
 Download/install the APK from the Expo build page (**Install**). Expo Go tunnel is temporary testing only — not the production install path. Details: [`apps/mobile/README.md`](./apps/mobile/README.md).
 
+**Android lock-screen push:** preview builds need Firebase `google-services.json` wired into the APK (`android.googleServicesFile` via EAS file env `GOOGLE_SERVICES_JSON`, or a local `apps/mobile/google-services.json`). Without it, Register for push fails with “Firebase Messaging / googleServicesFile”. **New APK install required** after that file is added. Plain founder steps (Firebase console + PowerShell): [`apps/mobile/README.md`](./apps/mobile/README.md#android-lock-screen-push-fcm).
+
 ## Tests & CI
 
 ```bash

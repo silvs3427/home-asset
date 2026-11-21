@@ -37,6 +37,8 @@ Run lint and typecheck before declaring any task done.
 Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
 Docs: https://docs.expo.dev/eas/index.md
 
+**Android FCM:** `app.config.js` sets `android.googleServicesFile` from EAS file env `GOOGLE_SERVICES_JSON` (or local `google-services.json`). Without it, Register for push fails on Android preview. Founder steps: [README.md](./README.md#android-lock-screen-push-fcm). Never put the FCM service-account private key in the app.
+
 ## Rules
 
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
