@@ -21,7 +21,7 @@ Mobile Expo specifics live in [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
 ## Homeowner-only product (do not regress)
 
 1. Signup never offers a contractor role. No face switch / contractor-only screens in the phone app.
-2. Contractors belong in LightLift; non-LightLift path is a later invite-link epic (not dual-role enrollment in HomeAsset).
+2. Contractors belong in LightLift; non-LightLift pros use a homeowner-sent invite link (browser submit — voice + photos + text) → pending draft → homeowner approve. Not dual-role enrollment in HomeAsset.
 
 ## How to use / Settings copy (do not regress)
 
@@ -29,4 +29,4 @@ Mobile Expo specifics live in [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
 2. Privacy / Security screens use `PRIVACY_SECTIONS` / `SECURITY_SECTIONS` in the same file.
 3. **When adding or relocating user-facing features**, update that content in the same PR.
 4. Home CTAs: Ask HomeAsset → View Assets → Add or Update an Asset → Notifications → Settings. Ask HomeAsset (`/ai/help`) is Talk or Text (typed or voice note → how-to). Add or Update (`/ai/add-update`): Scan a picture, Upload a PDF, Free text → Format with Ask HomeAsset; approve-before-official. One Notifications surface; delivery prefs under Settings. Colors from `apps/mobile/src/lib/theme.ts`. No long instructional copy on feature screens — How to use owns it. Permits suggest is not a primary CTA.
-5. How to use may mention invite-link **coming soon** (voice + photos + text → Ask HomeAsset draft → homeowner approve); do not ship a fake contractor face.
+5. Invite link: Settings → Invite a contractor / Review contractor submits; public edge `invite-submit`; How to use must stay accurate. Do not ship a fake contractor face.

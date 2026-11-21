@@ -1,8 +1,8 @@
 # HomeAsset
 
-Phone-first home memory for **homeowners only** (iPhone + Android). **Homeowners own the record.** Contractors use LightLift (or a later homeowner-sent invite link); there is no in-app contractor mode. Privacy and approve-before-official are product requirements from day one.
+Phone-first home memory for **homeowners only** (iPhone + Android). **Homeowners own the record.** Contractors use LightLift (or a homeowner-sent invite link); there is no in-app contractor mode. Privacy and approve-before-official are product requirements from day one.
 
-This repo includes **Supabase + installable EAS builds** (LightLift-style `app.json` / `app.config.js` / `eas.json`) on top of **EPIC 7** safety recalls (free public lists), **EPIC 6** AI assist, **D18** email/permit intake (approve-before-official), notifications, reminders, documents, assets, and accounts. Local SQLite demo stays the CI default until you add Supabase secrets. LightLift push / invite-link handoff comes later.
+This repo includes **Supabase + installable EAS builds** (LightLift-style `app.json` / `app.config.js` / `eas.json`) on top of **EPIC 7** safety recalls (free public lists), **EPIC 6** AI assist, **D18** email/permit intake (approve-before-official), **contractor invite-link submits** (pending → homeowner approve), notifications, reminders, documents, assets, and accounts. Local SQLite demo stays the CI default until you add Supabase secrets. LightLift push remains a later handoff piece.
 
 ## Stack
 
@@ -23,7 +23,7 @@ This repo includes **Supabase + installable EAS builds** (LightLift-style `app.j
 apps/
   mobile/   # Expo app — app.json + app.config.js + eas.json (LightLift layout)
   api/      # Backend API (auth + properties + assets + documents + reminders + recalls + notifications + AI)
-supabase/   # SQL migrations + edge functions (ai-assist, send-push) + founder setup README
+supabase/   # SQL migrations + edge functions (ai-assist, invite-submit, send-push) + founder setup README
 ```
 
 ## Prerequisites

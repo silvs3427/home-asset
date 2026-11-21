@@ -170,7 +170,7 @@ export default function NotificationPreferencesScreen() {
                 }}
               />
               <PrefRow
-                label="Contractor submissions (later)"
+                label="Contractor submissions"
                 value={prefs.contractorSubmitsEnabled}
                 disabled={saving}
                 onChange={(value) => {

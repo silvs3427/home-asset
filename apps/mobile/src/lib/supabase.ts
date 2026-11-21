@@ -78,3 +78,9 @@ export function requireSupabaseClient(): SupabaseClient {
   if (!supabase) throw new Error(CONFIG_ERROR);
   return supabase;
 }
+
+/** Project URL (no trailing slash) for building edge function links. */
+export function getSupabasePublicUrl(): string {
+  assertSupabaseConfigured();
+  return resolveSupabaseEnv().url.replace(/\/$/, "");
+}

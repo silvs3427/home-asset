@@ -18,8 +18,10 @@ HomeAsset’s cloud project ref (from project docs): `iiyhogiwqqotlrsjlqud` → 
 | 2 | `migrations/20261120000000_epic7_recalls.sql` | **Required for phone safety recalls** — `recall_notices` + `asset_recall_alerts` + RLS (safe to re-run) |
 | 3 | `migrations/20261121000000_bootstrap_new_user.sql` | LightLift-style `bootstrap_new_user` RPC; drops Auth trigger / insert-own policy if present |
 | 4 | `migrations/20261121120000_profiles_table_grants.sql` | **Paste now if signup says permission denied for table profiles** — GRANTs + re-assert select/update policies (safe re-run; no app rebuild) |
+| 5 | `migrations/20261121140000_ai_assist_rate_limits.sql` | Ask HomeAsset daily caps (optional but recommended) |
+| 6 | `migrations/20261121180000_contractor_invite_submissions.sql` | **Contractor invite links** — invites, pending submissions, media bucket (required for Settings → Invite a contractor) |
 
-That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, and adds a private Storage bucket for manuals / photos. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message.
+That setup creates the homeowner ledger tables, enables RLS so each user only sees their own rows, grants `authenticated` the table privileges PostgREST needs, lets the signed-in user bootstrap **their own** profile via RPC, and adds private Storage buckets for manuals / photos and invite media. **Phone recall alerts need migration #2** — without it, Check safety recalls fails with a “tables missing” message. **Invite links need migration #6** plus deploying the `invite-submit` edge function.
 
 ### Exact clicks (first-time)
 
@@ -72,6 +74,19 @@ supabase functions deploy ai-assist
 ```
 
 Without a key, the function returns **mock** catalog drafts so demos still work. Confirm / approve writes stay on the phone via RLS (homeowner must tap confirm). See `functions/ai-assist/README.md`.
+
+## Contractor invite submit (`invite-submit`)
+
+Public page for **non-LightLift** pros: homeowner shares a link from Settings → Invite a contractor; the pro opens it in a browser (voice + photos + text); Ask HomeAsset formats a **pending** draft; homeowner approves in the app.
+
+1. Paste SQL migration `20261121180000_contractor_invite_submissions.sql`.
+2. Deploy (JWT verification off — token gates access):
+
+```bash
+npx supabase functions deploy invite-submit
+```
+
+Same AI secrets as `ai-assist` (optional; mock drafts work without a key). See `functions/invite-submit/README.md`.
 
 ## Recall lock-screen push (`send-push`)
 
