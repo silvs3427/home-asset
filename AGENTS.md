@@ -21,4 +21,4 @@ Mobile Expo specifics live in [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
 1. In-app guide: `apps/mobile/src/app/settings/how-to-use.tsx` reads `HOW_TO_USE_SECTIONS` from `apps/mobile/src/lib/settingsContent.ts`.
 2. Privacy / Security screens use `PRIVACY_SECTIONS` / `SECURITY_SECTIONS` in the same file.
 3. **When adding or relocating user-facing features**, update that content in the same PR.
-4. Home stays lean (current home + primary steps). “Add another home” and secondary tools (notifications, AI intake) live under Settings.
+4. Home stays lean (Assets / Documents / Alerts). “Add another home” in Settings. AI scan/how-to via persistent FAB → `/ai/help`. One Alerts surface; delivery prefs under Settings. No long instructional copy on feature screens — How to use owns it. Permits suggest is not a primary CTA.

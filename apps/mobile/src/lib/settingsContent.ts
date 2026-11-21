@@ -2,8 +2,12 @@
  * In-app Settings copy: How to use, Privacy, and Security.
  *
  * Agents: when you ship a user-facing feature, update HOW_TO_USE_SECTIONS
- * (and Privacy/Security if the change affects those promises). See
+ * (and Privacy/Security sections if the change affects those promises). See
  * `.cursorrules` / `AGENTS.md` — keep this in sync with the product.
+ *
+ * Product UI: keep screens clean — put explanations here, not as in-app
+ * commentary on feature screens. AI scan / how-to open from the persistent
+ * FAB (`/ai/help`), not Home buttons. Suggest-from-permits is not a primary CTA.
  */
 
 export type ContentSection = {
@@ -14,36 +18,32 @@ export type ContentSection = {
 /** Plain-language guide of what the phone app can do today. */
 export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   {
-    title: "Sign in and your face",
-    body: "Create an account or sign in with email and password. One login can use a homeowner face (your homes and ledger) or a contractor face (format notes before a future handoff). Switch faces anytime from Home — same account.",
-  },
-  {
-    title: "Home screen",
-    body: "Home shows your current address and the main next steps: assets, documents, and reminders. Switch between homes there when you have more than one. Everything else lives under Settings so Home stays calm.",
+    title: "Home",
+    body: "Shows your current address and three next steps: Assets, Documents, and Alerts. Switch homes here when you have more than one. Settings is in the header.",
   },
   {
     title: "Homes",
-    body: "Add your first home from Home when you have none yet. Add another home from Settings. Everything you store is scoped to the home you selected; lists never mix addresses.",
+    body: "Add your first home from Home when you have none. Add another from Settings → Add another home. Each address keeps its own record.",
   },
   {
-    title: "Assets, documents, reminders",
-    body: "From Home: track equipment and installs; attach photos and files (and export a home packet); set upcoming maintenance and mark items done. Open an asset for details and AI how-to when useful.",
+    title: "Assets and documents",
+    body: "Assets track equipment and installs for this home. Documents hold photos and files; you can export a home packet when you need one.",
   },
   {
-    title: "Notifications and AI tools",
-    body: "Under Settings → More for this home: notification center, scan product, ask how-to, paste contractor email, and suggest from permits. AI and intake paths create drafts — nothing becomes official until you confirm. How-to asking is read-only.",
+    title: "Alerts",
+    body: "One place for upcoming reminders and recent notices (due items, safety recalls, and later contractor submissions). Add reminders here. Push and in-app delivery are under Settings → Push & in-app — not a second competing feature on Home.",
   },
   {
-    title: "Alert preferences",
-    body: "In Settings, choose what and when (lead days) and whether push is allowed. No marketing or SMS. Push needs a real phone build and server config; the in-app center works either way.",
+    title: "AI help",
+    body: "Use the floating AI button on any signed-in screen. Choose Scan a picture (identify a product and manuals; confirm before save) or Ask how-to (answers from manuals and facts on this home; asking never writes the ledger).",
   },
   {
     title: "Contractor face",
-    body: "Switch faces in Settings. On the contractor face, Home offers format notes (AI). Full submit into a homeowner ledger (with their approval) is a later step.",
+    body: "Switch faces in Settings. Format notes from Home or AI help. Submitting into a homeowner ledger with their approval comes later.",
   },
   {
     title: "Privacy and security",
-    body: "Settings also opens this How to use guide plus Privacy and Security. Sign out is in Settings too.",
+    body: "Settings opens How to use, Privacy, and Security. You own the record; approve before anything becomes official. Sign out is in Settings.",
   },
 ];
 
@@ -54,7 +54,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Approve before official",
-    body: "AI scans, email intake, permit suggestions, and similar helpers create drafts for you to review. Nothing is auto-added as official without your confirm.",
+    body: "AI scans and similar helpers create drafts for you to review. Nothing is auto-added as official without your confirm.",
   },
   {
     title: "Signed-in and home-scoped",
@@ -62,11 +62,11 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Least data shared",
-    body: "We avoid broad sharing by default. Exports and shares happen when you choose them. Notification preferences are under your control; there is no marketing channel in the app.",
+    body: "We avoid broad sharing by default. Exports and shares happen when you choose them. Alert delivery preferences are under your control; there is no marketing channel in the app.",
   },
   {
     title: "AI and your data",
-    body: "How-to answers use manuals and facts already on the home when possible. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; scan and intake paths wait for your confirm.",
+    body: "How-to answers use manuals and facts already on the home when possible. AI keys live on the server, never on the phone. Asking how-to does not write the ledger; scan waits for your confirm.",
   },
 ];
 

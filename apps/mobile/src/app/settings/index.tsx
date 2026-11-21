@@ -12,12 +12,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth";
 
 /**
- * Settings hub: homes, secondary tools, How to use / Privacy / Security,
- * alerts, face switch, sign out. Keeps Home uncluttered.
+ * Settings: Add home, guide (How to use / Privacy / Security),
+ * alert delivery prefs, face switch, sign out.
+ * AI scan/how-to: persistent FAB. Permits intake: not a primary CTA.
  */
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, activeProperty, signOut, setFace } = useAuth();
+  const { user, signOut, setFace } = useAuth();
   const [faceBusy, setFaceBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,74 +55,33 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.copy}>
-          Homes, secondary tools, and the privacy and security promises we keep
-          for your record.
-        </Text>
-
         {isHomeownerFace ? (
           <>
             <Text style={styles.sectionLabel}>Homes</Text>
             <NavRow
               label="Add another home"
-              hint="Each address keeps its own record"
               onPress={() => router.push("/add-home")}
             />
-
-            {activeProperty ? (
-              <>
-                <Text style={styles.sectionLabel}>More for this home</Text>
-                <NavRow
-                  label="Notifications"
-                  hint="Due reminders and recall alerts"
-                  onPress={() => router.push("/notifications")}
-                />
-                <NavRow
-                  label="Scan product (AI)"
-                  hint="Identify + manuals; confirm before save"
-                  onPress={() => router.push("/ai/scan")}
-                />
-                <NavRow
-                  label="Ask how-to (AI)"
-                  hint="Answers from manuals on this home"
-                  onPress={() => router.push("/ai/howto")}
-                />
-                <NavRow
-                  label="Paste contractor email"
-                  hint="Draft only — you approve"
-                  onPress={() => router.push("/ai/email-intake")}
-                />
-                <NavRow
-                  label="Suggest from permits"
-                  hint="Draft suggestions for this home"
-                  onPress={() => router.push("/ai/permit-suggestions")}
-                />
-              </>
-            ) : null}
           </>
         ) : null}
 
         <Text style={styles.sectionLabel}>Guide</Text>
         <NavRow
           label="How to use"
-          hint="What the app can do today"
           onPress={() => router.push("/settings/how-to-use")}
         />
         <NavRow
           label="Privacy"
-          hint="You own the record; approve before official"
           onPress={() => router.push("/settings/privacy")}
         />
         <NavRow
           label="Security"
-          hint="Account, sessions, and server-side rules"
           onPress={() => router.push("/settings/security")}
         />
 
-        <Text style={styles.sectionLabel}>Alerts</Text>
+        <Text style={styles.sectionLabel}>Alert delivery</Text>
         <NavRow
-          label="Alert preferences"
-          hint="Reminders, recalls, push, lead days"
+          label="Push & in-app"
           onPress={() => router.push("/notifications/preferences")}
         />
 
@@ -171,31 +131,19 @@ export default function SettingsScreen() {
         </Pressable>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <Text style={styles.footnote}>
-          Privacy and security stay on by default. We never ask you to weaken
-          them for a demo shortcut.
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function NavRow(props: {
-  label: string;
-  hint: string;
-  onPress: () => void;
-}) {
+function NavRow(props: { label: string; onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={props.onPress}
       style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}
     >
-      <View style={styles.navText}>
-        <Text style={styles.navLabel}>{props.label}</Text>
-        <Text style={styles.navHint}>{props.hint}</Text>
-      </View>
+      <Text style={styles.navLabel}>{props.label}</Text>
       <Text style={styles.navChevron}>›</Text>
     </Pressable>
   );
@@ -235,13 +183,7 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 24,
     paddingTop: 12,
-    paddingBottom: 40,
-  },
-  copy: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#3D5349",
-    marginBottom: 8,
+    paddingBottom: 88,
   },
   sectionLabel: {
     marginTop: 24,
@@ -261,22 +203,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    justifyContent: "space-between",
     marginBottom: 10,
-  },
-  navText: {
-    flex: 1,
-    gap: 2,
   },
   navLabel: {
     fontSize: 16,
     fontWeight: "600",
     color: "#14241D",
-  },
-  navHint: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#5A6E64",
   },
   navChevron: {
     fontSize: 22,
@@ -326,11 +259,5 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: "#8B2E2E",
     fontSize: 14,
-  },
-  footnote: {
-    marginTop: 28,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#5A6E64",
   },
 });

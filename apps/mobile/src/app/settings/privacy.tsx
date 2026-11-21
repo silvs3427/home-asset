@@ -31,11 +31,6 @@ export default function PrivacyScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.lead}>
-          HomeAsset is built so you stay in control of your home record. Least
-          data shared. No silent auto-adds.
-        </Text>
-
         {PRIVACY_SECTIONS.map((section) => (
           <View key={section.title} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
@@ -89,13 +84,7 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 24,
     paddingTop: 12,
-    paddingBottom: 40,
-  },
-  lead: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#3D5349",
-    marginBottom: 8,
+    paddingBottom: 88,
   },
   section: {
     marginTop: 20,

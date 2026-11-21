@@ -99,16 +99,6 @@ export default function EmailIntakeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.copy}>
-          Paste a contractor email (or forward text). HomeAsset drafts a clean
-          summary of the work — you approve before anything becomes official on
-          this home.
-        </Text>
-        <Text style={styles.privacy}>
-          Privacy: drafts stay on this home. Nothing silent. Real inbound email
-          can replace paste later; the approve step stays.
-        </Text>
-
         <Text style={styles.label}>Pasted email</Text>
         <TextInput
           value={emailText}
@@ -148,7 +138,6 @@ export default function EmailIntakeScreen() {
             <Text style={styles.sectionLabel}>
               Draft · {draft.mode} · not saved yet
             </Text>
-            <Text style={styles.privacy}>{draft.privacy.note}</Text>
 
             <Text style={styles.fieldLabel}>Summary</Text>
             <Text style={styles.fieldValue}>{draft.summary}</Text>

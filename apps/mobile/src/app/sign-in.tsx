@@ -191,10 +191,6 @@ export default function SignInScreen() {
               : "No cloud connection on this install. Add EXPO_PUBLIC_SUPABASE_URL + EXPO_PUBLIC_SUPABASE_ANON_KEY to the Expo preview environment and rebuild the preview APK."}
         </Text>
 
-        <Text style={styles.privacyNote}>
-          We don&apos;t silently share your home data. You approve what becomes
-          official. One login can use both faces later.
-        </Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

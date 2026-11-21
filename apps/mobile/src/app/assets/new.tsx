@@ -91,11 +91,6 @@ export default function NewAssetScreen() {
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.copy}>
-          Saved to {activeProperty.name} only. Serial and model help with
-          warranties and safety recalls later.
-        </Text>
-
         <Field
           label="Name"
           value={name}

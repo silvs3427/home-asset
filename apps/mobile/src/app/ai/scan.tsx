@@ -113,11 +113,6 @@ export default function AiScanScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.copy}>
-          Take a photo or type what you see. HomeAsset finds likely manuals, then
-          you confirm before anything is saved.
-        </Text>
-
         <Text style={styles.label}>Hint (optional)</Text>
         <TextInput
           value={hint}
@@ -183,8 +178,6 @@ export default function AiScanScreen() {
               {categoryLabel(draft.suggestedAsset.category)} · confidence{" "}
               {Math.round(draft.confidence * 100)}% · mode {draft.mode}
             </Text>
-            <Text style={styles.privacy}>{draft.privacy.note}</Text>
-
             <Text style={styles.label}>Name on your ledger</Text>
             <TextInput
               value={name}

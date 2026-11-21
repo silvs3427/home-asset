@@ -139,16 +139,11 @@ export default function NotificationPreferencesScreen() {
         >
           <Text style={styles.backLabel}>Back</Text>
         </Pressable>
-        <Text style={styles.brand}>Alert preferences</Text>
+        <Text style={styles.brand}>Push & in-app</Text>
         <View style={styles.spacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.copy}>
-          Choose what HomeAsset can notify you about. Push is the phone channel;
-          the in-app center always stays under your control. No marketing, no SMS.
-        </Text>
-
         {loading || !prefs ? (
           <ActivityIndicator color="#1B3A2F" style={styles.spinner} />
         ) : (
@@ -246,11 +241,9 @@ export default function NotificationPreferencesScreen() {
                     : "Register this phone for push"}
                 </Text>
               </Pressable>
-              <Text style={styles.footnote}>
-                {pushSoftDisabled
-                  ? pushUnavailableReason()
-                  : "Live push needs an Expo access token on the API. Without it, notices still land in the in-app center and pushes are stubbed."}
-              </Text>
+              {pushSoftDisabled ? (
+                <Text style={styles.footnote}>{pushUnavailableReason()}</Text>
+              ) : null}
             </View>
           </>
         )}

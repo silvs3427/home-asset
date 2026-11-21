@@ -13,8 +13,8 @@ import { formatPropertyAddress } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 /**
- * Homeowner home shell: current home + a few primary next steps.
- * Secondary tools, add-another-home, face switch, and sign-out live in Settings.
+ * Current home + primary next steps. Secondary tools and Add another home
+ * live in Settings; AI scan/how-to via the persistent FAB.
  */
 export default function HomeShellScreen() {
   const router = useRouter();
@@ -64,12 +64,8 @@ export default function HomeShellScreen() {
             {activeProperty ? (
               <>
                 <Text style={styles.title}>{activeProperty.name}</Text>
-                <Text style={styles.copy}>
+                <Text style={styles.address}>
                   {formatPropertyAddress(activeProperty)}
-                </Text>
-                <Text style={styles.ledgerNote}>
-                  This home&apos;s record only — assets, documents, and
-                  reminders stay here.
                 </Text>
 
                 <Pressable
@@ -80,7 +76,7 @@ export default function HomeShellScreen() {
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.primaryLabel}>View assets</Text>
+                  <Text style={styles.primaryLabel}>Assets</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -100,16 +96,12 @@ export default function HomeShellScreen() {
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.secondaryLabel}>Reminders</Text>
+                  <Text style={styles.secondaryLabel}>Alerts</Text>
                 </Pressable>
               </>
             ) : (
               <>
                 <Text style={styles.title}>Add your first home</Text>
-                <Text style={styles.copy}>
-                  Start with one address. Each home keeps its own record. Add
-                  another later from Settings.
-                </Text>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.push("/add-home")}
@@ -163,12 +155,7 @@ export default function HomeShellScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.title}>Contractor face</Text>
-            <Text style={styles.copy}>
-              Format notes with AI before you confirm. Submitting into a
-              homeowner ledger (with their approval) comes later. Switch faces
-              in Settings.
-            </Text>
+            <Text style={styles.title}>Contractor</Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push("/ai/contractor-format")}
@@ -177,7 +164,7 @@ export default function HomeShellScreen() {
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.primaryLabel}>Format notes (AI)</Text>
+              <Text style={styles.primaryLabel}>Format notes</Text>
             </Pressable>
           </>
         )}
@@ -218,7 +205,7 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 24,
     paddingTop: 28,
-    paddingBottom: 32,
+    paddingBottom: 88,
   },
   eyebrow: {
     fontSize: 13,
@@ -234,18 +221,11 @@ const styles = StyleSheet.create({
     color: "#14241D",
     letterSpacing: -0.4,
   },
-  copy: {
-    marginTop: 12,
+  address: {
+    marginTop: 8,
     fontSize: 16,
     lineHeight: 24,
     color: "#3D5349",
-    maxWidth: 420,
-  },
-  ledgerNote: {
-    marginTop: 16,
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#5A6E64",
   },
   primaryBtn: {
     marginTop: 24,

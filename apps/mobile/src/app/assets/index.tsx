@@ -75,11 +75,7 @@ export default function AssetsListScreen() {
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.eyebrow}>{activeProperty.name}</Text>
-        <Text style={styles.title}>What&apos;s in this home</Text>
-        <Text style={styles.copy}>
-          Track installs and serials for warranties, maintenance, and recalls.
-          Only visible on this home.
-        </Text>
+        <Text style={styles.title}>Assets</Text>
 
         <Pressable
           accessibilityRole="button"
@@ -99,10 +95,7 @@ export default function AssetsListScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {!loading && assets.length === 0 ? (
-          <Text style={styles.empty}>
-            No assets yet. Add a furnace, roof, appliance, or kids&apos; gear to
-            start this home&apos;s ledger.
-          </Text>
+          <Text style={styles.empty}>No assets yet.</Text>
         ) : null}
 
         <View style={styles.list}>
@@ -134,9 +127,6 @@ export default function AssetsListScreen() {
           ))}
         </View>
 
-        <Text style={styles.footnote}>
-          Privacy: signed-in only. Assets stay scoped to {activeProperty.name}.
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );

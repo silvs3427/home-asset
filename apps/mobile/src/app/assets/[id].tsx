@@ -388,29 +388,7 @@ export default function AssetDetailScreen() {
               />
             </View>
 
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy}
-              onPress={() =>
-                router.push({
-                  pathname: "/ai/howto",
-                  params: { assetId: id },
-                })
-              }
-              style={({ pressed }) => [
-                styles.secondaryBtn,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.secondaryLabel}>Ask how-to (AI)</Text>
-            </Pressable>
-
             <Text style={styles.sectionHeading}>Safety recalls</Text>
-            <Text style={styles.sectionCopy}>
-              Matched from free public safety lists using manufacturer, model,
-              and serial when available. Acknowledge or dismiss — history stays
-              on this asset.
-            </Text>
             <Pressable
               accessibilityRole="button"
               disabled={busy}
@@ -743,10 +721,6 @@ export default function AssetDetailScreen() {
               ))}
             </View>
 
-            <Text style={styles.footnote}>
-              Files stay on this home only. No silent sharing.
-            </Text>
-
             <Pressable
               accessibilityRole="button"
               disabled={busy}
@@ -760,9 +734,6 @@ export default function AssetDetailScreen() {
 
         {!loading && asset && editing ? (
           <>
-            <Text style={styles.copy}>
-              Editing on {activeProperty.name}. Changes stay on this home only.
-            </Text>
             <Field label="Name" value={name} onChangeText={setName} />
             <Text style={styles.label}>Category</Text>
             <View style={styles.chips}>

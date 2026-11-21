@@ -31,11 +31,6 @@ export default function SecurityScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.lead}>
-          How we protect your account and home data — and what you can do on a
-          shared phone.
-        </Text>
-
         {SECURITY_SECTIONS.map((section) => (
           <View key={section.title} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
@@ -89,13 +84,7 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 24,
     paddingTop: 12,
-    paddingBottom: 40,
-  },
-  lead: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#3D5349",
-    marginBottom: 8,
+    paddingBottom: 88,
   },
   section: {
     marginTop: 20,

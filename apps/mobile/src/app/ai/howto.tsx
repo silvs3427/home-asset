@@ -99,11 +99,6 @@ export default function AiHowtoScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.copy}>
-          Answers use manuals and facts already on this home — not open-web
-          guesses. Asking never changes your records.
-        </Text>
-
         {loadingAssets ? (
           <ActivityIndicator color="#1B3A2F" />
         ) : (
@@ -188,17 +183,8 @@ export default function AiHowtoScreen() {
                 ))}
               </>
             ) : null}
-            <Text style={styles.privacy}>{result.privacy.note}</Text>
           </View>
         ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/ai/scan")}
-          style={styles.linkBtn}
-        >
-          <Text style={styles.linkLabel}>Scan a product for manuals</Text>
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

@@ -30,7 +30,7 @@ Run lint and typecheck before declaring any task done.
 - Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
 - Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
 - Docs: https://docs.expo.dev/router/introduction.md
-- **Settings / How to use:** when shipping user-facing features, update `src/lib/settingsContent.ts` (powers Settings → How to use, Privacy, Security). Keep Home calm; secondary entry points and “Add another home” go in Settings.
+- **Settings / How to use:** when shipping user-facing features, update `src/lib/settingsContent.ts` (powers Settings → How to use, Privacy, Security). Keep Home calm (Assets / Documents / Alerts). “Add another home” in Settings. AI via persistent `AiHelpFab` → `/ai/help`. No long instructional copy on feature screens.
 
 ## Building with EAS
 
