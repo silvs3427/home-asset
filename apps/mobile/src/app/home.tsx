@@ -13,21 +13,13 @@ import { formatPropertyAddress } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 /**
- * Homeowner home shell: current home, thin switcher, and path to Add home.
- * Ledger content (assets/docs) arrives in later epics — always property-scoped.
+ * Homeowner home shell: current home + a few primary next steps.
+ * Secondary tools, add-another-home, face switch, and sign-out live in Settings.
  */
 export default function HomeShellScreen() {
   const router = useRouter();
-  const {
-    user,
-    properties,
-    activeProperty,
-    signOut,
-    selectHome,
-    setFace,
-  } = useAuth();
+  const { user, properties, activeProperty, selectHome } = useAuth();
   const [switchingId, setSwitchingId] = useState<string | null>(null);
-  const [faceBusy, setFaceBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!user) {
@@ -49,30 +41,16 @@ export default function HomeShellScreen() {
     }
   }
 
-  async function onToggleFace() {
-    setError(null);
-    setFaceBusy(true);
-    try {
-      await setFace(isHomeownerFace ? "contractor" : "homeowner");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not switch face.");
-    } finally {
-      setFaceBusy(false);
-    }
-  }
-
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.brand}>HomeAsset</Text>
         <Pressable
           accessibilityRole="button"
-          onPress={() => {
-            void signOut();
-          }}
-          style={styles.signOut}
+          onPress={() => router.push("/settings")}
+          style={styles.settingsBtn}
         >
-          <Text style={styles.signOutLabel}>Sign out</Text>
+          <Text style={styles.settingsLabel}>Settings</Text>
         </Pressable>
       </View>
 
@@ -90,22 +68,10 @@ export default function HomeShellScreen() {
                   {formatPropertyAddress(activeProperty)}
                 </Text>
                 <Text style={styles.ledgerNote}>
-                  Assets, warranties, documents, reminders, and notices for this
-                  home stay here — always scoped to this home only.
+                  This home&apos;s record only — assets, documents, and
+                  reminders stay here.
                 </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.title}>Add your first home</Text>
-                <Text style={styles.copy}>
-                  HomeAsset keeps each home&apos;s record separate. Start with one
-                  address; you can add another later.
-                </Text>
-              </>
-            )}
 
-            {activeProperty ? (
-              <>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.push("/assets")}
@@ -124,7 +90,7 @@ export default function HomeShellScreen() {
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.secondaryLabel}>Home documents</Text>
+                  <Text style={styles.secondaryLabel}>Documents</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -134,81 +100,28 @@ export default function HomeShellScreen() {
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.secondaryLabel}>Upcoming reminders</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/notifications")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>Notifications</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/ai/scan")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>Scan product (AI)</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/ai/howto")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>Ask how-to (AI)</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/ai/email-intake")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>
-                    Paste contractor email
-                  </Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push("/ai/permit-suggestions")}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.secondaryLabel}>
-                    Suggest from permits
-                  </Text>
+                  <Text style={styles.secondaryLabel}>Reminders</Text>
                 </Pressable>
               </>
-            ) : null}
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push("/add-home")}
-              style={({ pressed }) => [
-                activeProperty ? styles.secondaryBtn : styles.primaryBtn,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text
-                style={
-                  activeProperty ? styles.secondaryLabel : styles.primaryLabel
-                }
-              >
-                {activeProperty ? "Add another home" : "Add home"}
-              </Text>
-            </Pressable>
+            ) : (
+              <>
+                <Text style={styles.title}>Add your first home</Text>
+                <Text style={styles.copy}>
+                  Start with one address. Each home keeps its own record. Add
+                  another later from Settings.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/add-home")}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.primaryLabel}>Add home</Text>
+                </Pressable>
+              </>
+            )}
 
             {properties.length > 1 ? (
               <View style={styles.switcher}>
@@ -252,10 +165,9 @@ export default function HomeShellScreen() {
           <>
             <Text style={styles.title}>Contractor face</Text>
             <Text style={styles.copy}>
-              Format typed, voice, or upload notes with AI before you confirm.
-              Full submit into a homeowner ledger (with their approval) comes in
-              the contractor handoff epic. Homes stay on the homeowner face —
-              switch back anytime on this same login.
+              Format notes with AI before you confirm. Submitting into a
+              homeowner ledger (with their approval) comes later. Switch faces
+              in Settings.
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -271,35 +183,6 @@ export default function HomeShellScreen() {
         )}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <View style={styles.meta}>
-          <Text style={styles.metaLabel}>Signed in as</Text>
-          <Text style={styles.metaValue}>{user.email}</Text>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={faceBusy}
-          onPress={() => {
-            void onToggleFace();
-          }}
-          style={styles.faceSwitch}
-        >
-          {faceBusy ? (
-            <ActivityIndicator color="#2F5B4A" />
-          ) : (
-            <Text style={styles.faceSwitchLabel}>
-              {isHomeownerFace
-                ? "Switch to contractor face"
-                : "Switch to homeowner face"}
-            </Text>
-          )}
-        </Pressable>
-
-        <Text style={styles.footnote}>
-          Privacy: signed-in only. Each home&apos;s data stays scoped to that home.
-          No silent sharing. You decide what becomes official.
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -323,11 +206,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1B3A2F",
   },
-  signOut: {
+  settingsBtn: {
     paddingVertical: 8,
     paddingHorizontal: 4,
   },
-  signOutLabel: {
+  settingsLabel: {
     color: "#2F5B4A",
     fontSize: 14,
     fontWeight: "600",
@@ -446,35 +329,5 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: "#8B2E2E",
     fontSize: 14,
-  },
-  meta: {
-    marginTop: 28,
-    gap: 4,
-  },
-  metaLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#5A6E64",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  metaValue: {
-    fontSize: 16,
-    color: "#14241D",
-  },
-  faceSwitch: {
-    marginTop: 16,
-    paddingVertical: 10,
-  },
-  faceSwitchLabel: {
-    color: "#2F5B4A",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  footnote: {
-    marginTop: 28,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#5A6E64",
   },
 });

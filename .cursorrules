@@ -21,6 +21,11 @@ Phone-first home memory for homeowners. Contractors may submit work into the hom
 - Approve-before-official — no silent auto-adds to the ledger.
 - Call out privacy tradeoffs when asking product decisions.
 
+## Keep How to use in sync
+
+- When you ship a **user-facing** feature (or move where it lives in the UI), update `apps/mobile/src/lib/settingsContent.ts` (`HOW_TO_USE_SECTIONS`, and Privacy/Security sections if promises change). That copy powers Settings → How to use / Privacy / Security.
+- Prefer a calm Home (current home + primary next steps). Secondary tools and “Add another home” belong in Settings unless product says otherwise.
+
 ## Keep short
 
 - Plain language for founder-facing notes (what to run in SQL Editor, whether a rebuild is needed).

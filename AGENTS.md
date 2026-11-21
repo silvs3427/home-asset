@@ -15,3 +15,10 @@ Mobile Expo specifics live in [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
 
 - Prefer cloud Supabase for phone testing (URL + anon key).
 - `EXPO_PUBLIC_API_URL` / LAN IP is fallback for SQLite demo without Supabase only.
+
+## How to use / Settings copy (do not regress)
+
+1. In-app guide: `apps/mobile/src/app/settings/how-to-use.tsx` reads `HOW_TO_USE_SECTIONS` from `apps/mobile/src/lib/settingsContent.ts`.
+2. Privacy / Security screens use `PRIVACY_SECTIONS` / `SECURITY_SECTIONS` in the same file.
+3. **When adding or relocating user-facing features**, update that content in the same PR.
+4. Home stays lean (current home + primary steps). “Add another home” and secondary tools (notifications, AI intake) live under Settings.
