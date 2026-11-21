@@ -3,13 +3,16 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
+import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   aiAssetIntake,
   aiConfirmAssetIntake,
@@ -22,7 +25,6 @@ import {
   type AssetIntakeSuggested,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   pickFromCamera,
   pickFromLibrary,
@@ -228,10 +230,7 @@ export default function AssetIntakeScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        keyboardShouldPersistTaps="handled"
-      >
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {!draft ? (
           <>
             <Pressable
@@ -308,7 +307,7 @@ export default function AssetIntakeScreen() {
                 );
               })}
             </View>
-            <TextInput
+            <KeyboardAwareTextInput
               value={pasteText}
               onChangeText={setPasteText}
               placeholder={
@@ -500,7 +499,7 @@ export default function AssetIntakeScreen() {
             </Pressable>
           </View>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }
@@ -519,7 +518,7 @@ function Field(props: {
         {props.label}
         {props.highlight ? " *" : ""}
       </Text>
-      <TextInput
+      <KeyboardAwareTextInput
         value={props.value}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}

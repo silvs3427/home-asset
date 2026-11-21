@@ -3,13 +3,15 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import { aiAskHowto, type AiHowToResponse } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { pickAudioFile } from "@/lib/documents";
@@ -92,17 +94,14 @@ export default function AskHomeAssetScreen() {
         <View style={styles.spacer} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        keyboardShouldPersistTaps="handled"
-      >
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {!canUseHomeTools ? (
           <Text style={styles.empty}>Add a home first to use Ask HomeAsset.</Text>
         ) : (
           <>
             <Text style={styles.title}>Talk or Text</Text>
 
-            <TextInput
+            <KeyboardAwareTextInput
               value={prompt}
               onChangeText={setPrompt}
               placeholder="What are you looking for? How can we help with this home?"
@@ -187,7 +186,7 @@ export default function AskHomeAssetScreen() {
             ) : null}
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }

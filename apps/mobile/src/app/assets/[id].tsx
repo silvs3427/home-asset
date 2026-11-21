@@ -4,13 +4,16 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
+import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   acknowledgeRecallAlert,
   categoryLabel,
@@ -40,7 +43,6 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
-import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   downloadAndShareDocument,
   pickDocumentFile,
@@ -366,10 +368,7 @@ export default function AssetDetailScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        keyboardShouldPersistTaps="handled"
-      >
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {loading ? (
           <ActivityIndicator color={colors.brand} style={styles.loader} />
         ) : null}
@@ -851,7 +850,7 @@ export default function AssetDetailScreen() {
             </Pressable>
           </>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }
@@ -876,7 +875,7 @@ function Field(props: {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{props.label}</Text>
-      <TextInput
+      <KeyboardAwareTextInput
         style={[styles.input, props.multiline && styles.inputMultiline]}
         value={props.value}
         onChangeText={props.onChangeText}

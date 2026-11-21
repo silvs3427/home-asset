@@ -3,13 +3,15 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import {
   aiConfirmScan,
   aiScanProduct,
@@ -112,9 +114,9 @@ export default function AiScanScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         <Text style={styles.label}>Hint (optional)</Text>
-        <TextInput
+        <KeyboardAwareTextInput
           value={hint}
           onChangeText={setHint}
           placeholder="e.g. Generac GP6500 generator"
@@ -179,7 +181,7 @@ export default function AiScanScreen() {
               {Math.round(draft.confidence * 100)}% · mode {draft.mode}
             </Text>
             <Text style={styles.label}>Name on your ledger</Text>
-            <TextInput
+            <KeyboardAwareTextInput
               value={name}
               onChangeText={setName}
               style={styles.input}
@@ -234,7 +236,7 @@ export default function AiScanScreen() {
             </Pressable>
           </View>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }

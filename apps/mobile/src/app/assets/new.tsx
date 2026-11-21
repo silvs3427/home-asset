@@ -3,13 +3,16 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
+import { OpenLabelField } from "@/components/OpenLabelField";
 import {
   aiAssetIntake,
   createAsset,
@@ -19,7 +22,6 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
-import { OpenLabelField } from "@/components/OpenLabelField";
 
 function asCategory(value: string | null | undefined): AssetCategory {
   const next = normalizeLabelValue(value ?? "");
@@ -166,12 +168,9 @@ export default function NewAssetScreen() {
         <View style={styles.backSpacer} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.body}
-        keyboardShouldPersistTaps="handled"
-      >
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         <Text style={styles.label}>Describe the asset</Text>
-        <TextInput
+        <KeyboardAwareTextInput
           style={[styles.input, styles.inputMultiline]}
           value={freeText}
           onChangeText={setFreeText}
@@ -313,7 +312,7 @@ export default function NewAssetScreen() {
             <Text style={styles.primaryLabel}>Save asset</Text>
           )}
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }
@@ -329,7 +328,7 @@ function Field(props: {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{props.label}</Text>
-      <TextInput
+      <KeyboardAwareTextInput
         style={[styles.input, props.multiline && styles.inputMultilineShort]}
         value={props.value}
         onChangeText={props.onChangeText}

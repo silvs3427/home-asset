@@ -2,16 +2,16 @@ import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import { useAuth } from "@/lib/auth";
 
 /**
@@ -57,80 +57,75 @@ export default function AddHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.flex}
-      >
-        <View style={styles.header}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={styles.back}
-          >
-            <Text style={styles.backLabel}>Back</Text>
-          </Pressable>
-          <Text style={styles.brand}>Add home</Text>
-          <View style={styles.backSpacer} />
+      <View style={styles.header}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          style={styles.back}
+        >
+          <Text style={styles.backLabel}>Back</Text>
+        </Pressable>
+        <Text style={styles.brand}>Add home</Text>
+        <View style={styles.backSpacer} />
+      </View>
+
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
+        <Field label="Home name" value={name} onChangeText={setName} placeholder="e.g. Oak Street" />
+        <Field
+          label="Street address"
+          value={addressLine1}
+          onChangeText={setAddressLine1}
+          placeholder="123 Main St"
+          autoComplete="street-address"
+        />
+        <Field
+          label="Apt / suite (optional)"
+          value={addressLine2}
+          onChangeText={setAddressLine2}
+          placeholder="Unit 2"
+        />
+        <Field label="City" value={city} onChangeText={setCity} placeholder="Austin" />
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Field
+              label="State / region"
+              value={region}
+              onChangeText={setRegion}
+              placeholder="TX"
+            />
+          </View>
+          <View style={styles.half}>
+            <Field
+              label="Postal code"
+              value={postalCode}
+              onChangeText={setPostalCode}
+              placeholder="78701"
+              autoComplete="postal-code"
+            />
+          </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          <Field label="Home name" value={name} onChangeText={setName} placeholder="e.g. Oak Street" />
-          <Field
-            label="Street address"
-            value={addressLine1}
-            onChangeText={setAddressLine1}
-            placeholder="123 Main St"
-            autoComplete="street-address"
-          />
-          <Field
-            label="Apt / suite (optional)"
-            value={addressLine2}
-            onChangeText={setAddressLine2}
-            placeholder="Unit 2"
-          />
-          <Field label="City" value={city} onChangeText={setCity} placeholder="Austin" />
-          <View style={styles.row}>
-            <View style={styles.half}>
-              <Field
-                label="State / region"
-                value={region}
-                onChangeText={setRegion}
-                placeholder="TX"
-              />
-            </View>
-            <View style={styles.half}>
-              <Field
-                label="Postal code"
-                value={postalCode}
-                onChangeText={setPostalCode}
-                placeholder="78701"
-                autoComplete="postal-code"
-              />
-            </View>
-          </View>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
-          <Pressable
-            accessibilityRole="button"
-            disabled={busy}
-            onPress={() => {
-              void onSubmit();
-            }}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed && styles.pressed,
-              busy && styles.disabled,
-            ]}
-          >
-            {busy ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.primaryLabel}>Save home</Text>
-            )}
-          </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => {
+            void onSubmit();
+          }}
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            pressed && styles.pressed,
+            busy && styles.disabled,
+          ]}
+        >
+          {busy ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.primaryLabel}>Save home</Text>
+          )}
+        </Pressable>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }
@@ -145,7 +140,7 @@ function Field(props: {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{props.label}</Text>
-      <TextInput
+      <KeyboardAwareTextInput
         style={styles.input}
         value={props.value}
         onChangeText={props.onChangeText}
@@ -161,9 +156,6 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: "#F2F5FA",
-  },
-  flex: {
-    flex: 1,
   },
   header: {
     paddingHorizontal: 24,

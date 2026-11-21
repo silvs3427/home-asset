@@ -2,8 +2,6 @@ import { Redirect } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -11,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { KeyboardAwareScroll } from "@/components/KeyboardAwareScroll";
 import { useAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { API_BASE_URL, SUPABASE_CONFIGURED } from "@/lib/config";
@@ -71,9 +70,9 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.wrap}
+      <KeyboardAwareScroll
+        contentContainerStyle={styles.wrap}
+        style={styles.flex}
       >
         <View style={styles.main}>
           <Text style={styles.brand}>HomeAsset</Text>
@@ -165,7 +164,7 @@ export default function SignInScreen() {
             </Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }
@@ -175,14 +174,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  wrap: {
+  flex: {
     flex: 1,
+  },
+  wrap: {
+    flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 32,
     paddingBottom: 16,
+    justifyContent: "space-between",
   },
   main: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
   },
   brand: {

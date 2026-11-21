@@ -4,14 +4,16 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   Share,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  KeyboardAwareScroll,
+  KeyboardAwareTextInput,
+} from "@/components/KeyboardAwareScroll";
 import {
   createContractorInvite,
   listContractorInvites,
@@ -157,7 +159,7 @@ export default function InviteContractorScreen() {
         <View style={styles.spacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {!SUPABASE_CONFIGURED ? (
           <Text style={styles.error}>
             Invite links need the cloud connection on this phone (Supabase URL
@@ -182,7 +184,7 @@ export default function InviteContractorScreen() {
         </Pressable>
 
         <Text style={styles.label}>Optional note on the link</Text>
-        <TextInput
+        <KeyboardAwareTextInput
           value={label}
           onChangeText={setLabel}
           placeholder="e.g. HVAC tune-up"
@@ -261,7 +263,7 @@ export default function InviteContractorScreen() {
             );
           })
         )}
-      </ScrollView>
+      </KeyboardAwareScroll>
     </SafeAreaView>
   );
 }
