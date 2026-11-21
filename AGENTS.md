@@ -17,9 +17,15 @@ Mobile Expo specifics live in [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
 - `EXPO_PUBLIC_API_URL` / LAN IP is fallback for SQLite demo without Supabase only.
 - Recall lock-screen push on cloud: edge `send-push` + secret `EXPO_ACCESS_TOKEN` (never `EXPO_PUBLIC_*`). Phone still matches fixtures and writes in-app notices via RLS; edge only sends Expo.
 
+## Homeowner-only product (do not regress)
+
+1. Signup never offers a contractor role. No face switch / contractor-only screens in the phone app.
+2. Contractors belong in LightLift; non-LightLift path is a later invite-link epic (not dual-role enrollment in HomeAsset).
+
 ## How to use / Settings copy (do not regress)
 
 1. In-app guide: `apps/mobile/src/app/settings/how-to-use.tsx` reads `HOW_TO_USE_SECTIONS` from `apps/mobile/src/lib/settingsContent.ts`.
 2. Privacy / Security screens use `PRIVACY_SECTIONS` / `SECURITY_SECTIONS` in the same file.
 3. **When adding or relocating user-facing features**, update that content in the same PR.
 4. Home CTAs: Ask HomeAsset → View Assets → Notifications → Settings. AI named Ask HomeAsset (`/ai/help`): Add or update asset (multi-source photo/email/invoice/notes → approve-before-official), Scan a picture, Ask how-to. One Notifications surface; delivery prefs under Settings. Colors from `apps/mobile/src/lib/theme.ts`. No long instructional copy on feature screens — How to use owns it. Permits suggest is not a primary CTA.
+5. How to use may mention invite-link **coming soon** (voice + photos + text → Ask HomeAsset draft → homeowner approve); do not ship a fake contractor face.

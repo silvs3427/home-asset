@@ -1,8 +1,8 @@
 # HomeAsset
 
-Phone-first home memory for homeowners (iPhone + Android), with a path for contractors to submit work into the homeowner’s ledger. **Homeowners own the record.** Privacy and approve-before-official are product requirements from day one.
+Phone-first home memory for **homeowners only** (iPhone + Android). **Homeowners own the record.** Contractors use LightLift (or a later homeowner-sent invite link); there is no in-app contractor mode. Privacy and approve-before-official are product requirements from day one.
 
-This repo includes **Supabase + installable EAS builds** (LightLift-style `app.json` / `app.config.js` / `eas.json`) on top of **EPIC 7** safety recalls (free public lists), **EPIC 6** AI assist, **D18** email/permit intake (approve-before-official), notifications, reminders, documents, assets, and accounts. Local SQLite demo stays the CI default until you add Supabase secrets. Full contractor submit → homeowner approve comes next.
+This repo includes **Supabase + installable EAS builds** (LightLift-style `app.json` / `app.config.js` / `eas.json`) on top of **EPIC 7** safety recalls (free public lists), **EPIC 6** AI assist, **D18** email/permit intake (approve-before-official), notifications, reminders, documents, assets, and accounts. Local SQLite demo stays the CI default until you add Supabase secrets. LightLift push / invite-link handoff comes later.
 
 ## Stack
 
@@ -95,17 +95,15 @@ If Expo Go says the project is incompatible, you have the wrong SDK client — u
 
 ### 4. Smoke accounts through AI assist
 
-1. Create an account (choose **homeowner** or **contractor**).
-2. On the homeowner face, tap **Add home**, enter name + address, save.
-3. Tap **Scan product (AI)** → hint `Generac GP6500` (or take a photo) → review suggested manuals → **Confirm & save**.
-4. Open the asset → confirm a **safety recall** alert appears (or Home → **Notifications** → **Check safety recalls**) → **Ack** or **Dismiss**. Needs epic7 SQL on Supabase — see [`supabase/README.md`](./supabase/README.md).
-5. Open the asset → **Ask how-to (AI)** → ask how to start it safely outdoors; check sources.
-6. Tap **Paste contractor email** → paste a sample contractor message → draft → **Approve & save** (nothing is official until approve).
-7. Tap **Suggest from permits** → review stub hints for the address → select → **Approve selected**.
-8. From home, also try **View assets**, documents, reminders, and **Notifications** as before.
-9. Switch to **contractor face** → **Format notes (AI)** → paste job notes → confirm draft wording (nothing is written to a home ledger yet).
-10. Add a second home, switch, and confirm assets/docs stay empty there.
-11. Sign out / sign in again — session and data should still be there.
+1. Create an account (homeowner signup only).
+2. Tap **Add home**, enter name + address, save.
+3. From Home → **Ask HomeAsset** → **Scan a picture** → hint `Generac GP6500` (or take a photo) → review suggested manuals → **Confirm & save**.
+4. Open the asset → confirm a **safety recall** alert appears (or Home → **Notifications**) → **Ack** or **Dismiss**. Needs epic7 SQL on Supabase — see [`supabase/README.md`](./supabase/README.md).
+5. **Ask HomeAsset** → **Ask how-to** → ask how to start it safely outdoors; check sources.
+6. **Ask HomeAsset** → **Add or update asset** → paste a sample contractor email or notes → draft → confirm (nothing is official until approve).
+7. From home, also try **View Assets**, documents, reminders, and **Notifications** as before.
+8. Add a second home from Settings, switch, and confirm assets/docs stay empty there.
+9. Sign out / sign in again — session and data should still be there.
 
 ### 5. Scheduler (optional)
 

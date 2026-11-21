@@ -1,6 +1,6 @@
 # HomeAsset — agent rules
 
-Phone-first home memory for homeowners. Contractors may submit work into the homeowner’s ledger later; **homeowners own the record.** Stack: Expo (React Native) + optional Hono API + Supabase Postgres with RLS.
+Phone-first home memory for **homeowners only** — no in-app contractor mode/face. Contractors use LightLift; non-LightLift pros get a homeowner-sent invite link later. **Homeowners own the record.** Stack: Expo (React Native) + optional Hono API + Supabase Postgres with RLS.
 
 ## Prefer LightLift patterns
 

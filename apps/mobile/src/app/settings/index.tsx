@@ -1,44 +1,20 @@
 import { Redirect, useRouter } from "expo-router";
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/auth";
 import { colors } from "@/lib/theme";
 
 /**
  * Settings: Add home, guide (How to use / Privacy / Security),
- * alert delivery prefs, face switch, sign out.
- * AI scan/how-to: persistent FAB. Permits intake: not a primary CTA.
+ * alert delivery prefs, sign out.
+ * HomeAsset is homeowner-only — no face switch.
  */
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, signOut, setFace } = useAuth();
-  const [faceBusy, setFaceBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { user, signOut } = useAuth();
 
   if (!user) {
     return <Redirect href="/sign-in" />;
-  }
-
-  const isHomeownerFace = user.activeFace === "homeowner";
-
-  async function onToggleFace() {
-    setError(null);
-    setFaceBusy(true);
-    try {
-      await setFace(isHomeownerFace ? "contractor" : "homeowner");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not switch face.");
-    } finally {
-      setFaceBusy(false);
-    }
   }
 
   return (
@@ -56,15 +32,11 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        {isHomeownerFace ? (
-          <>
-            <Text style={styles.sectionLabel}>Homes</Text>
-            <NavRow
-              label="Add another home"
-              onPress={() => router.push("/add-home")}
-            />
-          </>
-        ) : null}
+        <Text style={styles.sectionLabel}>Homes</Text>
+        <NavRow
+          label="Add another home"
+          onPress={() => router.push("/add-home")}
+        />
 
         <Text style={styles.sectionLabel}>Guide</Text>
         <NavRow
@@ -90,32 +62,7 @@ export default function SettingsScreen() {
         <View style={styles.meta}>
           <Text style={styles.metaLabel}>Signed in as</Text>
           <Text style={styles.metaValue}>{user.email}</Text>
-          <Text style={styles.metaFace}>
-            Face: {isHomeownerFace ? "Homeowner" : "Contractor"}
-          </Text>
         </View>
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={faceBusy}
-          onPress={() => {
-            void onToggleFace();
-          }}
-          style={({ pressed }) => [
-            styles.secondaryBtn,
-            pressed && styles.pressed,
-          ]}
-        >
-          {faceBusy ? (
-            <ActivityIndicator color={colors.brand} />
-          ) : (
-            <Text style={styles.secondaryLabel}>
-              {isHomeownerFace
-                ? "Switch to contractor face"
-                : "Switch to homeowner face"}
-            </Text>
-          )}
-        </Pressable>
 
         <Pressable
           accessibilityRole="button"
@@ -124,14 +71,11 @@ export default function SettingsScreen() {
           }}
           style={({ pressed }) => [
             styles.secondaryBtn,
-            styles.signOutBtn,
             pressed && styles.pressed,
           ]}
         >
           <Text style={styles.secondaryLabel}>Sign out</Text>
         </Pressable>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -232,11 +176,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.ink,
   },
-  metaFace: {
-    marginTop: 4,
-    fontSize: 14,
-    color: colors.muted,
-  },
   secondaryBtn: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -245,9 +184,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  signOutBtn: {
-    marginTop: 12,
-  },
   secondaryLabel: {
     color: colors.brand,
     fontSize: 16,
@@ -255,10 +191,5 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.9,
-  },
-  error: {
-    marginTop: 16,
-    color: colors.danger,
-    fontSize: 14,
   },
 });
