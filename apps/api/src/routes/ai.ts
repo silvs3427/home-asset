@@ -118,6 +118,8 @@ aiRoutes.post("/scan", async (c) => {
     const contentType = c.req.header("content-type") ?? "";
     let hint: string | null = null;
     let filename: string | null = null;
+    let imageBase64: string | null = null;
+    let mediaMimeType: string | null = null;
 
     if (contentType.includes("multipart/form-data")) {
       const form = await c.req.parseBody({ all: true });
@@ -125,8 +127,28 @@ aiRoutes.post("/scan", async (c) => {
       if (typeof hintField === "string") hint = hintField;
       const file = form.photo ?? form.file;
       if (file && typeof file === "object" && "name" in file) {
-        filename = String((file as File).name || "photo.jpg");
-        // Bytes are intentionally not persisted on scan — confirm owns writes.
+        const photo = file as File;
+        filename = String(photo.name || "photo.jpg");
+        // Prefer bytes for vision identify; still never persist until confirm.
+        if (typeof photo.arrayBuffer === "function") {
+          try {
+            const buf = new Uint8Array(await photo.arrayBuffer());
+            if (buf.byteLength > 0 && buf.byteLength <= 2_500_000) {
+              let binary = "";
+              const chunk = 0x8000;
+              for (let i = 0; i < buf.length; i += chunk) {
+                binary += String.fromCharCode(
+                  ...buf.subarray(i, Math.min(i + chunk, buf.length)),
+                );
+              }
+              imageBase64 = btoa(binary);
+              mediaMimeType = (photo.type || "image/jpeg").toLowerCase();
+              if (mediaMimeType === "image/jpg") mediaMimeType = "image/jpeg";
+            }
+          } catch {
+            // Filename-only fallback below.
+          }
+        }
       }
     } else {
       const body = await c.req.json().catch(() => null);
@@ -134,6 +156,18 @@ aiRoutes.post("/scan", async (c) => {
         .object({
           hint: z.string().trim().max(500).optional().nullable(),
           filename: z.string().trim().max(200).optional().nullable(),
+          imageBase64: z.string().max(3_500_000).optional().nullable(),
+          mediaMimeType: z
+            .enum([
+              "image/jpeg",
+              "image/jpg",
+              "image/png",
+              "image/webp",
+              "image/heic",
+              "image/heif",
+            ])
+            .optional()
+            .nullable(),
         })
         .safeParse(body ?? {});
       if (!parsed.success) {
@@ -147,9 +181,28 @@ aiRoutes.post("/scan", async (c) => {
       }
       hint = parsed.data.hint ?? null;
       filename = parsed.data.filename ?? null;
+      imageBase64 = parsed.data.imageBase64?.trim() || null;
+      mediaMimeType =
+        parsed.data.mediaMimeType === "image/jpg"
+          ? "image/jpeg"
+          : parsed.data.mediaMimeType ?? null;
+      if (imageBase64 && !mediaMimeType) {
+        return c.json(
+          {
+            error: "invalid_input",
+            message: "mediaMimeType required with imageBase64.",
+          },
+          400,
+        );
+      }
     }
 
-    const identified = await identifyProduct({ hint, filename });
+    const identified = await identifyProduct({
+      hint,
+      filename,
+      imageBase64,
+      mediaMimeType,
+    });
     const draft = createScanDraft({
       userId: claims.sub,
       propertyId,

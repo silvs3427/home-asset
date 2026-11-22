@@ -183,8 +183,9 @@ export function matchCatalogProducts(query: string): CatalogProduct[] {
 
   if (scored.length > 0) return scored.map((s) => s.product);
 
-  // Default demo product when the photo has no useful text — still a draft only.
-  return [PRODUCT_CATALOG[0]!];
+  // No keyword hit — do NOT invent a demo product (e.g. Generac).
+  // Callers must return a low-confidence / blank draft instead of a wrong make/model.
+  return [];
 }
 
 export function getCatalogProduct(id: string): CatalogProduct | undefined {

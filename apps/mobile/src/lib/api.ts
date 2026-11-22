@@ -1464,7 +1464,12 @@ export type ContractorFormatResponse = {
 export async function aiScanProduct(
   accessToken: string,
   propertyId: string,
-  input: { hint?: string | null; filename?: string | null },
+  input: {
+    hint?: string | null;
+    filename?: string | null;
+    imageBase64?: string | null;
+    mediaMimeType?: string | null;
+  },
 ): Promise<{ draft: AiScanDraft; aiMode: "mock" | "live" }> {
   if (useCloud()) {
     const { invokeAiAssist, rememberScanDraft } = await import("./aiEdge");
@@ -1476,6 +1481,8 @@ export async function aiScanProduct(
       propertyId,
       hint: input.hint ?? null,
       filename: input.filename ?? null,
+      imageBase64: input.imageBase64 ?? null,
+      mediaMimeType: input.mediaMimeType ?? null,
     });
     rememberScanDraft(
       res.draft.draftId,
@@ -1490,7 +1497,12 @@ export async function aiScanProduct(
   const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/ai/scan`, {
     method: "POST",
     headers: authHeaders(accessToken),
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      hint: input.hint ?? null,
+      filename: input.filename ?? null,
+      imageBase64: input.imageBase64 ?? null,
+      mediaMimeType: input.mediaMimeType ?? null,
+    }),
   });
   return parseJson(res);
 }

@@ -27,7 +27,7 @@ Server-side AI for HomeAsset (scan / how-to / **support** / contractor format / 
 | `SUPPORT_ASSIST_DAILY_CAP` | No | Default `25` Support messages per UTC day |
 | `UPSTASH_REDIS_REST_URL` / `TOKEN` | No | Optional Redis backend for caps |
 
-Without any AI key (or with live flag off), the function returns **mock** catalog drafts so demos still work. Live mode turns on when a key is present.
+Without any AI key (or with live flag off), the function returns **mock** drafts: catalog products only when keywords match (e.g. “Generac”); otherwise a low-confidence blank draft — never a wrong default brand. Live mode turns on when a key is present and uses vision on attached photos.
 
 **Usage limits:** Ask HomeAsset and Support use **separate** per-user caps (defaults above). Apply migrations `20261121140000_ai_assist_rate_limits.sql` and `20261121400000_support_assist_rate_limits.sql` so daily caps stay durable across edge cold starts. Off-topic coding / general-chat asks are soft-refused with a clear message and do not need a phone rebuild.
 
@@ -74,7 +74,7 @@ npx supabase secrets set AI_ASSIST_LIVE=true
 | `action` | Body extras | Response |
 | --- | --- | --- |
 | `status` | — | `{ aiMode, provider, capabilities, privacy }` |
-| `scan` | `propertyId`, `hint?`, `filename?` | `{ draft, aiMode, manualContents }` |
+| `scan` | `propertyId`, `hint?`, `filename?`, `imageBase64?`, `mediaMimeType?` | `{ draft, aiMode, manualContents }` — photo bytes preferred; never invents Generac when unmatched |
 | `howto` | `propertyId`, `question`, `assetId?` | how-to / manuals answer, or reminder-schedule list from this home’s RLS reminders + asset service fields (no invent) + citations |
 | `support` | `question`, `propertyId?`, `homeLabel?` | warm app/account Support reply (`answer`, `escalate`, `nextSteps`) — separate quota; never invents account facts; never writes |
 | `contractor-format` | `inputText`, `inputKind?` | format draft (no writes) |
