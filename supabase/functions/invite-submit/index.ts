@@ -15,10 +15,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import {
-  getCatalogProduct,
-  matchCatalogProducts,
-} from "../_shared/catalog.ts";
+import { matchCatalogProducts } from "../_shared/catalog.ts";
 import { HOME_SCOPE_SYSTEM_BLURB } from "../_shared/topicGuard.ts";
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
@@ -846,26 +843,32 @@ async function formatContractorDraft(input: {
     }
   }
 
-  const product = matchCatalogProducts(text)[0] ?? getCatalogProduct("generac-gp6500")!;
+  const product = matchCatalogProducts(text)[0];
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
+  const assetName =
+    product?.name ??
+    lines[0]?.slice(0, 120) ??
+    "Work from invite submission";
   return {
     mode: "mock",
     draft: {
       summary:
         lines[0]?.slice(0, 160) ||
-        `${input.inputKind} notes for ${product.manufacturer} ${product.model}`,
-      workPerformed: text || `Installed / serviced ${product.name}.`,
+        (product
+          ? `${input.inputKind} notes for ${product.manufacturer} ${product.model}`
+          : `${input.inputKind} notes (confirm brand and model)`),
+      workPerformed: text || `Installed / serviced ${assetName}.`,
       contractorName: input.contractorName,
       workDate: null,
       assetsSuggested: [
         {
-          name: product.name,
-          category: product.category as AssetCategory,
-          manufacturer: product.manufacturer,
-          model: product.model,
+          name: assetName,
+          category: (product?.category as AssetCategory) ?? "other",
+          manufacturer: product?.manufacturer ?? null,
+          model: product?.model ?? null,
           notes: `Formatted from invite-link ${input.inputKind} input (mock AI). Approve before official.`,
         },
       ],

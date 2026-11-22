@@ -30,7 +30,7 @@ Soft reject for clearly off-topic free text (coding projects, unrelated general 
 
 ## `catalog.ts`
 
-Local product / manual catalog used for **mock** AI mode and as grounded manuals after live identify. Same demo products as `apps/api` (Generac / Carrier / Rheem).
+Local product / manual catalog used for **mock** AI mode and as grounded manuals after live identify when keywords match. Same demo products as `apps/api` (Generac / Carrier / Rheem). No match ⇒ empty list (never invent Generac).
 
 ## `expoPush.ts`
 

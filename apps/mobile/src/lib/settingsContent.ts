@@ -42,7 +42,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Add or Update an Asset",
-    body: "From Home: Scan a picture (camera or photo library), Upload a PDF (invoice or paperwork), or Free text (describe the item and tap Format with Ask HomeAsset). Photos of labels and nameplates are read for brand, model, serial, and capacity when visible. Installer / vendor lets you pick from Past contractors or add a new name — it lands in your searchable directory when you save. After Save / Confirm with make and model, Ask HomeAsset can suggest manuals and spec sheets for you to approve — it does not silently add them, and you do not need to photograph manuals separately for that step.",
+    body: "From Home: Scan a picture (camera or photo library), Upload a PDF (invoice or paperwork), or Free text (describe the item and tap Format with Ask HomeAsset). Photos are sent so Ask HomeAsset can read logos, labels, and nameplates for brand, model, serial, and capacity when visible — if it is unsure, fields stay blank for you to fill instead of guessing a wrong product. Installer / vendor lets you pick from Past contractors or add a new name — it lands in your searchable directory when you save. After Save / Confirm with make and model, Ask HomeAsset can suggest manuals and spec sheets for you to approve — it does not silently add them, and you do not need to photograph manuals separately for that step.",
   },
   {
     title: "Notifications",

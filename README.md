@@ -98,7 +98,7 @@ If Expo Go says the project is incompatible, you have the wrong SDK client — u
 
 1. Create an account (homeowner signup only).
 2. Tap **Add home**, enter name + address, save.
-3. From Home → **Ask HomeAsset** → **Scan a picture** → hint `Generac GP6500` (or take a photo) → review suggested manuals → **Confirm & save**.
+3. From Home → **Add or Update an Asset** → **Scan a picture** → take a photo of the label/logo (or hint brand + model) → review the draft → **Confirm & save**.
 4. Open the asset → confirm a **safety recall** alert appears (or Home → **Notifications**) → **Ack** or **Dismiss**. Needs epic7 SQL on Supabase — see [`supabase/README.md`](./supabase/README.md).
 5. **Ask HomeAsset** → **Ask how-to** → ask how to start it safely outdoors; check sources.
 6. **Ask HomeAsset** → **Add or update asset** → paste a sample contractor email or notes → draft → confirm (nothing is official until approve).

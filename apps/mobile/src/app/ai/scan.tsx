@@ -46,7 +46,11 @@ export default function AiScanScreen() {
   if (!user) return <Redirect href="/sign-in" />;
   if (!activeProperty) return <Redirect href="/home" />;
 
-  async function runScan(filename?: string | null) {
+  async function runScan(opts?: {
+    filename?: string | null;
+    imageBase64?: string | null;
+    mediaMimeType?: string | null;
+  }) {
     if (!accessToken || !activeProperty) return;
     setError(null);
     setSavedMsg(null);
@@ -54,7 +58,9 @@ export default function AiScanScreen() {
     try {
       const res = await aiScanProduct(accessToken, activeProperty.id, {
         hint: hint.trim() || null,
-        filename: filename ?? photoName,
+        filename: opts?.filename ?? photoName,
+        imageBase64: opts?.imageBase64 ?? null,
+        mediaMimeType: opts?.mediaMimeType ?? null,
       });
       setDraft(res.draft);
       setName(res.draft.suggestedAsset.name);
@@ -74,10 +80,22 @@ export default function AiScanScreen() {
     setError(null);
     try {
       const picked =
-        source === "camera" ? await pickFromCamera() : await pickFromLibrary();
+        source === "camera"
+          ? await pickFromCamera({ forAi: true })
+          : await pickFromLibrary({ forAi: true });
       if (!picked) return;
+      if (!picked.base64) {
+        setError(
+          "Could not read that photo for Ask HomeAsset. Try taking it again.",
+        );
+        return;
+      }
       setPhotoName(picked.name);
-      await runScan(picked.name);
+      await runScan({
+        filename: picked.name,
+        imageBase64: picked.base64,
+        mediaMimeType: picked.mimeType || "image/jpeg",
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open camera.");
     }
@@ -114,7 +132,7 @@ export default function AiScanScreen() {
         <KeyboardAwareTextInput
           value={hint}
           onChangeText={setHint}
-          placeholder="e.g. Generac GP6500 generator"
+          placeholder="e.g. iRobot Roomba, brand + model"
           placeholderTextColor="#8A9BB0"
           style={styles.input}
           autoCapitalize="words"
@@ -150,7 +168,7 @@ export default function AiScanScreen() {
           accessibilityRole="button"
           disabled={busy || (!hint.trim() && !photoName)}
           onPress={() => {
-            void runScan();
+            void runScan({ filename: photoName });
           }}
           style={({ pressed }) => [
             styles.secondaryBtn,

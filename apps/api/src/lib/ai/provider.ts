@@ -129,8 +129,69 @@ function manualsFromProduct(
   }));
 }
 
+const UNKNOWN_CATALOG_ID = "unknown-unidentified";
+
+function looksLikeGenericFilename(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  return (
+    /^(photo|image|img|scan|camera|screenshot)[-_\s]?\d*\.(jpe?g|png|webp|heic|heif)$/i.test(
+      v,
+    ) ||
+    /^[a-f0-9-]{8,}\.(jpe?g|png|webp|heic|heif)$/i.test(v) ||
+    /^\d{8,}(_\d+)?\.(jpe?g|png|webp|heic|heif)$/i.test(v)
+  );
+}
+
+function unidentifiedScanResult(
+  mode: AiMode,
+  opts?: { label?: string | null; notes?: string | null },
+): IdentifyResult {
+  const raw = (opts?.label ?? "").trim().slice(0, 120);
+  const usable =
+    raw && !looksLikeGenericFilename(raw) ? raw : "Unidentified asset";
+  const notes =
+    opts?.notes?.trim() ||
+    "Ask HomeAsset could not confidently identify brand or model from what you sent. Enter make and model, then confirm — nothing is saved until you do.";
+  const catalogProduct: CatalogProduct = {
+    id: UNKNOWN_CATALOG_ID,
+    matchTerms: [],
+    name: usable,
+    category: "other",
+    manufacturer: "",
+    model: "",
+    confidence: 0.15,
+    manuals: [],
+    howtoNotes: [],
+  };
+  return {
+    mode,
+    catalogProduct,
+    identificationLabel:
+      usable === "Unidentified asset"
+        ? "Could not identify — please enter brand and model"
+        : usable,
+    confidence: 0.15,
+    suggestedAsset: {
+      name: usable,
+      category: "other",
+      manufacturer: null,
+      model: null,
+      serial: null,
+      notes,
+    },
+    manuals: [],
+  };
+}
+
 function identifyFromCatalog(query: string, mode: AiMode): IdentifyResult {
-  const product = matchCatalogProducts(query)[0]!;
+  const product = matchCatalogProducts(query)[0];
+  if (!product) {
+    return unidentifiedScanResult(mode, {
+      label: query,
+      notes:
+        "No catalog match for that hint. Confirm or edit brand and model before saving.",
+    });
+  }
   return {
     mode,
     catalogProduct: product,
@@ -148,13 +209,57 @@ function identifyFromCatalog(query: string, mode: AiMode): IdentifyResult {
   };
 }
 
+const SCAN_IDENTIFY_SYSTEM =
+  `${HOME_SCOPE_SYSTEM_BLURB} ` +
+  "You identify ONE home product for a homeowner ledger from a photo and/or short hint. " +
+  "PRIORITY: read logos, brand marks, product names, model stickers, and nameplate text FIRST. " +
+  "Also use overall product shape (robot vacuum, generator, water heater, HVAC outdoor unit, etc.). " +
+  "Make, model, and category MUST be grounded in what is visible or clearly stated — never invent an unrelated demo product. " +
+  "If the brand logo is readable (e.g. Roomba / iRobot), use that brand even when model is unclear. " +
+  "If unsure, leave manufacturer/model null, set confidence low (≤0.35), and say what you need the homeowner to confirm. " +
+  "Do not guess Generac, Carrier, Rheem, or any catalog default when the image does not show that brand. " +
+  "Reply with JSON only: " +
+  '{"manufacturer":string|null,"model":string|null,"category":"short free-text label","name":string,' +
+  '"identificationLabel":string,"confidence":number,"notes":string|null,"unsure":boolean}';
+
 /**
- * Optional OpenAI-compatible chat call. On any failure, falls back to mock catalog
- * so local/CI never hard-depends on secrets.
+ * Optional OpenAI-compatible chat call. On any failure, falls back without inventing
+ * a wrong catalog product so local/CI never hard-depends on secrets.
  */
-async function liveIdentifyHint(query: string): Promise<string | null> {
+async function liveIdentifyFromVision(input: {
+  query: string;
+  imageBase64?: string | null;
+  mediaMimeType?: string | null;
+}): Promise<{
+  manufacturer: string | null;
+  model: string | null;
+  category: string;
+  name: string;
+  identificationLabel: string;
+  confidence: number;
+  notes: string | null;
+  unsure: boolean;
+} | null> {
   if (!config.aiApiKey) return null;
+  const hasMedia = Boolean(input.imageBase64 && input.mediaMimeType);
+  if (!hasMedia && !input.query.trim()) return null;
   try {
+    const userText =
+      (hasMedia
+        ? "A photo is attached. Identify the product actually shown.\n"
+        : "No photo — identify only from the hint text; if too vague, mark unsure.\n") +
+      `hint/filename: ${input.query.trim() || "(none)"}`;
+    const userContent: Array<Record<string, unknown>> = [
+      { type: "text", text: userText },
+    ];
+    if (hasMedia) {
+      userContent.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${input.mediaMimeType};base64,${input.imageBase64}`,
+        },
+      });
+    }
     const res = await fetch(`${config.aiBaseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -165,16 +270,10 @@ async function liveIdentifyHint(query: string): Promise<string | null> {
         model: config.aiModel,
         temperature: 0,
         messages: [
-          {
-            role: "system",
-            content:
-              `${HOME_SCOPE_SYSTEM_BLURB} ` +
-              "You identify home equipment from short user hints. Reply with JSON only: " +
-              '{"manufacturer":"...","model":"...","category":"short free-text label","name":"..."}',
-          },
+          { role: "system", content: SCAN_IDENTIFY_SYSTEM },
           {
             role: "user",
-            content: `Identify this home product for a homeowner ledger: ${query}`,
+            content: hasMedia ? userContent : userText,
           },
         ],
       }),
@@ -186,38 +285,149 @@ async function liveIdentifyHint(query: string): Promise<string | null> {
     const content = body.choices?.[0]?.message?.content?.trim();
     if (!content) return null;
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return content;
+    if (!jsonMatch) return null;
     const parsed = JSON.parse(jsonMatch[0]) as {
-      manufacturer?: string;
-      model?: string;
-      name?: string;
+      manufacturer?: string | null;
+      model?: string | null;
       category?: string;
+      name?: string;
+      identificationLabel?: string;
+      confidence?: number;
+      notes?: string | null;
+      unsure?: boolean;
     };
-    return [parsed.manufacturer, parsed.model, parsed.name, parsed.category, query]
-      .filter(Boolean)
-      .join(" ");
+    const manufacturer =
+      parsed.manufacturer != null
+        ? String(parsed.manufacturer).trim().slice(0, 120) || null
+        : null;
+    const model =
+      parsed.model != null
+        ? String(parsed.model).trim().slice(0, 120) || null
+        : null;
+    const category = coerceCategory(parsed.category);
+    const name =
+      String(parsed.name ?? "")
+        .trim()
+        .slice(0, 120) ||
+      [manufacturer, model].filter(Boolean).join(" ") ||
+      "Unidentified asset";
+    const identificationLabel =
+      String(parsed.identificationLabel ?? "")
+        .trim()
+        .slice(0, 200) ||
+      [manufacturer, model].filter(Boolean).join(" ") ||
+      name;
+    let confidence = Math.min(
+      1,
+      Math.max(0, Number(parsed.confidence ?? 0.5) || 0.5),
+    );
+    const unsure =
+      parsed.unsure === true || (!manufacturer && !model) || confidence < 0.4;
+    if (unsure) confidence = Math.min(confidence, 0.35);
+    const notes =
+      parsed.notes != null
+        ? String(parsed.notes).trim().slice(0, 2000) || null
+        : null;
+    return {
+      manufacturer,
+      model,
+      category,
+      name,
+      identificationLabel,
+      confidence,
+      notes,
+      unsure,
+    };
   } catch {
     return null;
   }
 }
 
 /**
- * Identify a product from a photo filename / hint. Live mode may refine the hint
- * via an API key; catalog still supplies grounded manuals for confirm.
+ * Identify a product from a photo (preferred) and/or hint.
+ * Live mode uses vision when image bytes are present; catalog manuals attach only on a real match.
  */
 export async function identifyProduct(input: {
   hint?: string | null;
   filename?: string | null;
+  imageBase64?: string | null;
+  mediaMimeType?: string | null;
 }): Promise<IdentifyResult> {
   const mode = resolveAiMode();
-  const baseQuery = [input.hint, input.filename].filter(Boolean).join(" ").trim() ||
-    "generator";
+  const filename = (input.filename ?? "").trim();
+  const hint = (input.hint ?? "").trim();
+  const filenameForQuery =
+    filename && !looksLikeGenericFilename(filename) ? filename : "";
+  const baseQuery = [hint, filenameForQuery].filter(Boolean).join(" ").trim();
+  const hasMedia = Boolean(input.imageBase64?.trim() && input.mediaMimeType);
 
-  if (mode === "live") {
-    const refined = await liveIdentifyHint(baseQuery);
-    return identifyFromCatalog(refined ?? baseQuery, "live");
+  if (mode === "live" && (hasMedia || baseQuery)) {
+    const vision = await liveIdentifyFromVision({
+      query: baseQuery || filename || hint,
+      imageBase64: input.imageBase64,
+      mediaMimeType: input.mediaMimeType,
+    });
+    if (vision) {
+      const catalogQuery = [
+        vision.manufacturer,
+        vision.model,
+        vision.name,
+        vision.category,
+        baseQuery,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const catalogHit = matchCatalogProducts(catalogQuery)[0];
+      const manuals =
+        catalogHit &&
+        vision.manufacturer &&
+        catalogHit.manufacturer.toLowerCase() ===
+          vision.manufacturer.toLowerCase()
+          ? manualsFromProduct(catalogHit)
+          : [];
+      if (vision.unsure && !vision.manufacturer && !vision.model) {
+        return unidentifiedScanResult("live", {
+          label: vision.name,
+          notes: vision.notes,
+        });
+      }
+      return {
+        mode: "live",
+        catalogProduct: catalogHit ?? {
+          id: UNKNOWN_CATALOG_ID,
+          matchTerms: [],
+          name: vision.name,
+          category: "other",
+          manufacturer: vision.manufacturer ?? "",
+          model: vision.model ?? "",
+          confidence: vision.confidence,
+          manuals: [],
+          howtoNotes: [],
+        },
+        identificationLabel: vision.identificationLabel,
+        confidence: vision.confidence,
+        suggestedAsset: {
+          name: vision.name,
+          category: coerceCategory(vision.category),
+          manufacturer: vision.manufacturer,
+          model: vision.model,
+          serial: null,
+          notes:
+            vision.notes ??
+            (vision.unsure
+              ? "Low confidence — please confirm brand and model before saving."
+              : "Identified via Ask HomeAsset from your photo. Confirm before saving."),
+        },
+        manuals,
+      };
+    }
   }
-  return identifyFromCatalog(baseQuery, "mock");
+
+  if (!baseQuery && !hasMedia) {
+    return unidentifiedScanResult(mode);
+  }
+
+  return identifyFromCatalog(baseQuery || "home equipment", mode);
 }
 
 export function buildManualContent(
@@ -293,25 +503,31 @@ export async function formatContractorInput(input: {
     }
   }
 
-  const product = matchCatalogProducts(text)[0]!;
+  const product = matchCatalogProducts(text)[0];
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
+  const assetName =
+    product?.name ??
+    lines[0]?.slice(0, 120) ??
+    "Home asset from contractor notes";
 
   return {
     mode: "mock",
     draft: {
       summary:
         lines[0]?.slice(0, 160) ||
-        `${input.inputKind} notes for ${product.manufacturer} ${product.model}`,
-      workPerformed: text || `Installed / serviced ${product.name}.`,
+        (product
+          ? `${input.inputKind} notes for ${product.manufacturer} ${product.model}`
+          : `${input.inputKind} notes (confirm brand and model)`),
+      workPerformed: text || `Installed / serviced ${assetName}.`,
       assetsSuggested: [
         {
-          name: product.name,
-          category: product.category,
-          manufacturer: product.manufacturer,
-          model: product.model,
+          name: assetName,
+          category: product?.category ?? "other",
+          manufacturer: product?.manufacturer ?? null,
+          model: product?.model ?? null,
           notes: `Formatted from ${input.inputKind} input (mock AI). Confirm before submit.`,
         },
       ],
@@ -463,7 +679,7 @@ export async function formatEmailIntake(input: {
     }
   }
 
-  const product = matchCatalogProducts(text)[0]!;
+  const product = matchCatalogProducts(text)[0];
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -471,6 +687,7 @@ export async function formatEmailIntake(input: {
   const subject = text.match(/^Subject:\s*(.+)$/im)?.[1]?.trim();
   const contractorName = extractContractorName(text);
   const workDate = extractLikelyDate(text);
+  const assetName = product?.name ?? "Home asset from email";
 
   return {
     mode: "mock",
@@ -480,7 +697,7 @@ export async function formatEmailIntake(input: {
         0,
         160,
       ) ||
-      `Contractor work notes for ${product.name}`,
+      `Contractor work notes for ${assetName}`,
     workPerformed:
       lines
         .filter((l) => !/^from:|^to:|^sent:|^date:|^subject:/i.test(l))
@@ -490,10 +707,10 @@ export async function formatEmailIntake(input: {
     workDate,
     assetsSuggested: [
       {
-        name: product.name,
-        category: product.category,
-        manufacturer: product.manufacturer,
-        model: product.model,
+        name: assetName,
+        category: product?.category ?? "other",
+        manufacturer: product?.manufacturer ?? null,
+        model: product?.model ?? null,
         serial: null,
         notes: [
           "Drafted from pasted contractor email (mock AI).",
@@ -632,21 +849,22 @@ function matchExistingAsset(
 const ASSET_INTAKE_LIVE_SYSTEM =
   `${HOME_SCOPE_SYSTEM_BLURB} ` +
   "You extract ONE distinct home asset from homeowner input. " +
-  "When an image or PDF is attached, carefully OCR / read ALL visible text: equipment nameplates, data plates, " +
-  "HVAC proposals, invoices, receipts, stickers, and purchase screenshots. " +
+  "When an image or PDF is attached: (1) read logos and brand marks first, (2) OCR ALL visible text on nameplates, " +
+  "data plates, stickers, invoices, receipts, and purchase screenshots, (3) use product shape/type only as support. " +
   "Prefer exact printed values over guesses. Transcribe model and serial character-for-character " +
   "(watch O vs 0, I vs 1, S vs 5). " +
   "Look for Manufacturer/Brand, Model, Serial, Capacity (tons/BTU/kW/gallons), SEER/AFUE/HSPF, refrigerant, voltage. " +
   "Put capacity and other plate facts into suggestedAsset.notes when there is no dedicated field. " +
-  "identificationLabel should be brand + model when known. " +
+  "identificationLabel should be brand + model when known (e.g. \"iRobot Roomba j7+\"). " +
   "Reply with JSON only: {intent:\"add\"|\"update\", matchedAssetId:string|null, identificationLabel:string, confidence:number, " +
   "capacity:string|null, " +
   "suggestedAsset:{name,category,manufacturer,model,serial,purchaseDate,installDate,installerVendor,location,notes,warrantyEndDate,warrantyTerm}, " +
   "missingFields:string[]}. " +
-  "category is a short free-text label the homeowner would recognize (e.g. HVAC, Roof, Dishwasher) — not a fixed enum. " +
+  "category is a short free-text label the homeowner would recognize (e.g. HVAC, Roof, Robot vacuum) — not a fixed enum. " +
   "matchedAssetId must be one of the provided existing asset ids or null. Prefer update when the same equipment already exists. " +
-  "Do not invent serial numbers, model numbers, or capacity. Dates YYYY-MM-DD or null. " +
-  "Fill only facts grounded in the input or attached media.";
+  "Do not invent serial numbers, model numbers, capacity, or an unrelated make/model (never default to Generac/Carrier/Rheem). " +
+  "If the logo or product is unclear, leave manufacturer/model null, set confidence ≤0.35, and list missingFields. " +
+  "Dates YYYY-MM-DD or null. Fill only facts grounded in the input or attached media.";
 
 /**
  * Multi-source Ask HomeAsset intake → one distinct asset draft (Add or Update).
@@ -862,14 +1080,14 @@ export async function formatAssetIntake(input: {
     }
   }
 
-  const product = matchCatalogProducts(query || "appliance")[0]!;
+  const product = matchCatalogProducts(query || "appliance")[0];
   const installDate = extractLikelyDate(query);
   const installerVendor = extractContractorName(query);
   const suggestedAsset: AssetIntakeSuggestedFields = {
-    name: product.name,
-    category: product.category,
-    manufacturer: product.manufacturer,
-    model: product.model,
+    name: product?.name ?? "Unidentified asset",
+    category: product?.category ?? "other",
+    manufacturer: product?.manufacturer ?? null,
+    model: product?.model ?? null,
     serial: null,
     purchaseDate: null,
     installDate:
@@ -879,8 +1097,8 @@ export async function formatAssetIntake(input: {
     installerVendor,
     location: null,
     notes: hasMedia
-      ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (${mode}). Confirm before saving.`
-      : `Drafted from ${input.sourceKind} via Ask HomeAsset (${mode}). Confirm before saving.`,
+      ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`
+      : `Drafted from ${input.sourceKind} via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`,
     warrantyEndDate: null,
     warrantyTerm: null,
   };
@@ -890,8 +1108,10 @@ export async function formatAssetIntake(input: {
     intent: matched ? "update" : "add",
     matchedAssetId: matched?.id ?? null,
     matchedAssetLabel: matched?.label ?? null,
-    identificationLabel: `${product.manufacturer} ${product.model}`,
-    confidence: product.confidence,
+    identificationLabel: product
+      ? `${product.manufacturer} ${product.model}`
+      : "Could not identify — please enter brand and model",
+    confidence: product?.confidence ?? 0.15,
     suggestedAsset,
     missingFields: computeMissingFields(suggestedAsset),
     privacy,
