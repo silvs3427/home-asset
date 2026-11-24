@@ -177,6 +177,7 @@ function unidentifiedScanResult(
       manufacturer: null,
       model: null,
       serial: null,
+      purchaseDate: null,
       notes,
     },
     manuals: [],
@@ -203,24 +204,88 @@ function identifyFromCatalog(query: string, mode: AiMode): IdentifyResult {
       manufacturer: product.manufacturer,
       model: product.model,
       serial: null,
+      purchaseDate: null,
       notes: `Identified via AI assist (${mode}). Confirm before saving.`,
     },
     manuals: manualsFromProduct(product),
   };
 }
 
+/** Shared guidance: retailer purchase screenshots are valid product-ID sources. */
+export const RETAILER_SCREENSHOT_GUIDANCE =
+  "Retailer purchase screenshots (Amazon, Best Buy, Home Depot, Walmart, Target, manufacturer stores, order history) " +
+  "are VALID product ID sources — not only physical product / nameplate photos. " +
+  "When UI chrome is present: OCR the product TITLE, brand/store link (e.g. \"Visit the iRobot Store\"), " +
+  "\"Purchased N times\", \"Last purchased <date>\", list/sale PRICE, and category phrases (Robot Vacuum & Mop, etc.). " +
+  "Prefer the title/brand text over guessing from the product hero image alone. " +
+  "Ignore ads, ratings, cart chrome, and Alexa badges unless they name the product. ";
+
 const SCAN_IDENTIFY_SYSTEM =
   `${HOME_SCOPE_SYSTEM_BLURB} ` +
-  "You identify ONE home product for a homeowner ledger from a photo and/or short hint. " +
-  "PRIORITY: read logos, brand marks, product names, model stickers, and nameplate text FIRST. " +
-  "Also use overall product shape (robot vacuum, generator, water heater, HVAC outdoor unit, etc.). " +
+  "You identify ONE home product for a homeowner ledger from a photo, purchase screenshot, and/or short hint. " +
+  "PRIORITY: (1) logos, brand marks, product titles, model stickers, nameplate text, " +
+  "(2) retailer page text (title, brand link, last-purchased date, price), " +
+  "(3) overall product shape only as support. " +
+  RETAILER_SCREENSHOT_GUIDANCE +
   "Make, model, and category MUST be grounded in what is visible or clearly stated — never invent an unrelated demo product. " +
-  "If the brand logo is readable (e.g. Roomba / iRobot), use that brand even when model is unclear. " +
+  "If the brand logo or store link is readable (e.g. Roomba / iRobot), use that brand even when model is unclear. " +
+  "purchaseDate: YYYY-MM-DD when \"Last purchased\", order date, or similar is visible; otherwise null. " +
+  "Put a visible sale/list price into notes as \"Purchase price: $…\" when useful; do not invent a price. " +
   "If unsure, leave manufacturer/model null, set confidence low (≤0.35), and say what you need the homeowner to confirm. " +
   "Do not guess Generac, Carrier, Rheem, or any catalog default when the image does not show that brand. " +
   "Reply with JSON only: " +
   '{"manufacturer":string|null,"model":string|null,"category":"short free-text label","name":string,' +
-  '"identificationLabel":string,"confidence":number,"notes":string|null,"unsure":boolean}';
+  '"identificationLabel":string,"confidence":number,"purchaseDate":string|null,"notes":string|null,"unsure":boolean}';
+
+/** Parse YYYY-MM-DD or common retailer date text (e.g. "Oct 6, 2026"). */
+export function nullableIsoDate(value: unknown): string | null {
+  if (value == null) return null;
+  const raw = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  // Common retailer display forms → ISO when year is unambiguous.
+  const mdy = raw.match(
+    /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s+(\d{4})$/i,
+  );
+  if (mdy) {
+    const monthToken = mdy[1];
+    const dayToken = mdy[2];
+    const yearToken = mdy[3];
+    if (!monthToken || !dayToken || !yearToken) return null;
+    const months: Record<string, string> = {
+      jan: "01",
+      feb: "02",
+      mar: "03",
+      apr: "04",
+      may: "05",
+      jun: "06",
+      jul: "07",
+      aug: "08",
+      sep: "09",
+      oct: "10",
+      nov: "11",
+      dec: "12",
+    };
+    const mm = months[monthToken.slice(0, 3).toLowerCase()];
+    if (mm) {
+      return `${yearToken}-${mm}-${dayToken.padStart(2, "0")}`;
+    }
+  }
+  return null;
+}
+
+function mergePriceIntoNotes(
+  notes: string | null,
+  priceHint: string | null | undefined,
+): string | null {
+  const price =
+    priceHint != null ? String(priceHint).trim().slice(0, 40) : "";
+  if (!price) return notes;
+  const line = /^\$?\d/.test(price)
+    ? `Purchase price: ${price.startsWith("$") ? price : `$${price}`}`
+    : `Purchase price: ${price}`;
+  if (notes && /purchase price:/i.test(notes)) return notes;
+  return notes ? `${notes}\n${line}`.slice(0, 2000) : line;
+}
 
 /**
  * Optional OpenAI-compatible chat call. On any failure, falls back without inventing
@@ -237,6 +302,7 @@ async function liveIdentifyFromVision(input: {
   name: string;
   identificationLabel: string;
   confidence: number;
+  purchaseDate: string | null;
   notes: string | null;
   unsure: boolean;
 } | null> {
@@ -246,7 +312,8 @@ async function liveIdentifyFromVision(input: {
   try {
     const userText =
       (hasMedia
-        ? "A photo is attached. Identify the product actually shown.\n"
+        ? "An image is attached (physical product photo OR retailer purchase/order screenshot). " +
+          "Identify the ONE home product for the ledger. Read on-screen title/brand/purchase text — do not ignore UI chrome.\n"
         : "No photo — identify only from the hint text; if too vague, mark unsure.\n") +
       `hint/filename: ${input.query.trim() || "(none)"}`;
     const userContent: Array<Record<string, unknown>> = [
@@ -293,6 +360,8 @@ async function liveIdentifyFromVision(input: {
       name?: string;
       identificationLabel?: string;
       confidence?: number;
+      purchaseDate?: string | null;
+      price?: string | null;
       notes?: string | null;
       unsure?: boolean;
     };
@@ -324,10 +393,15 @@ async function liveIdentifyFromVision(input: {
     const unsure =
       parsed.unsure === true || (!manufacturer && !model) || confidence < 0.4;
     if (unsure) confidence = Math.min(confidence, 0.35);
-    const notes =
+    let notes =
       parsed.notes != null
         ? String(parsed.notes).trim().slice(0, 2000) || null
         : null;
+    notes = mergePriceIntoNotes(
+      notes,
+      parsed.price != null ? String(parsed.price) : null,
+    );
+    const purchaseDate = nullableIsoDate(parsed.purchaseDate);
     return {
       manufacturer,
       model,
@@ -335,6 +409,7 @@ async function liveIdentifyFromVision(input: {
       name,
       identificationLabel,
       confidence,
+      purchaseDate,
       notes,
       unsure,
     };
@@ -397,7 +472,7 @@ export async function identifyProduct(input: {
           id: UNKNOWN_CATALOG_ID,
           matchTerms: [],
           name: vision.name,
-          category: "other",
+          category: coerceCategory(vision.category),
           manufacturer: vision.manufacturer ?? "",
           model: vision.model ?? "",
           confidence: vision.confidence,
@@ -412,22 +487,28 @@ export async function identifyProduct(input: {
           manufacturer: vision.manufacturer,
           model: vision.model,
           serial: null,
+          purchaseDate: vision.purchaseDate,
           notes:
             vision.notes ??
             (vision.unsure
               ? "Low confidence — please confirm brand and model before saving."
-              : "Identified via Ask HomeAsset from your photo. Confirm before saving."),
+              : "Identified via Ask HomeAsset from your photo or purchase screenshot. Confirm before saving."),
         },
         manuals,
       };
     }
   }
 
-  if (!baseQuery && !hasMedia) {
-    return unidentifiedScanResult(mode);
+  if (!baseQuery) {
+    // Media present but live vision failed / mock — never invent Generac via "home equipment".
+    return unidentifiedScanResult(mode, {
+      notes: hasMedia
+        ? "Ask HomeAsset could not read brand or model from that photo or purchase screenshot. Enter make and model, then confirm — nothing is saved until you do."
+        : undefined,
+    });
   }
 
-  return identifyFromCatalog(baseQuery || "home equipment", mode);
+  return identifyFromCatalog(baseQuery, mode);
 }
 
 export function buildManualContent(
@@ -851,16 +932,19 @@ const ASSET_INTAKE_LIVE_SYSTEM =
   "You extract ONE distinct home asset from homeowner input. " +
   "When an image or PDF is attached: (1) read logos and brand marks first, (2) OCR ALL visible text on nameplates, " +
   "data plates, stickers, invoices, receipts, and purchase screenshots, (3) use product shape/type only as support. " +
+  RETAILER_SCREENSHOT_GUIDANCE +
   "Prefer exact printed values over guesses. Transcribe model and serial character-for-character " +
   "(watch O vs 0, I vs 1, S vs 5). " +
-  "Look for Manufacturer/Brand, Model, Serial, Capacity (tons/BTU/kW/gallons), SEER/AFUE/HSPF, refrigerant, voltage. " +
-  "Put capacity and other plate facts into suggestedAsset.notes when there is no dedicated field. " +
-  "identificationLabel should be brand + model when known (e.g. \"iRobot Roomba j7+\"). " +
+  "Look for Manufacturer/Brand, Model, Serial, Capacity (tons/BTU/kW/gallons), SEER/AFUE/HSPF, refrigerant, voltage, " +
+  "Last purchased / order date, and price. " +
+  "Put capacity, price (as \"Purchase price: $…\"), and other plate/receipt facts into suggestedAsset.notes when there is no dedicated field. " +
+  "purchaseDate from \"Last purchased\", order date, or invoice date when visible (YYYY-MM-DD). " +
+  "identificationLabel should be brand + model when known (e.g. \"iRobot Roomba 505X\"). " +
   "Reply with JSON only: {intent:\"add\"|\"update\", matchedAssetId:string|null, identificationLabel:string, confidence:number, " +
   "capacity:string|null, " +
   "suggestedAsset:{name,category,manufacturer,model,serial,purchaseDate,installDate,installerVendor,location,notes,warrantyEndDate,warrantyTerm}, " +
   "missingFields:string[]}. " +
-  "category is a short free-text label the homeowner would recognize (e.g. HVAC, Roof, Robot vacuum) — not a fixed enum. " +
+  "category is a short free-text label the homeowner would recognize (e.g. HVAC, Roof, Robot vacuum, Vacuum) — not a fixed enum. " +
   "matchedAssetId must be one of the provided existing asset ids or null. Prefer update when the same equipment already exists. " +
   "Do not invent serial numbers, model numbers, capacity, or an unrelated make/model (never default to Generac/Carrier/Rheem). " +
   "If the logo or product is unclear, leave manufacturer/model null, set confidence ≤0.35, and list missingFields. " +
@@ -906,7 +990,8 @@ export async function formatAssetIntake(input: {
         })),
       );
       const mediaNote = hasMedia
-        ? `mediaAttached=true mime=${mediaMimeType}`
+        ? `mediaAttached=true mime=${mediaMimeType} ` +
+          `(physical product photo, nameplate, invoice/PDF, OR retailer purchase/order screenshot — OCR title, brand, last-purchased, price)`
         : "mediaAttached=false";
       const userText =
         `sourceKind=${input.sourceKind}\n${mediaNote}\n` +
@@ -993,13 +1078,9 @@ export async function formatAssetIntake(input: {
               parsed.suggestedAsset?.serial != null
                 ? String(parsed.suggestedAsset.serial).trim().slice(0, 120) || null
                 : null,
-            purchaseDate:
-              parsed.suggestedAsset?.purchaseDate &&
-              /^\d{4}-\d{2}-\d{2}$/.test(
-                String(parsed.suggestedAsset.purchaseDate),
-              )
-                ? String(parsed.suggestedAsset.purchaseDate)
-                : null,
+            purchaseDate: nullableIsoDate(
+              parsed.suggestedAsset?.purchaseDate,
+            ),
             installDate:
               parsed.suggestedAsset?.installDate &&
               /^\d{4}-\d{2}-\d{2}$/.test(

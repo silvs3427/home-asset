@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -21,9 +21,10 @@ import { colors } from "@/lib/theme";
 /**
  * Ask HomeAsset — Talk or Text prompt for home / ledger help.
  * Typed or voice-note ask → how-to answer. Never writes the ledger.
- * Add/update assets live on Home → Add or Update an Asset.
+ * Photo / purchase-screenshot drafts go through asset intake (approve-before-official).
  */
 export default function AskHomeAssetScreen() {
+  const router = useRouter();
   const { user, accessToken, activeProperty } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [voiceName, setVoiceName] = useState<string | null>(null);
@@ -116,6 +117,22 @@ export default function AskHomeAssetScreen() {
             >
               <Text style={styles.secondaryLabel}>
                 {voiceName ? "Change voice note" : "Attach voice note"}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => {
+                router.push("/ai/asset-intake");
+              }}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+                busy && styles.disabled,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>
+                Draft from photo or screenshot
               </Text>
             </Pressable>
             {voiceName ? (

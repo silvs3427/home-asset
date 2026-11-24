@@ -254,7 +254,9 @@ export default function AssetIntakeScreen() {
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.secondaryLabel}>Photo library</Text>
+              <Text style={styles.secondaryLabel}>
+                Photo or purchase screenshot
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"

@@ -23,4 +23,11 @@ describe("matchCatalogProducts", () => {
     assert.deepEqual(matchCatalogProducts("appliance"), []);
     assert.deepEqual(matchCatalogProducts("home equipment"), []);
   });
+
+  it("does not invent Generac for Amazon Roomba purchase title text", () => {
+    const hits = matchCatalogProducts(
+      "iRobot Roomba 505X Robot Vacuum & Mop Combo Purchased 1 time Last purchased Oct 6, 2026 $469.99",
+    );
+    assert.deepEqual(hits, []);
+  });
 });

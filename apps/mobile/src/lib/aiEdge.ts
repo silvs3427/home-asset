@@ -44,6 +44,7 @@ const scanDraftById = new Map<
       manufacturer: string | null;
       model: string | null;
       serial: string | null;
+      purchaseDate?: string | null;
       notes: string | null;
     };
     manuals: Array<{ id: string; title: string }>;
@@ -128,6 +129,7 @@ export function rememberScanDraft(
       manufacturer: string | null;
       model: string | null;
       serial: string | null;
+      purchaseDate?: string | null;
       notes: string | null;
     };
     manuals: Array<{ id: string; title: string }>;
@@ -146,6 +148,7 @@ export function takeScanDraft(draftId: string):
         manufacturer: string | null;
         model: string | null;
         serial: string | null;
+        purchaseDate?: string | null;
         notes: string | null;
       };
       manuals: Array<{ id: string; title: string }>;
