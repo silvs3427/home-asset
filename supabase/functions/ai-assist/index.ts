@@ -37,6 +37,7 @@ import {
   assessAskHomeAssetTopic,
   HOME_SCOPE_SYSTEM_BLURB,
 } from "../_shared/topicGuard.ts";
+import { fetchManualPdf } from "../_shared/fetchManual.ts";
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
@@ -59,7 +60,8 @@ type ErrorCode =
   | "asset_not_found"
   | "ai_assist_disabled"
   | "upstream_error"
-  | "parse_failed";
+  | "parse_failed"
+  | "manual_not_downloadable";
 
 /** Open homeowner-defined category label (free text). */
 type AssetCategory = string;
@@ -84,6 +86,7 @@ const RequestSchema = z
       "email-intake",
       "asset-intake",
       "suggest-manuals",
+      "fetch-manual",
       "permits-suggest",
     ]),
     propertyId: z.string().uuid().optional(),
@@ -115,6 +118,10 @@ const RequestSchema = z
     manufacturer: z.string().max(120).optional().nullable(),
     model: z.string().max(120).optional().nullable(),
     existingAssets: z.array(ExistingAssetSchema).max(100).optional(),
+    /** Public https URL of a suggested manual / spec (fetch-manual). */
+    sourceUrl: z.string().url().max(2048).optional().nullable(),
+    /** Display title hint for filename when fetching a manual. */
+    title: z.string().max(200).optional().nullable(),
   })
   .strict();
 
@@ -214,6 +221,7 @@ Deno.serve(async (req) => {
       "email-intake",
       "asset-intake",
       "suggest-manuals",
+      "fetch-manual",
       "permits-suggest",
     ] as const;
     const staleDeploy =
@@ -288,11 +296,12 @@ Deno.serve(async (req) => {
 
   const rateRoute =
     body.action === "support" ? "support-assist" : "ai-assist";
+  // fetch-manual is a post-approve download (not an AI ask) — do not burn Ask quota.
   const rate = await enforceRateLimit({
     key: user.id,
     route: rateRoute,
     supabase,
-    skip: body.action === "status",
+    skip: body.action === "status" || body.action === "fetch-manual",
   });
   if (!rate.allowed) {
     const code: ErrorCode =
@@ -329,6 +338,7 @@ Deno.serve(async (req) => {
             emailIntake: true,
             assetIntake: true,
             suggestManuals: true,
+            fetchManual: true,
             permitsSuggest: true,
             submitToLedger: false,
             note: "Confirm / approve writes happen on the phone via Supabase RLS — never silently. Support is separate from Ask HomeAsset.",
@@ -623,6 +633,153 @@ Deno.serve(async (req) => {
           },
           aiMode: manualsDraft.mode,
           manualContents: manualsDraft.manualContents,
+        });
+      }
+
+      case "fetch-manual": {
+        // Post-approve download: resolve URL → real PDF → store in home vault (RLS).
+        // Called only after the homeowner confirms on the phone — never auto-adds.
+        if (!body.propertyId) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "propertyId required",
+          );
+        }
+        const sourceUrl = (body.sourceUrl ?? "").trim();
+        if (!sourceUrl) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "sourceUrl required to fetch a manual",
+          );
+        }
+        const assetId = body.assetId ?? null;
+        if (!assetId) {
+          return errorResponse(
+            400,
+            "invalid_request_body",
+            "assetId required to store a fetched manual",
+          );
+        }
+        await assertPropertyOwned(supabase, body.propertyId, user.id);
+        // Ensure asset belongs to this home (RLS also enforces).
+        const { data: assetRow, error: assetErr } = await supabase
+          .from("assets")
+          .select("id")
+          .eq("id", assetId)
+          .eq("property_id", body.propertyId)
+          .maybeSingle();
+        if (assetErr || !assetRow) {
+          return errorResponse(404, "asset_not_found", "Asset not found on this home");
+        }
+
+        const title = (body.title ?? "").trim() || "Manual";
+        const fetched = await fetchManualPdf({
+          sourceUrl,
+          titleHint: title,
+        });
+        if (!fetched.ok) {
+          return jsonResponse({
+            ok: false,
+            code: "manual_not_downloadable",
+            reason: fetched.reason,
+            fetchCode: fetched.code,
+            privacy: {
+              writes: false,
+              note: "Nothing was stored. HomeAsset does not save broken links as manuals.",
+            },
+          });
+        }
+
+        const documentId = crypto.randomUUID();
+        const safeName =
+          fetched.filename.replace(/[^\w.\-()+ ]+/g, "_") || "manual.pdf";
+        const storageKey = `${body.propertyId}/${documentId}/${safeName}`;
+        const uploadBody = new Blob([fetched.bytes], {
+          type: fetched.mimeType,
+        });
+        const { error: uploadError } = await supabase.storage
+          .from("documents")
+          .upload(storageKey, uploadBody, {
+            contentType: fetched.mimeType,
+            upsert: false,
+          });
+        if (uploadError) {
+          return errorResponse(
+            502,
+            "upstream_error",
+            "Could not store the PDF in your home vault.",
+            { reason: uploadError.message },
+          );
+        }
+        const now = new Date().toISOString();
+        const { data: docRow, error: insertError } = await supabase
+          .from("documents")
+          .insert({
+            id: documentId,
+            property_id: body.propertyId,
+            asset_id: assetId,
+            title: title.slice(0, 200),
+            doc_type: "manual",
+            document_date: null,
+            source: "ai_fetched",
+            mime_type: fetched.mimeType,
+            original_filename: safeName,
+            storage_key: storageKey,
+            byte_size: fetched.byteSize,
+            created_at: now,
+            updated_at: now,
+          })
+          .select(
+            "id, property_id, asset_id, title, doc_type, document_date, source, mime_type, original_filename, byte_size, created_at, updated_at",
+          )
+          .single();
+        if (insertError || !docRow) {
+          await supabase.storage.from("documents").remove([storageKey]);
+          return errorResponse(
+            502,
+            "upstream_error",
+            "Could not save the document record.",
+            { reason: insertError?.message },
+          );
+        }
+        const row = docRow as {
+          id: string;
+          property_id: string;
+          asset_id: string | null;
+          title: string;
+          doc_type: string;
+          document_date: string | null;
+          source: string;
+          mime_type: string;
+          original_filename: string;
+          byte_size: number;
+          created_at: string;
+          updated_at: string;
+        };
+        return jsonResponse({
+          ok: true,
+          finalUrl: fetched.finalUrl,
+          document: {
+            id: row.id,
+            propertyId: row.property_id,
+            assetId: row.asset_id,
+            title: row.title,
+            docType: row.doc_type,
+            documentDate: row.document_date,
+            source: row.source,
+            mimeType: row.mime_type,
+            originalFilename: row.original_filename,
+            byteSize: row.byte_size,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          },
+          privacy: {
+            writes: true,
+            confirmedByUser: true,
+            note: "Stored only because you confirmed. Real PDF in this home’s vault — not a nested link.",
+          },
         });
       }
 
@@ -1268,11 +1425,12 @@ async function suggestManualsForMakeModel(input: {
         system:
           `${HOME_SCOPE_SYSTEM_BLURB} ` +
           "Find official manufacturer owner's manuals and spec sheets for ONE home equipment model. " +
-          "Prefer manufacturer.com / support / literature PDF links over random blogs. " +
+          "Prefer direct https links to manufacturer.com / support / literature PDFs (URL path ending in .pdf). " +
+          "Do NOT return retailer listings, blogs, search pages, or HTML-only product pages when a PDF exists. " +
           "Reply with JSON only: {documents:[{title,url,kind:\"manual\"|\"spec\"|\"other\",note}]}. " +
           "Include at most 5 high-confidence docs. If unsure of a URL, omit it — never invent domains. " +
           "This is a draft for homeowner approve; do not claim documents are already stored.",
-        user: `manufacturer=${input.manufacturer}\nmodel=${input.model}\nFind public manuals and spec sheets.`,
+        user: `manufacturer=${input.manufacturer}\nmodel=${input.model}\nFind public manuals and spec sheets (prefer direct PDF URLs).`,
         useGoogleSearch: input.live.provider === "gemini",
       });
       const jsonMatch = content?.match(/\{[\s\S]*\}/);
@@ -1294,6 +1452,20 @@ async function suggestManualsForMakeModel(input: {
           const title = String(doc.title ?? "").trim().slice(0, 160);
           const url = String(doc.url ?? "").trim();
           if (!title || !/^https:\/\//i.test(url)) continue;
+          // Skip obviously non-file hosts; prefer pdf-looking paths when ranking later.
+          try {
+            const host = new URL(url).hostname.toLowerCase();
+            if (
+              host === "example.invalid" ||
+              host === "example.com" ||
+              host.endsWith(".invalid") ||
+              host.endsWith(".test")
+            ) {
+              continue;
+            }
+          } catch {
+            continue;
+          }
           const urlKey = url.toLowerCase();
           if (seenUrls.has(urlKey)) continue;
           seenUrls.add(urlKey);
@@ -1303,28 +1475,22 @@ async function suggestManualsForMakeModel(input: {
               : "manual";
           const id = `web-${manuals.length + 1}-${crypto.randomUUID().slice(0, 8)}`;
           const note = String(doc.note ?? "").trim().slice(0, 280);
-          const body = [
-            `${title}`,
-            "",
-            `Manufacturer: ${input.manufacturer}`,
-            `Model: ${input.model}`,
-            `Kind: ${kind}`,
-            `Source: ${url}`,
-            "",
-            note ||
-              "Link suggested by Ask HomeAsset from a public web search. Open in a browser to view or download. Not fetched automatically.",
-            "",
-            "Stored only because you confirmed. HomeAsset does not silently add manuals.",
-          ].join("\n");
+          const isLikelyPdf = /\.pdf(\?|#|$)/i.test(url);
+          // Do NOT store a fake text "link stub" — approve will fetch real PDF bytes.
+          // Empty content marks this as URL-backed (phone calls fetch-manual).
           manuals.push({
             id,
             title,
             sourceUrl: url,
-            preview: note || url,
+            preview:
+              note ||
+              (isLikelyPdf
+                ? "Manufacturer PDF — saved as a real file only after you confirm."
+                : "Suggested source — HomeAsset will try to download a real PDF when you confirm."),
             kind,
             selectedByDefault: manuals.length === 0,
           });
-          manualContents[id] = body;
+          // Intentionally omit manualContents[id] for web URLs — confirm fetches PDF.
           if (manuals.length >= 6) break;
         }
       }

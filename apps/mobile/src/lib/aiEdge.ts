@@ -20,6 +20,7 @@ export type AiEdgeAction =
   | "email-intake"
   | "asset-intake"
   | "suggest-manuals"
+  | "fetch-manual"
   | "permits-suggest";
 
 type EdgeErrorBody = {
@@ -229,7 +230,7 @@ const manualsDraftById = new Map<
     assetId: string;
     manufacturer: string;
     model: string;
-    manuals: Array<{ id: string; title: string }>;
+    manuals: Array<{ id: string; title: string; sourceUrl: string | null }>;
     manualContents: Record<string, string>;
   }
 >();
@@ -241,7 +242,7 @@ export function rememberManualsDraft(
     assetId: string;
     manufacturer: string;
     model: string;
-    manuals: Array<{ id: string; title: string }>;
+    manuals: Array<{ id: string; title: string; sourceUrl: string | null }>;
     manualContents: Record<string, string>;
   },
 ): void {
