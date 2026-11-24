@@ -42,7 +42,7 @@ export const HOW_TO_USE_SECTIONS: ContentSection[] = [
   },
   {
     title: "Add or Update an Asset",
-    body: "From Home: Scan a picture (camera or photo library), Upload a PDF (invoice or paperwork), or Free text (describe the item and tap Format with Ask HomeAsset). Photos are sent so Ask HomeAsset can read logos, labels, and nameplates for brand, model, serial, and capacity when visible — if it is unsure, fields stay blank for you to fill instead of guessing a wrong product. Installer / vendor lets you pick from Past contractors or add a new name — it lands in your searchable directory when you save. After Save / Confirm with make and model, Ask HomeAsset can suggest manuals and spec sheets for you to approve — it does not silently add them, and you do not need to photograph manuals separately for that step.",
+    body: "From Home: Scan a picture (camera or photo library), Upload a PDF (invoice or paperwork), or Free text (describe the item and tap Format with Ask HomeAsset). Photos are sent so Ask HomeAsset can read logos, labels, and nameplates for brand, model, serial, and capacity when visible — if it is unsure, fields stay blank for you to fill instead of guessing a wrong product. Installer / vendor lets you pick from Past contractors or add a new name — it lands in your searchable directory when you save. After Save / Confirm with make and model, Ask HomeAsset can suggest manuals and spec sheets for you to approve — it does not silently add them, and you do not need to photograph manuals separately for that step. When you approve a suggestion, HomeAsset downloads a real PDF into this home’s documents when the manufacturer source allows it; if the source is only a web page (not a file), you get a clear message and nothing fake is stored.",
   },
   {
     title: "Notifications",
@@ -73,7 +73,7 @@ export const PRIVACY_SECTIONS: ContentSection[] = [
   },
   {
     title: "Approve before official",
-    body: "Ask HomeAsset drafts (scan a picture, PDF upload, free-text format, photo/email/invoice intake, suggested manuals/spec sheets, and similar helpers) wait for your review. Contractor invite-link submissions — voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Contact details a pro adds on the invite form enter your Past contractors directory only after you approve. Nothing is auto-added as official without your confirm.",
+    body: "Ask HomeAsset drafts (scan a picture, PDF upload, free-text format, photo/email/invoice intake, suggested manuals/spec sheets, and similar helpers) wait for your review. Approved suggested manuals are stored as real PDF files in this home’s vault when the source is downloadable — web pages that are not files are refused, not saved as nested links. Contractor invite-link submissions — voice, photos, and text that Ask HomeAsset formats — also wait for your approve / edit / decline. Contact details a pro adds on the invite form enter your Past contractors directory only after you approve. Nothing is auto-added as official without your confirm.",
   },
   {
     title: "Signed-in and home-scoped",

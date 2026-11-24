@@ -2161,7 +2161,11 @@ export async function aiSuggestManuals(
       assetId: input.assetId,
       manufacturer: input.manufacturer,
       model: input.model,
-      manuals: res.draft.manuals.map((m) => ({ id: m.id, title: m.title })),
+      manuals: res.draft.manuals.map((m) => ({
+        id: m.id,
+        title: m.title,
+        sourceUrl: m.sourceUrl ?? null,
+      })),
       manualContents: res.manualContents ?? {},
     });
     return { draft: res.draft, aiMode: res.aiMode };
@@ -2197,10 +2201,11 @@ export async function aiConfirmSuggestedManuals(
 ): Promise<{
   documents: PublicDocument[];
   storedManualCount: number;
+  failed: Array<{ id: string; title: string; reason: string }>;
   privacy: { writes: boolean; confirmedByUser: boolean; note: string };
 }> {
   if (useCloud()) {
-    const { takeManualsDraft } = await import("./aiEdge");
+    const { takeManualsDraft, invokeAiAssist } = await import("./aiEdge");
     const { cloudCreateDocumentFromBytes } = await import("./cloud");
     const held = takeManualsDraft(input.draftId);
     if (
@@ -2214,26 +2219,108 @@ export async function aiConfirmSuggestedManuals(
         404,
       );
     }
-    const titleById = new Map(held.manuals.map((m) => [m.id, m.title]));
+    const metaById = new Map(
+      held.manuals.map((m) => [m.id, { title: m.title, sourceUrl: m.sourceUrl }]),
+    );
     const documents: PublicDocument[] = [];
+    const failed: Array<{ id: string; title: string; reason: string }> = [];
+
     for (const manualId of input.selectedManualIds) {
-      const content = held.manualContents[manualId];
-      if (!content) continue;
-      const bytes = new TextEncoder().encode(content);
-      const { document } = await cloudCreateDocumentFromBytes(propertyId, {
-        title: titleById.get(manualId) || manualId,
-        docType: "manual",
-        assetId: input.assetId,
-        source: "ai_fetched",
-        mimeType: "text/plain",
-        originalFilename: `${manualId}.txt`,
-        bytes,
+      const meta = metaById.get(manualId);
+      const title = meta?.title || manualId;
+      const sourceUrl = meta?.sourceUrl?.trim() || "";
+      const textContent = held.manualContents[manualId];
+      const isLinkStub =
+        typeof textContent === "string" &&
+        (/Not fetched automatically/i.test(textContent) ||
+          /Link suggested by Ask HomeAsset/i.test(textContent));
+
+      // Prefer real PDF download when we have a public https source URL.
+      const canFetchUrl =
+        !!sourceUrl &&
+        /^https:\/\//i.test(sourceUrl) &&
+        !isUnfetchableManualUrl(sourceUrl);
+      if (canFetchUrl) {
+        try {
+          const fetched = await invokeAiAssist<{
+            ok: boolean;
+            document?: PublicDocument;
+            reason?: string;
+            code?: string;
+          }>("fetch-manual", {
+            propertyId,
+            sourceUrl,
+            title,
+            assetId: input.assetId,
+          });
+          if (fetched.ok && fetched.document) {
+            documents.push(fetched.document);
+            continue;
+          }
+          // Fetch failed — fall through to catalog text only if it is real content.
+          if (!(textContent && !isLinkStub)) {
+            failed.push({
+              id: manualId,
+              title,
+              reason:
+                fetched.reason?.trim() ||
+                "That source was not a downloadable PDF. Nothing was stored for this one.",
+            });
+            continue;
+          }
+        } catch (err) {
+          if (!(textContent && !isLinkStub)) {
+            failed.push({
+              id: manualId,
+              title,
+              reason:
+                err instanceof Error
+                  ? err.message
+                  : "Could not download that document.",
+            });
+            continue;
+          }
+        }
+      }
+
+      // Catalog / text excerpts only — never store nested link stubs as "manuals".
+      if (textContent && !isLinkStub) {
+        const bytes = new TextEncoder().encode(textContent);
+        const { document } = await cloudCreateDocumentFromBytes(propertyId, {
+          title,
+          docType: "manual",
+          assetId: input.assetId,
+          source: "ai_fetched",
+          mimeType: "text/plain",
+          originalFilename: `${manualId}.txt`,
+          bytes,
+        });
+        documents.push(document);
+        continue;
+      }
+
+      failed.push({
+        id: manualId,
+        title,
+        reason:
+          "No downloadable PDF was available for this suggestion. Nothing was stored.",
       });
-      documents.push(document);
     }
+
+    if (documents.length === 0 && failed.length > 0) {
+      throw new ApiError(
+        failed.length === 1
+          ? failed[0]!.reason
+          : `None of the selected docs could be saved as real files. ${failed[0]!.reason}`,
+        "client",
+        422,
+      );
+    }
+
     return {
       documents,
       storedManualCount: documents.length,
+      failed,
       privacy: {
         writes: true,
         confirmedByUser: true,
@@ -2246,6 +2333,23 @@ export async function aiConfirmSuggestedManuals(
     "client",
     501,
   );
+}
+
+/** Demo / placeholder hosts — never call fetch-manual for these. */
+function isUnfetchableManualUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return (
+      host === "example.invalid" ||
+      host === "example.com" ||
+      host === "example.org" ||
+      host.endsWith(".example") ||
+      host.endsWith(".invalid") ||
+      host.endsWith(".test")
+    );
+  } catch {
+    return true;
+  }
 }
 
 /** Navigate helper target after asset save when make + model are present. */

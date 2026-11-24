@@ -81,9 +81,10 @@ npx supabase secrets set AI_ASSIST_LIVE=true
 | `email-intake` | `propertyId`, `emailText` | email intake draft |
 | `asset-intake` | `propertyId`, `sourceKind`, `text?`, `hint?`, `filename?`, `imageBase64?`, `mediaMimeType?`, `existingAssets?` | one-asset Add/Update draft + missing fields (multimodal OCR for photos/PDFs) |
 | `suggest-manuals` | `propertyId`, `manufacturer`, `model`, `assetId?` | draft manuals / spec sheets (catalog + live web search) — confirm on phone |
+| `fetch-manual` | `propertyId`, `assetId`, `sourceUrl`, `title?` | after homeowner confirm: download https source, validate PDF (`%PDF` / content-type; reject HTML), store in home vault via user JWT + RLS; returns `{ ok, document }` or honest `{ ok:false, reason }` — skips Ask quota |
 | `permits-suggest` | `propertyId` | permit suggestion draft |
 
-**Confirm / save** (scan confirm, email approve, asset intake confirm, permit approve) runs on the phone against Supabase Postgres + Storage with the user JWT — those steps do **not** need an AI key.
+**Confirm / save** (scan confirm, email approve, asset intake confirm, permit approve) runs on the phone against Supabase Postgres + Storage with the user JWT — those steps do **not** need an AI key. **Suggested manuals confirm** calls `fetch-manual` so approved docs are real PDFs in the vault (or fail honestly) — never nested HTML link stubs.
 
 ## Privacy
 

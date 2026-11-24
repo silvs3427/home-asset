@@ -2,6 +2,7 @@ import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -103,13 +104,31 @@ export default function SuggestManualsScreen() {
           selectedManualIds: selectedIds,
         },
       );
-      setSavedMsg(
-        res.storedManualCount > 0
-          ? `Saved ${res.storedManualCount} document${res.storedManualCount === 1 ? "" : "s"}.`
-          : "Nothing selected — asset kept as-is.",
-      );
       setDraft(null);
-      router.replace(`/assets/${assetId}`);
+      if (res.failed.length > 0 && res.storedManualCount > 0) {
+        Alert.alert(
+          "Some docs saved",
+          `Saved ${res.storedManualCount} as a real file. ` +
+            `${res.failed.length} could not be downloaded:\n` +
+            res.failed.map((f) => `• ${f.title}: ${f.reason}`).join("\n"),
+          [
+            {
+              text: "OK",
+              onPress: () => router.replace(`/assets/${assetId}`),
+            },
+          ],
+        );
+      } else if (res.storedManualCount > 0) {
+        setSavedMsg(
+          `Saved ${res.storedManualCount} document${res.storedManualCount === 1 ? "" : "s"} as real file${res.storedManualCount === 1 ? "" : "s"}.`,
+        );
+        router.replace(`/assets/${assetId}`);
+      } else if (selectedIds.length === 0) {
+        setSavedMsg("Nothing selected — asset kept as-is.");
+        router.replace(`/assets/${assetId}`);
+      } else {
+        router.replace(`/assets/${assetId}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Confirm failed.");
     } finally {
