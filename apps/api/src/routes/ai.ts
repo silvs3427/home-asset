@@ -237,6 +237,7 @@ const confirmSchema = z.object({
       manufacturer: z.string().trim().max(120).optional().nullable(),
       model: z.string().trim().max(120).optional().nullable(),
       serial: z.string().trim().max(120).optional().nullable(),
+      purchaseDate: z.string().trim().max(40).optional().nullable(),
       notes: z.string().trim().max(2000).optional().nullable(),
     })
     .optional(),
@@ -275,6 +276,14 @@ aiRoutes.post("/confirm-scan", async (c) => {
     if (!draft) throw new Error("DRAFT_NOT_FOUND");
 
     const overrides = parsed.data.assetOverrides ?? {};
+    const purchaseDateRaw =
+      overrides.purchaseDate !== undefined
+        ? overrides.purchaseDate
+        : (draft.suggestedAsset.purchaseDate ?? null);
+    const purchaseDate =
+      purchaseDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(purchaseDateRaw)
+        ? purchaseDateRaw
+        : null;
     const base = {
       name: overrides.name ?? draft.suggestedAsset.name,
       category:
@@ -291,6 +300,7 @@ aiRoutes.post("/confirm-scan", async (c) => {
         overrides.serial !== undefined
           ? overrides.serial
           : draft.suggestedAsset.serial,
+      purchaseDate,
       notes:
         overrides.notes !== undefined
           ? overrides.notes
@@ -311,6 +321,7 @@ aiRoutes.post("/confirm-scan", async (c) => {
         manufacturer: base.manufacturer,
         model: base.model,
         serial: base.serial,
+        purchaseDate: base.purchaseDate,
         notes: base.notes,
       });
     } else if (parsed.data.createAsset === false) {

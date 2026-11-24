@@ -1395,6 +1395,7 @@ export type AiScanDraft = {
     manufacturer: string | null;
     model: string | null;
     serial: string | null;
+    purchaseDate?: string | null;
     notes: string | null;
   };
   manuals: SuggestedManualDraft[];
@@ -1521,6 +1522,7 @@ export async function aiConfirmScan(
       manufacturer?: string | null;
       model?: string | null;
       serial?: string | null;
+      purchaseDate?: string | null;
       notes?: string | null;
     };
   },
@@ -1546,6 +1548,14 @@ export async function aiConfirmScan(
       );
     }
     const overrides = input.assetOverrides ?? {};
+    const purchaseDateRaw =
+      overrides.purchaseDate !== undefined
+        ? overrides.purchaseDate
+        : (held.suggestedAsset.purchaseDate ?? null);
+    const purchaseDate =
+      purchaseDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(purchaseDateRaw)
+        ? purchaseDateRaw
+        : null;
     const base = {
       name: overrides.name ?? held.suggestedAsset.name,
       category: (overrides.category ??
@@ -1562,6 +1572,7 @@ export async function aiConfirmScan(
         overrides.serial !== undefined
           ? overrides.serial
           : held.suggestedAsset.serial,
+      purchaseDate,
       notes:
         overrides.notes !== undefined
           ? overrides.notes

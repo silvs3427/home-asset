@@ -37,9 +37,10 @@ export async function pickFromCamera(
   }
 
   const forAi = Boolean(options.forAi);
+  // Slightly higher quality for AI so retailer UI text (title, last purchased) stays readable.
   const result = await ImagePicker.launchCameraAsync({
     mediaTypes: ["images"],
-    quality: forAi ? 0.65 : 0.85,
+    quality: forAi ? 0.8 : 0.85,
     exif: false,
     base64: forAi,
   });
@@ -60,7 +61,7 @@ export async function pickFromLibrary(
   const forAi = Boolean(options.forAi);
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
-    quality: forAi ? 0.65 : 0.85,
+    quality: forAi ? 0.8 : 0.85,
     exif: false,
     base64: forAi,
   });

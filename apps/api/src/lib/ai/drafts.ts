@@ -22,6 +22,8 @@ export type SuggestedAssetDraft = {
   manufacturer: string | null;
   model: string | null;
   serial: string | null;
+  /** YYYY-MM-DD when grounded in a receipt / retailer purchase screenshot. */
+  purchaseDate?: string | null;
   notes: string | null;
 };
 

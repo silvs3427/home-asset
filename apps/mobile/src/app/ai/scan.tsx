@@ -34,6 +34,10 @@ export default function AiScanScreen() {
   const [draft, setDraft] = useState<AiScanDraft | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [name, setName] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
+  const [model, setModel] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState("");
+  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
@@ -64,6 +68,10 @@ export default function AiScanScreen() {
       });
       setDraft(res.draft);
       setName(res.draft.suggestedAsset.name);
+      setManufacturer(res.draft.suggestedAsset.manufacturer ?? "");
+      setModel(res.draft.suggestedAsset.model ?? "");
+      setPurchaseDate(res.draft.suggestedAsset.purchaseDate ?? "");
+      setNotes(res.draft.suggestedAsset.notes ?? "");
       const next: Record<string, boolean> = {};
       for (const m of res.draft.manuals) {
         next[m.id] = m.selectedByDefault;
@@ -109,7 +117,13 @@ export default function AiScanScreen() {
       const res = await aiConfirmScan(accessToken, activeProperty.id, {
         draftId: draft.draftId,
         selectedManualIds: selectedIds,
-        assetOverrides: { name: name.trim() || draft.suggestedAsset.name },
+        assetOverrides: {
+          name: name.trim() || draft.suggestedAsset.name,
+          manufacturer: manufacturer.trim() || null,
+          model: model.trim() || null,
+          purchaseDate: purchaseDate.trim() || null,
+          notes: notes.trim() || null,
+        },
       });
       setSavedMsg(
         `Saved ${res.asset.name} with ${res.storedManualCount} manual${res.storedManualCount === 1 ? "" : "s"}.`,
@@ -199,6 +213,42 @@ export default function AiScanScreen() {
               onChangeText={setName}
               style={styles.input}
             />
+            <Text style={styles.label}>Manufacturer</Text>
+            <KeyboardAwareTextInput
+              value={manufacturer}
+              onChangeText={setManufacturer}
+              placeholder="e.g. iRobot"
+              placeholderTextColor="#8A9BB0"
+              style={styles.input}
+              autoCapitalize="words"
+            />
+            <Text style={styles.label}>Model</Text>
+            <KeyboardAwareTextInput
+              value={model}
+              onChangeText={setModel}
+              placeholder="e.g. Roomba 505X"
+              placeholderTextColor="#8A9BB0"
+              style={styles.input}
+            />
+            <Text style={styles.label}>Purchase date (YYYY-MM-DD)</Text>
+            <KeyboardAwareTextInput
+              value={purchaseDate}
+              onChangeText={setPurchaseDate}
+              placeholder="From Last purchased / receipt"
+              placeholderTextColor="#8A9BB0"
+              style={styles.input}
+              autoCapitalize="none"
+            />
+            <Text style={styles.label}>Notes</Text>
+            <KeyboardAwareTextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Price and other details"
+              placeholderTextColor="#8A9BB0"
+              style={[styles.input, styles.notesInput]}
+              multiline
+              textAlignVertical="top"
+            />
 
             <Text style={styles.sectionLabel}>Manuals to store</Text>
             {draft.manuals.map((manual) => {
@@ -287,6 +337,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: "#0B1B33",
+  },
+  notesInput: {
+    minHeight: 72,
   },
   meta: { marginTop: 8, fontSize: 13, color: "#5C6E84" },
   primaryBtn: {
