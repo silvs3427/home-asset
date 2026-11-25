@@ -1,5 +1,5 @@
 import { Redirect, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -22,7 +22,8 @@ import { colors } from "@/lib/theme";
 
 /**
  * View Assets for the current home. Search + category filter + optional
- * group-by-category. Categories are the homeowner's own tags (not a fixed list).
+ * group-by-category (accordion sections). Categories are the homeowner's own
+ * tags (not a fixed list).
  */
 export default function AssetsListScreen() {
   const router = useRouter();
@@ -34,6 +35,10 @@ export default function AssetsListScreen() {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [groupByCategory, setGroupByCategory] = useState(false);
+  /** Session expand state for category accordion keys (lowercase). */
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const load = useCallback(async () => {
     if (!accessToken || !activeProperty) {
@@ -123,6 +128,39 @@ export default function AssetsListScreen() {
       }),
     );
   }, [filtered, groupByCategory]);
+
+  // Seed / prune accordion expand state while grouping is on.
+  // Default: first category expanded so the phone isn't an empty wall of headers.
+  useEffect(() => {
+    if (!groupByCategory || !grouped || grouped.length === 0) return;
+    setExpandedCategories((prev) => {
+      const keys = grouped.map(([cat]) => cat.toLowerCase());
+      const keySet = new Set(keys);
+      if (prev.size === 0) {
+        return new Set([keys[0]]);
+      }
+      const pruned = new Set([...prev].filter((k) => keySet.has(k)));
+      if (pruned.size === 0) {
+        return new Set([keys[0]]);
+      }
+      if (
+        pruned.size === prev.size &&
+        [...prev].every((k) => pruned.has(k))
+      ) {
+        return prev;
+      }
+      return pruned;
+    });
+  }, [groupByCategory, grouped]);
+
+  const toggleCategoryExpanded = useCallback((catKey: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(catKey)) next.delete(catKey);
+      else next.add(catKey);
+      return next;
+    });
+  }, []);
 
   if (!user) {
     return <Redirect href="/sign-in" />;
@@ -221,7 +259,16 @@ export default function AssetsListScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ selected: groupByCategory }}
-            onPress={() => setGroupByCategory((v) => !v)}
+            onPress={() => {
+              setGroupByCategory((v) => {
+                const next = !v;
+                if (next) {
+                  // Fresh default (first group) when turning grouping on.
+                  setExpandedCategories(new Set());
+                }
+                return next;
+              });
+            }}
             style={[
               styles.groupToggle,
               groupByCategory && styles.groupToggleOn,
@@ -282,29 +329,49 @@ export default function AssetsListScreen() {
         ) : null}
 
         {!loading && grouped
-          ? grouped.map(([cat, items]) => (
-              <View key={cat.toLowerCase()} style={styles.group}>
-                <Text style={styles.groupHeading}>
-                  {categoryLabel(cat)}
-                  <Text style={styles.groupCount}> · {items.length}</Text>
-                </Text>
-                <View style={styles.list}>
-                  {items.map((asset) => (
-                    <AssetRow
-                      key={asset.id}
-                      asset={asset}
-                      hideCategory
-                      onPress={() =>
-                        router.push({
-                          pathname: "/assets/[id]",
-                          params: { id: asset.id },
-                        })
-                      }
-                    />
-                  ))}
+          ? grouped.map(([cat, items]) => {
+              const catKey = cat.toLowerCase();
+              const expanded = expandedCategories.has(catKey);
+              return (
+                <View key={catKey} style={styles.group}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded }}
+                    accessibilityLabel={`${categoryLabel(cat)}, ${items.length} assets`}
+                    onPress={() => toggleCategoryExpanded(catKey)}
+                    style={({ pressed }) => [
+                      styles.groupHeader,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.groupChevron} accessibilityElementsHidden>
+                      {expanded ? "▾" : "▸"}
+                    </Text>
+                    <Text style={styles.groupHeading}>
+                      {categoryLabel(cat)}
+                      <Text style={styles.groupCount}> · {items.length}</Text>
+                    </Text>
+                  </Pressable>
+                  {expanded ? (
+                    <View style={styles.groupList}>
+                      {items.map((asset) => (
+                        <AssetRow
+                          key={asset.id}
+                          asset={asset}
+                          hideCategory
+                          onPress={() =>
+                            router.push({
+                              pathname: "/assets/[id]",
+                              params: { id: asset.id },
+                            })
+                          }
+                        />
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
-              </View>
-            ))
+              );
+            })
           : null}
       </ScrollView>
     </SafeAreaView>
@@ -492,17 +559,37 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   group: {
-    marginTop: 20,
+    marginTop: 16,
+  },
+  groupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSoft,
+  },
+  groupChevron: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.accent,
+    width: 16,
+    textAlign: "center",
   },
   groupHeading: {
+    flex: 1,
     fontSize: 15,
     fontWeight: "700",
     color: colors.brand,
-    marginBottom: 4,
   },
   groupCount: {
     fontWeight: "600",
     color: colors.muted,
+  },
+  groupList: {
+    marginTop: 10,
+    gap: 10,
   },
   row: {
     borderWidth: 1,
