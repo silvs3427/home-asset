@@ -16,11 +16,15 @@
  * Android lock-screen push (FCM):
  * - Expo Go / local Metro: soft-omit android.googleServicesFile when the file
  *   is missing (push soft-disables in JS).
- * - EAS Android builds (preview/production/development): REQUIRE a usable
- *   google-services.json via EAS file env GOOGLE_SERVICES_JSON (visibility
- *   sensitive — needed for app.config resolution) or a local file. Fail the
- *   build loudly instead of shipping an APK without Firebase Messaging.
- * Escape hatch: ALLOW_MISSING_GOOGLE_SERVICES=1 (recovery builds only).
+ * - EAS Android preview / development: soft-omit + warn when missing so
+ *   founder preview APKs are not blocked on Firebase setup. Push stays
+ *   unavailable until a usable file is present.
+ * - EAS Android production: REQUIRE a usable google-services.json via EAS
+ *   file env GOOGLE_SERVICES_JSON (visibility sensitive — needed for
+ *   app.config resolution) or a local file. Fail the build loudly instead of
+ *   shipping a store APK without Firebase Messaging.
+ * Escape hatch (any profile): ALLOW_MISSING_GOOGLE_SERVICES=1.
+ * Force-require (any profile): REQUIRE_GOOGLE_SERVICES=1.
  * See README “Android lock-screen push (FCM)”.
  */
 const fs = require("fs");
@@ -44,8 +48,30 @@ function isEasAndroidBuild() {
   return isEasBuild() && process.env.EAS_BUILD_PLATFORM === "android";
 }
 
+function easBuildProfile() {
+  return (process.env.EAS_BUILD_PROFILE || "").trim();
+}
+
 function allowMissingGoogleServices() {
   return process.env.ALLOW_MISSING_GOOGLE_SERVICES === "1";
+}
+
+/**
+ * Hard-fail only when shipping production (or when explicitly forced).
+ * Preview/development soft-omit so Read app config does not die as
+ * “Unknown error” when GOOGLE_SERVICES_JSON is missing or secret-visibility.
+ */
+function requireGoogleServicesOnThisBuild() {
+  if (!isEasAndroidBuild()) {
+    return false;
+  }
+  if (allowMissingGoogleServices()) {
+    return false;
+  }
+  if (process.env.REQUIRE_GOOGLE_SERVICES === "1") {
+    return true;
+  }
+  return easBuildProfile() === "production";
 }
 
 /**
@@ -131,15 +157,26 @@ function materializeGoogleServicesFile(sourcePath) {
 }
 
 function failEasAndroidMissingGoogleServices(detail) {
+  const profile = easBuildProfile() || "unknown";
   throw new Error(
-    `[HomeAsset] Android EAS build requires a usable google-services.json so ` +
-      `Firebase Messaging is baked into the APK. ${detail} ` +
+    `[HomeAsset] Android EAS build (profile=${profile}) requires a usable ` +
+      `google-services.json so Firebase Messaging is baked into the APK. ${detail} ` +
       `Upload EAS file env GOOGLE_SERVICES_JSON with visibility **sensitive** ` +
-      `(not secret — secrets are unavailable when EAS CLI resolves app.config) ` +
-      `for this build's environment (development / preview / production), ` +
+      `(not secret — secrets are unavailable when EAS CLI resolves app.config), ` +
       `package name com.homeasset.app. Or place apps/mobile/google-services.json. ` +
-      `Temporary recovery only: ALLOW_MISSING_GOOGLE_SERVICES=1. ` +
+      `Temporary recovery: ALLOW_MISSING_GOOGLE_SERVICES=1. ` +
+      `Preview/development soft-omit when missing unless REQUIRE_GOOGLE_SERVICES=1. ` +
       `Steps: apps/mobile/README.md → Android lock-screen push (FCM).`,
+  );
+}
+
+function warnEasAndroidMissingGoogleServices(detail) {
+  console.warn(
+    `[HomeAsset] EAS Android (${easBuildProfile() || "unknown"} profile): ` +
+      `no usable google-services.json — omitting android.googleServicesFile. ` +
+      `${detail} Lock-screen push will soft-disable on this APK. ` +
+      `Upload GOOGLE_SERVICES_JSON (visibility **sensitive**) for push, ` +
+      `or set REQUIRE_GOOGLE_SERVICES=1 to fail the build instead.`,
   );
 }
 
@@ -158,10 +195,14 @@ function resolveGoogleServicesFile() {
     if (fromEnv.startsWith("{")) {
       const msg =
         "GOOGLE_SERVICES_JSON looks like raw JSON, not a file path. Use EAS env type=file.";
-      if (isEasAndroidBuild() && !allowMissingGoogleServices()) {
+      if (requireGoogleServicesOnThisBuild()) {
         failEasAndroidMissingGoogleServices(msg);
       }
-      console.warn(`[HomeAsset] ${msg} Omitting android.googleServicesFile.`);
+      if (isEasAndroidBuild()) {
+        warnEasAndroidMissingGoogleServices(msg);
+      } else {
+        console.warn(`[HomeAsset] ${msg} Omitting android.googleServicesFile.`);
+      }
       return undefined;
     }
     if (isUsableGoogleServicesFile(fromEnv, { required: true })) {
@@ -179,14 +220,17 @@ function resolveGoogleServicesFile() {
         return fromEnv;
       }
     }
-    if (isEasAndroidBuild() && !allowMissingGoogleServices()) {
-      failEasAndroidMissingGoogleServices(
-        `GOOGLE_SERVICES_JSON is set but the file is missing or invalid (${fromEnv}).`,
+    const invalidDetail = `GOOGLE_SERVICES_JSON is set but the file is missing or invalid (${fromEnv}).`;
+    if (requireGoogleServicesOnThisBuild()) {
+      failEasAndroidMissingGoogleServices(invalidDetail);
+    }
+    if (isEasAndroidBuild()) {
+      warnEasAndroidMissingGoogleServices(invalidDetail);
+    } else {
+      console.warn(
+        "[HomeAsset] GOOGLE_SERVICES_JSON unusable; omitting android.googleServicesFile so local/Expo Go can boot.",
       );
     }
-    console.warn(
-      "[HomeAsset] GOOGLE_SERVICES_JSON unusable; omitting android.googleServicesFile so local/Expo Go can boot.",
-    );
     return undefined;
   }
 
@@ -197,13 +241,16 @@ function resolveGoogleServicesFile() {
     return LOCAL_GOOGLE_SERVICES_REL;
   }
 
-  if (isEasAndroidBuild() && !allowMissingGoogleServices()) {
-    failEasAndroidMissingGoogleServices(
-      "Neither GOOGLE_SERVICES_JSON nor apps/mobile/google-services.json was found.",
-    );
+  const missingDetail =
+    "Neither GOOGLE_SERVICES_JSON nor apps/mobile/google-services.json was found.";
+  if (requireGoogleServicesOnThisBuild()) {
+    failEasAndroidMissingGoogleServices(missingDetail);
+  }
+  if (isEasAndroidBuild()) {
+    warnEasAndroidMissingGoogleServices(missingDetail);
   }
 
-  // Expo Go / local without Firebase: soft-omit (push soft-disables in JS).
+  // Expo Go / local / preview without Firebase: soft-omit (push soft-disables in JS).
   return undefined;
 }
 

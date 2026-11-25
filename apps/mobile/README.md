@@ -76,7 +76,8 @@ into the APK before **Register this phone for push** works. Without it you see:
 | Where | Missing `google-services.json` |
 | --- | --- |
 | **Expo Go / local Metro** | Soft-skip — app opens; push soft-disables; in-app notices still work |
-| **EAS Android APK/AAB** (`preview` / `production` / `development`) | **Build fails** until a usable file is provided (so we never ship another APK without FCM by accident) |
+| **EAS Android `preview` / `development`** | Soft-skip + warn — APK builds; Register for push stays unavailable until a usable file is baked in |
+| **EAS Android `production`** | **Build fails** until a usable file is provided (so we do not ship a store build without FCM) |
 
 **New phone install required** after a valid file is baked in (native FCM
 config). In-app Notifications still work on the old install.
@@ -94,12 +95,11 @@ That is a phone install / native crash, not “Register for push.” Try in orde
 2. **Uninstall and reinstall the last APK that worked** — delete HomeAsset,
    install the older preview APK from your Expo builds page (not a brand-new
    build). Confirm it stays open.
-3. **Temporary no-FCM recovery build only** — set EAS env
-   `ALLOW_MISSING_GOOGLE_SERVICES=1` for **preview**, rebuild, install. App
-   should open; Register for push stays unavailable. Remove that flag before
-   the real FCM rebuild.
+3. **Preview without FCM is already allowed** — rebuild preview; app should
+   open; Register for push stays unavailable until steps A–D. For a
+   **production** recovery only, set EAS env `ALLOW_MISSING_GOOGLE_SERVICES=1`.
 4. Only after the app opens reliably, finish Firebase steps A–D below and
-   rebuild once more for lock-screen push (without the allow-missing flag).
+   rebuild once more for lock-screen push.
 
 There are **two** Firebase pieces (easy to mix up):
 
@@ -180,9 +180,10 @@ cd apps\mobile
 npx eas-cli@latest build -p android --profile preview
 ```
 
-If the build fails with “requires a usable google-services.json”, fix step B
-(sensitive file env for **preview**) and run the build again — do not install
-an older APK expecting push to work.
+If a **production** build fails with “requires a usable google-services.json”,
+fix step B (sensitive file env for **production**) and run again. Preview
+builds without the file still succeed; push stays off until you rebuild with
+step B.
 
 When the build finishes, install the **new** APK (uninstall the old HomeAsset
 preview first if the phone keeps the old one). Then:
