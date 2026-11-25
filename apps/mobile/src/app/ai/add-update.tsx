@@ -7,7 +7,7 @@ import { colors } from "@/lib/theme";
 
 /**
  * Home → Add or Update an Asset.
- * Scan / PDF / free-text AI format — all approve-before-official.
+ * Scan / order email or PDF / PDF / free-text AI format — all approve-before-official.
  */
 export default function AddOrUpdateAssetScreen() {
   const router = useRouter();
@@ -38,7 +38,25 @@ export default function AddOrUpdateAssetScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push({ pathname: "/ai/asset-intake", params: { mode: "pdf" } })}
+          onPress={() =>
+            router.push({
+              pathname: "/ai/asset-intake",
+              params: { mode: "purchase" },
+            })
+          }
+          style={({ pressed }) => [
+            styles.secondaryBtn,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.secondaryLabel}>Order email or PDF</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            router.push({ pathname: "/ai/asset-intake", params: { mode: "pdf" } })
+          }
           style={({ pressed }) => [
             styles.secondaryBtn,
             pressed && styles.pressed,

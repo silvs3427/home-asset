@@ -1889,6 +1889,114 @@ describe("HomeAsset API — email + permit intake (D18)", () => {
     assert.equal(reuse.status, 404);
   });
 
+  it("drafts retailer order email purchase fields and attaches source on confirm", async () => {
+    process.env.AI_FORCE_MOCK = "1";
+    const app = createApp();
+    const auth = await signup(app, "purchase-email@example.com");
+    const home = await createHome(app, auth.accessToken, "Purchase Inbox Home");
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${auth.accessToken}`,
+    };
+    const orderEmail = [
+      "From: auto-confirm@amazon.com",
+      "Subject: Your Amazon.com order of iRobot Roomba 505X",
+      "",
+      "Ordered on Oct 6, 2026",
+      "Item: iRobot Roomba 505X Robot Vacuum & Mop Combo",
+      "Total: $469.99",
+    ].join("\n");
+
+    const intake = await app.request(
+      `/properties/${home.id}/ai/asset-intake`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          sourceKind: "email",
+          text: orderEmail,
+        }),
+      },
+    );
+    assert.equal(intake.status, 200);
+    const intakeBody = (await intake.json()) as {
+      draft: {
+        draftId: string;
+        privacy: { writes: boolean; confirmRequired: boolean };
+        suggestedAsset: {
+          name: string;
+          category: string;
+          manufacturer: string | null;
+          model: string | null;
+          purchaseDate: string | null;
+          installDate: string | null;
+          installerVendor: string | null;
+          notes: string | null;
+          serial: string | null;
+          location: string | null;
+          warrantyEndDate: string | null;
+          warrantyTerm: string | null;
+        };
+      };
+    };
+    assert.equal(intakeBody.draft.privacy.writes, false);
+    assert.equal(intakeBody.draft.suggestedAsset.purchaseDate, "2026-10-06");
+    assert.match(
+      intakeBody.draft.suggestedAsset.notes ?? "",
+      /Purchase price:\s*\$469\.99/i,
+    );
+    assert.equal(intakeBody.draft.suggestedAsset.installerVendor, null);
+
+    const mid = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: headers.authorization },
+    });
+    assert.equal(
+      ((await mid.json()) as { assets: unknown[] }).assets.length,
+      0,
+    );
+
+    const confirm = await app.request(
+      `/properties/${home.id}/ai/confirm-asset-intake`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          draftId: intakeBody.draft.draftId,
+          intent: "add",
+          attachSourceDocument: true,
+          assetOverrides: {
+            ...intakeBody.draft.suggestedAsset,
+            name: "Roomba 505X",
+            category: "Robot vacuum",
+            manufacturer: "iRobot",
+            model: "Roomba 505X",
+          },
+        }),
+      },
+    );
+    assert.equal(confirm.status, 200);
+    const confirmBody = (await confirm.json()) as {
+      asset: {
+        id: string;
+        purchaseDate: string | null;
+        manufacturer: string | null;
+      };
+      sourceDocument: {
+        id: string;
+        docType: string;
+        title: string;
+        assetId: string | null;
+      } | null;
+      privacy: { confirmedByUser: boolean };
+    };
+    assert.equal(confirmBody.privacy.confirmedByUser, true);
+    assert.equal(confirmBody.asset.purchaseDate, "2026-10-06");
+    assert.equal(confirmBody.asset.manufacturer, "iRobot");
+    assert.ok(confirmBody.sourceDocument);
+    assert.equal(confirmBody.sourceDocument?.docType, "receipt");
+    assert.equal(confirmBody.sourceDocument?.assetId, confirmBody.asset.id);
+  });
+
   it("drafts email intake without writing, then confirms selected assets", async () => {
     process.env.AI_FORCE_MOCK = "1";
     const app = createApp();

@@ -34,24 +34,36 @@ import {
 } from "@/lib/documents";
 import { colors } from "@/lib/theme";
 
-type Mode = "pick" | "paste" | "pdf";
+type Mode = "pick" | "paste" | "pdf" | "purchase";
 
 /**
- * Multi-source asset intake (photo / PDF / email / notes).
+ * Multi-source asset intake (photo / PDF / order email / notes).
  * Draft → homeowner confirm — AI never writes the ledger silently.
+ * Purchase slice: paste retailer order email and/or attach invoice PDF.
  */
 export default function AssetIntakeScreen() {
   const router = useRouter();
   const { mode: modeParam } = useLocalSearchParams<{ mode?: string }>();
   const { user, accessToken, activeProperty } = useAuth();
-  const [mode, setMode] = useState<Mode>(
-    modeParam === "pdf" ? "pdf" : "pick",
+  const initialMode: Mode =
+    modeParam === "pdf"
+      ? "pdf"
+      : modeParam === "purchase"
+        ? "purchase"
+        : "pick";
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [sourceKind, setSourceKind] = useState<AssetIntakeSourceKind>(
+    modeParam === "pdf" || modeParam === "purchase" ? "invoice" : "email",
   );
-  const [sourceKind, setSourceKind] =
-    useState<AssetIntakeSourceKind>("email");
   const [pasteText, setPasteText] = useState("");
   const [photoName, setPhotoName] = useState<string | null>(null);
   const [pdfName, setPdfName] = useState<string | null>(null);
+  const [heldMedia, setHeldMedia] = useState<{
+    base64: string;
+    mimeType: string;
+    filename: string;
+  } | null>(null);
+  const [attachSource, setAttachSource] = useState(true);
   const [draft, setDraft] = useState<AssetIntakeDraft | null>(null);
   const [intent, setIntent] = useState<"add" | "update">("add");
   const [fields, setFields] = useState<AssetIntakeSuggested | null>(null);
@@ -62,11 +74,16 @@ export default function AssetIntakeScreen() {
     if (modeParam === "pdf") {
       setMode("pdf");
       setSourceKind("invoice");
+    } else if (modeParam === "purchase") {
+      setMode("purchase");
+      setSourceKind("email");
     }
   }, [modeParam]);
 
   if (!user) return <Redirect href="/sign-in" />;
   if (!activeProperty) return <Redirect href="/home" />;
+
+  const purchaseFocused = mode === "purchase" || modeParam === "purchase";
 
   function applyDraft(next: AssetIntakeDraft) {
     setDraft(next);
@@ -111,6 +128,11 @@ export default function AssetIntakeScreen() {
       }
       setPhotoName(picked.name);
       setPdfName(null);
+      setHeldMedia({
+        base64: picked.base64,
+        mimeType: picked.mimeType || "image/jpeg",
+        filename: picked.name,
+      });
       setMode("pick");
       await runIntake({
         sourceKind: "photo",
@@ -137,7 +159,12 @@ export default function AssetIntakeScreen() {
       }
       setPdfName(picked.name);
       setPhotoName(null);
-      setMode("pdf");
+      setHeldMedia({
+        base64: picked.base64,
+        mimeType: picked.mimeType || "application/pdf",
+        filename: picked.name,
+      });
+      setMode(purchaseFocused ? "purchase" : "pdf");
       setSourceKind("invoice");
       await runIntake({
         sourceKind: "invoice",
@@ -145,7 +172,9 @@ export default function AssetIntakeScreen() {
         imageBase64: picked.base64,
         mediaMimeType: picked.mimeType || "application/pdf",
         text: pasteText.trim() || null,
-        hint: "PDF invoice or paperwork",
+        hint: purchaseFocused
+          ? "Retailer order email PDF export or purchase invoice/receipt"
+          : "PDF invoice or paperwork",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open PDF.");
@@ -154,11 +183,25 @@ export default function AssetIntakeScreen() {
 
   async function onPasteDraft() {
     const text = pasteText.trim();
-    if (text.length < 12) {
-      setError("Paste a bit more of the email, invoice, or notes.");
+    if (text.length < 12 && !heldMedia) {
+      setError("Paste a bit more of the order email, invoice, or notes.");
       return;
     }
-    await runIntake({ sourceKind, text });
+    const kind: AssetIntakeSourceKind = purchaseFocused
+      ? heldMedia?.mimeType?.includes("pdf")
+        ? "invoice"
+        : "email"
+      : sourceKind;
+    await runIntake({
+      sourceKind: kind,
+      text: text || null,
+      filename: heldMedia?.filename ?? null,
+      imageBase64: heldMedia?.base64 ?? null,
+      mediaMimeType: heldMedia?.mimeType ?? null,
+      hint: purchaseFocused
+        ? "Retailer order email and/or purchase invoice"
+        : null,
+    });
   }
 
   function patchField<K extends keyof AssetIntakeSuggested>(
@@ -185,10 +228,11 @@ export default function AssetIntakeScreen() {
         draftId: draft.draftId,
         intent,
         matchedAssetId: draft.matchedAssetId,
+        attachSourceDocument: attachSource,
         assetOverrides: {
           ...fields,
           name: fields.name.trim(),
-          category: normalizeLabelValue(fields.category),
+          category: normalizeLabelValue(fields.category) as AssetCategory,
           manufacturer: fields.manufacturer?.trim() || null,
           model: fields.model?.trim() || null,
           serial: fields.serial?.trim() || null,
@@ -198,12 +242,11 @@ export default function AssetIntakeScreen() {
           installerContractorId: fields.installerContractorId ?? null,
           location: fields.location?.trim() || null,
           notes: fields.notes?.trim() || null,
-          warrantyEndDate: fields.warrantyEndDate?.trim() || null,
-          warrantyTerm: fields.warrantyTerm?.trim() || null,
         },
       });
       setDraft(null);
       setFields(null);
+      setHeldMedia(null);
       const manualsPath = manualsSuggestPath({
         assetId: res.asset.id,
         manufacturer: res.asset.manufacturer ?? fields.manufacturer,
@@ -222,121 +265,186 @@ export default function AssetIntakeScreen() {
   }
 
   const missingKeys = new Set((draft?.missingFields ?? []).map((m) => m.key));
+  const emailPlaceholder = purchaseFocused
+    ? "Paste Amazon / retailer order email…\nSubject: Your Amazon.com order…\nOrdered on Oct 6, 2026…"
+    : sourceKind === "email"
+      ? "Paste contractor or order email…"
+      : sourceKind === "invoice"
+        ? "Paste invoice or receipt text…"
+        : "Paste notes…";
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="Add or update" />
+      <ScreenHeader
+        title={purchaseFocused ? "Order email / PDF" : "Add or update"}
+      />
 
       <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {!draft ? (
           <>
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy}
-              onPress={() => {
-                void onPhoto("camera");
-              }}
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.primaryLabel}>Photo of label</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy}
-              onPress={() => {
-                void onPhoto("library");
-              }}
-              style={({ pressed }) => [
-                styles.secondaryBtn,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.secondaryLabel}>
-                Photo or purchase screenshot
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy}
-              onPress={() => {
-                void onPdf();
-              }}
-              style={({ pressed }) => [
-                styles.secondaryBtn,
-                pressed && styles.pressed,
-                busy ? styles.disabled : null,
-              ]}
-            >
-              <Text style={styles.secondaryLabel}>Upload a PDF</Text>
-            </Pressable>
-            {photoName ? (
-              <Text style={styles.meta}>Photo: {photoName}</Text>
-            ) : null}
-            {pdfName ? (
-              <Text style={styles.meta}>PDF: {pdfName}</Text>
-            ) : null}
+            {purchaseFocused ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => {
+                    void onPdf();
+                  }}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    pressed && styles.pressed,
+                    busy ? styles.disabled : null,
+                  ]}
+                >
+                  <Text style={styles.primaryLabel}>
+                    Upload order / invoice PDF
+                  </Text>
+                </Pressable>
+                {pdfName ? (
+                  <Text style={styles.meta}>PDF: {pdfName}</Text>
+                ) : null}
 
-            <Text style={styles.label}>Or paste</Text>
-            <View style={styles.chips}>
-              {(
-                [
-                  ["email", "Email"],
-                  ["invoice", "Invoice"],
-                  ["notes", "Notes"],
-                ] as const
-              ).map(([value, label]) => {
-                const on = sourceKind === value && mode === "paste";
-                return (
-                  <Pressable
-                    key={value}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      setMode("paste");
-                      setSourceKind(value);
-                    }}
-                    style={[styles.chip, on && styles.chipOn]}
-                  >
-                    <Text style={[styles.chipLabel, on && styles.chipLabelOn]}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <KeyboardAwareTextInput
-              value={pasteText}
-              onChangeText={setPasteText}
-              placeholder={
-                sourceKind === "email"
-                  ? "Paste contractor email…"
-                  : sourceKind === "invoice"
-                    ? "Paste invoice or receipt text…"
-                    : "Paste notes…"
-              }
-              placeholderTextColor={colors.placeholder}
-              style={[styles.input, styles.multiline]}
-              multiline
-              textAlignVertical="top"
-              autoCapitalize="sentences"
-              onFocus={() => setMode("paste")}
-            />
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy || pasteText.trim().length < 12}
-              onPress={() => {
-                void onPasteDraft();
-              }}
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                pressed && styles.pressed,
-                busy || pasteText.trim().length < 12 ? styles.disabled : null,
-              ]}
-            >
-              <Text style={styles.primaryLabel}>Draft asset</Text>
-            </Pressable>
+                <Text style={styles.label}>Or paste order email</Text>
+                <KeyboardAwareTextInput
+                  value={pasteText}
+                  onChangeText={setPasteText}
+                  placeholder={emailPlaceholder}
+                  placeholderTextColor={colors.placeholder}
+                  style={[styles.input, styles.multiline]}
+                  multiline
+                  textAlignVertical="top"
+                  autoCapitalize="sentences"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={
+                    busy ||
+                    (pasteText.trim().length < 12 && !heldMedia)
+                  }
+                  onPress={() => {
+                    void onPasteDraft();
+                  }}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                    busy ||
+                    (pasteText.trim().length < 12 && !heldMedia)
+                      ? styles.disabled
+                      : null,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>Draft asset</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => {
+                    void onPhoto("camera");
+                  }}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.primaryLabel}>Photo of label</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => {
+                    void onPhoto("library");
+                  }}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>
+                    Photo or purchase screenshot
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => {
+                    void onPdf();
+                  }}
+                  style={({ pressed }) => [
+                    styles.secondaryBtn,
+                    pressed && styles.pressed,
+                    busy ? styles.disabled : null,
+                  ]}
+                >
+                  <Text style={styles.secondaryLabel}>Upload a PDF</Text>
+                </Pressable>
+                {photoName ? (
+                  <Text style={styles.meta}>Photo: {photoName}</Text>
+                ) : null}
+                {pdfName ? (
+                  <Text style={styles.meta}>PDF: {pdfName}</Text>
+                ) : null}
+
+                <Text style={styles.label}>Or paste</Text>
+                <View style={styles.chips}>
+                  {(
+                    [
+                      ["email", "Email"],
+                      ["invoice", "Invoice"],
+                      ["notes", "Notes"],
+                    ] as const
+                  ).map(([value, label]) => {
+                    const on = sourceKind === value && mode === "paste";
+                    return (
+                      <Pressable
+                        key={value}
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setMode("paste");
+                          setSourceKind(value);
+                        }}
+                        style={[styles.chip, on && styles.chipOn]}
+                      >
+                        <Text
+                          style={[styles.chipLabel, on && styles.chipLabelOn]}
+                        >
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <KeyboardAwareTextInput
+                  value={pasteText}
+                  onChangeText={setPasteText}
+                  placeholder={emailPlaceholder}
+                  placeholderTextColor={colors.placeholder}
+                  style={[styles.input, styles.multiline]}
+                  multiline
+                  textAlignVertical="top"
+                  autoCapitalize="sentences"
+                  onFocus={() => setMode("paste")}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy || pasteText.trim().length < 12}
+                  onPress={() => {
+                    void onPasteDraft();
+                  }}
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    pressed && styles.pressed,
+                    busy || pasteText.trim().length < 12
+                      ? styles.disabled
+                      : null,
+                  ]}
+                >
+                  <Text style={styles.primaryLabel}>Draft asset</Text>
+                </Pressable>
+              </>
+            )}
           </>
         ) : null}
 
@@ -440,6 +548,13 @@ export default function AssetIntakeScreen() {
               highlight={missingKeys.has("model")}
             />
             <Field
+              label="Purchase date"
+              value={fields.purchaseDate ?? ""}
+              onChangeText={(v) => patchField("purchaseDate", v)}
+              placeholder="YYYY-MM-DD"
+              highlight={missingKeys.has("purchaseDate")}
+            />
+            <Field
               label="Serial"
               value={fields.serial ?? ""}
               onChangeText={(v) => patchField("serial", v)}
@@ -485,7 +600,20 @@ export default function AssetIntakeScreen() {
               value={fields.notes ?? ""}
               onChangeText={(v) => patchField("notes", v)}
               multiline
+              placeholder="Price and other details"
             />
+
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: attachSource }}
+              onPress={() => setAttachSource((v) => !v)}
+              style={[styles.attachRow, attachSource && styles.attachRowOn]}
+            >
+              <Text style={styles.attachCheck}>{attachSource ? "✓" : "○"}</Text>
+              <Text style={styles.attachLabel}>
+                Attach source email / PDF to this asset when I confirm
+              </Text>
+            </Pressable>
 
             <Pressable
               accessibilityRole="button"
@@ -553,22 +681,6 @@ function Field(props: {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  back: {
-    color: colors.brandMuted,
-    fontSize: 14,
-    fontWeight: "600",
-    width: 56,
-  },
-  brand: { fontSize: 18, fontWeight: "700", color: colors.brand },
-  headerSpacer: { width: 56 },
   body: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 },
   label: {
     marginTop: 14,
@@ -656,6 +768,33 @@ const styles = StyleSheet.create({
   },
   gapLine: {
     marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.copy,
+  },
+  attachRow: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  attachRowOn: {
+    borderColor: colors.accent,
+  },
+  attachCheck: {
+    fontSize: 16,
+    color: colors.accent,
+    fontWeight: "700",
+    marginTop: 1,
+  },
+  attachLabel: {
+    flex: 1,
     fontSize: 14,
     lineHeight: 20,
     color: colors.copy,

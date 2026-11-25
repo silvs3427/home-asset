@@ -743,6 +743,10 @@ aiRoutes.post("/asset-intake", async (c) => {
       confidence: formatted.confidence,
       suggestedAsset: formatted.suggestedAsset,
       missingFields: formatted.missingFields,
+      sourceText: text,
+      sourceFilename: filename,
+      sourceMediaBase64: imageBase64,
+      sourceMediaMimeType: mediaMimeType,
     });
     return c.json({
       draft: toPublicAssetIntakeDraft(draft),
@@ -757,6 +761,8 @@ const confirmAssetIntakeSchema = z.object({
   draftId: z.string().uuid(),
   intent: z.enum(["add", "update"]),
   matchedAssetId: z.string().uuid().optional().nullable(),
+  /** When true (default), store the pasted email / PDF / photo on the asset after approve. */
+  attachSourceDocument: z.boolean().optional().default(true),
   assetOverrides: z.object({
     name: z.string().trim().min(1).max(120),
     category: openCategorySchema,
@@ -824,23 +830,36 @@ aiRoutes.post("/confirm-asset-intake", async (c) => {
 
     const matchedId =
       parsed.data.matchedAssetId ?? draft.matchedAssetId ?? null;
-    if (parsed.data.intent === "update" && matchedId) {
-      const asset = updateAsset(matchedId, propertyId, claims.sub, payload);
-      return c.json({
-        asset: toPublicAsset(asset),
-        intent: "update" as const,
-        privacy: {
-          writes: true,
-          confirmedByUser: true,
-          note: "Updated only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
-        },
+    const asset =
+      parsed.data.intent === "update" && matchedId
+        ? updateAsset(matchedId, propertyId, claims.sub, payload)
+        : createAsset(propertyId, claims.sub, payload);
+    const intent =
+      parsed.data.intent === "update" && matchedId
+        ? ("update" as const)
+        : ("add" as const);
+
+    let sourceDocument = null;
+    if (parsed.data.attachSourceDocument !== false) {
+      sourceDocument = await storeAssetIntakeSourceDocument({
+        propertyId,
+        ownerUserId: claims.sub,
+        assetId: asset.id,
+        sourceKind: draft.sourceKind,
+        sourceText: draft.sourceText,
+        sourceFilename: draft.sourceFilename,
+        sourceMediaBase64: draft.sourceMediaBase64,
+        sourceMediaMimeType: draft.sourceMediaMimeType,
+        purchaseDate: payload.purchaseDate,
       });
     }
 
-    const asset = createAsset(propertyId, claims.sub, payload);
     return c.json({
       asset: toPublicAsset(asset),
-      intent: "add" as const,
+      intent,
+      sourceDocument: sourceDocument
+        ? toPublicDocument(sourceDocument)
+        : null,
       privacy: {
         writes: true,
         confirmedByUser: true,
@@ -851,6 +870,82 @@ aiRoutes.post("/confirm-asset-intake", async (c) => {
     return mapAiError(err, c);
   }
 });
+
+async function storeAssetIntakeSourceDocument(input: {
+  propertyId: string;
+  ownerUserId: string;
+  assetId: string;
+  sourceKind: "photo" | "email" | "invoice" | "notes";
+  sourceText: string | null;
+  sourceFilename: string | null;
+  sourceMediaBase64: string | null;
+  sourceMediaMimeType: string | null;
+  purchaseDate: string | null;
+}) {
+  const docDate =
+    input.purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(input.purchaseDate)
+      ? input.purchaseDate
+      : null;
+  if (input.sourceMediaBase64 && input.sourceMediaMimeType) {
+    const bytes = Buffer.from(input.sourceMediaBase64, "base64");
+    if (bytes.byteLength === 0) return null;
+    const mime = input.sourceMediaMimeType.toLowerCase();
+    const isPdf = mime === "application/pdf" || mime.includes("pdf");
+    const isImage = mime.startsWith("image/");
+    const ext = isPdf
+      ? "pdf"
+      : mime.includes("png")
+        ? "png"
+        : mime.includes("webp")
+          ? "webp"
+          : "jpg";
+    const filename =
+      input.sourceFilename?.trim() ||
+      `purchase-source-${Date.now()}.${ext}`;
+    return createDocument(input.propertyId, input.ownerUserId, {
+      title: isPdf
+        ? `Purchase PDF: ${filename}`
+        : `Purchase photo: ${filename}`,
+      docType: isPdf ? "receipt" : isImage ? "photo" : "receipt",
+      documentDate: docDate,
+      source: "ai_fetched",
+      assetId: input.assetId,
+      mimeType: input.sourceMediaMimeType,
+      originalFilename: filename,
+      bytes,
+    });
+  }
+  if (input.sourceText && input.sourceText.trim().length >= 12) {
+    const bodyText = [
+      "HomeAsset purchase / order source",
+      "",
+      `Source kind: ${input.sourceKind}`,
+      input.sourceFilename ? `Filename: ${input.sourceFilename}` : null,
+      "",
+      "---",
+      "Original pasted text (homeowner-provided):",
+      input.sourceText.trim(),
+    ]
+      .filter((line) => line != null)
+      .join("\n");
+    return createDocument(input.propertyId, input.ownerUserId, {
+      title:
+        input.sourceKind === "email"
+          ? "Order email (pasted)"
+          : input.sourceKind === "invoice"
+            ? "Invoice / receipt (pasted)"
+            : "Purchase notes (pasted)",
+      docType: "receipt",
+      documentDate: docDate,
+      source: "ai_fetched",
+      assetId: input.assetId,
+      mimeType: "text/plain",
+      originalFilename: "purchase-source.txt",
+      bytes: Buffer.from(bodyText, "utf8"),
+    });
+  }
+  return null;
+}
 
 /**
  * POST /properties/:propertyId/ai/permits/suggest

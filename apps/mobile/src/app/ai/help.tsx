@@ -135,6 +135,25 @@ export default function AskHomeAssetScreen() {
                 Draft from photo or screenshot
               </Text>
             </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={() => {
+                router.push({
+                  pathname: "/ai/asset-intake",
+                  params: { mode: "purchase" },
+                });
+              }}
+              style={({ pressed }) => [
+                styles.secondaryBtn,
+                pressed && styles.pressed,
+                busy && styles.disabled,
+              ]}
+            >
+              <Text style={styles.secondaryLabel}>
+                Draft from order email or PDF
+              </Text>
+            </Pressable>
             {voiceName ? (
               <View style={styles.voiceRow}>
                 <Text style={styles.meta} numberOfLines={1}>

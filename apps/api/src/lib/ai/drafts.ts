@@ -72,6 +72,11 @@ export type AssetIntakeDraftRecord = {
   confidence: number;
   suggestedAsset: AssetIntakeSuggestedFields;
   missingFields: AssetIntakeMissingField[];
+  /** Held until confirm so we can attach the source email/PDF/photo after approve. */
+  sourceText: string | null;
+  sourceFilename: string | null;
+  sourceMediaBase64: string | null;
+  sourceMediaMimeType: string | null;
   createdAt: string;
   expiresAt: string;
 };
@@ -274,6 +279,10 @@ export function createAssetIntakeDraft(input: {
   confidence: number;
   suggestedAsset: AssetIntakeSuggestedFields;
   missingFields: AssetIntakeMissingField[];
+  sourceText?: string | null;
+  sourceFilename?: string | null;
+  sourceMediaBase64?: string | null;
+  sourceMediaMimeType?: string | null;
 }): AssetIntakeDraftRecord {
   pruneExpired();
   const now = Date.now();
@@ -290,6 +299,10 @@ export function createAssetIntakeDraft(input: {
     confidence: input.confidence,
     suggestedAsset: input.suggestedAsset,
     missingFields: input.missingFields,
+    sourceText: input.sourceText?.trim() || null,
+    sourceFilename: input.sourceFilename?.trim() || null,
+    sourceMediaBase64: input.sourceMediaBase64?.trim() || null,
+    sourceMediaMimeType: input.sourceMediaMimeType?.trim() || null,
     createdAt: new Date(now).toISOString(),
     expiresAt: new Date(now + TTL_MS).toISOString(),
   };
