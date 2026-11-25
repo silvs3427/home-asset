@@ -90,7 +90,7 @@ export function burstLimitMessage(route = "ai-assist"): string {
   if (route === "support-assist") {
     return "Support needs a short pause — too many messages in a minute. Try again in a moment.";
   }
-  return "Ask HomeAsset needs a short pause — too many asks in a minute. Try again in a moment.";
+  return "HomeAsset needs a short pause — too many asks in a minute. Try again in a moment.";
 }
 
 export function dailyCapMessage(dailyCap: number, route = "ai-assist"): string {
@@ -101,8 +101,8 @@ export function dailyCapMessage(dailyCap: number, route = "ai-assist"): string {
     );
   }
   return (
-    `You've reached today's Ask HomeAsset limit (${dailyCap} asks). ` +
-    "It resets tomorrow (UTC). Ask HomeAsset is for home help only — not unlimited AI."
+    `You've reached today's HomeAsset limit (${dailyCap} asks). ` +
+    "It resets tomorrow (UTC). HomeAsset is for home help only — not unlimited AI."
   );
 }
 

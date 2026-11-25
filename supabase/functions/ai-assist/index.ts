@@ -267,7 +267,7 @@ Deno.serve(async (req) => {
         code: "off_topic",
         answer: topic.message,
         escalate: false,
-        nextSteps: ["Home → Ask HomeAsset for ledger help"],
+        nextSteps: ["Home → HomeAsset for ledger help"],
         privacy: {
           writes: false,
           note: "Support replies never change your ledger or account settings.",
@@ -312,8 +312,8 @@ Deno.serve(async (req) => {
           ? `You've reached today's Support limit (${rate.dailyCap} messages).`
           : "Support needs a short pause — try again in a moment."
         : rate.reason === "daily_cap"
-          ? `You've reached today's Ask HomeAsset limit (${rate.dailyCap} asks).`
-          : "Ask HomeAsset needs a short pause — try again in a moment.";
+          ? `You've reached today's HomeAsset limit (${rate.dailyCap} asks).`
+          : "HomeAsset needs a short pause — try again in a moment.";
     return errorResponse(429, code, rate.message ?? fallback, {
       extra: {
         retry_after: rate.retryAfterSeconds,
@@ -341,12 +341,12 @@ Deno.serve(async (req) => {
             fetchManual: true,
             permitsSuggest: true,
             submitToLedger: false,
-            note: "Confirm / approve writes happen on the phone via Supabase RLS — never silently. Support is separate from Ask HomeAsset.",
+            note: "Confirm / approve writes happen on the phone via Supabase RLS — never silently. Support is separate from HomeAsset entry.",
           },
           limits: {
             burstLimit: rate.burstLimit,
             dailyCap: rate.dailyCap,
-            note: "Server-enforced per signed-in user. Ask HomeAsset = home help; Support = app/account help — separate caps, not unlimited AI.",
+            note: "Server-enforced per signed-in user. HomeAsset = home help; Support = app/account help — separate caps, not unlimited AI.",
           },
           privacy: {
             writes: false,
@@ -1002,7 +1002,7 @@ function unidentifiedScanResult(
     raw && !looksLikeGenericFilename(raw) ? raw : "Unidentified asset";
   const notes =
     opts?.notes?.trim() ||
-    "Ask HomeAsset could not confidently identify brand or model from what you sent. Enter make and model, then confirm — nothing is saved until you do.";
+    "HomeAsset could not confidently identify brand or model from what you sent. Enter make and model, then confirm — nothing is saved until you do.";
   return {
     mode,
     catalogProduct: {
@@ -1337,7 +1337,7 @@ async function identifyProduct(input: {
             vision.notes ??
             (vision.unsure
               ? "Low confidence — please confirm brand and model before saving."
-              : "Identified via Ask HomeAsset from your photo or purchase screenshot. Confirm before saving."),
+              : "Identified via HomeAsset from your photo or purchase screenshot. Confirm before saving."),
         },
         manuals,
       };
@@ -1349,7 +1349,7 @@ async function identifyProduct(input: {
       input.live.mode === "live" ? "live" : "mock",
       {
         notes: hasMedia
-          ? "Ask HomeAsset could not read brand or model from that photo or purchase screenshot. Enter make and model, then confirm — nothing is saved until you do."
+          ? "HomeAsset could not read brand or model from that photo or purchase screenshot. Enter make and model, then confirm — nothing is saved until you do."
           : undefined,
       },
     );
@@ -2119,10 +2119,10 @@ async function formatAssetIntake(input: {
         ? from
         : null;
   let notes: string | null = hasMedia
-    ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (mock — live vision unavailable). Enter brand and model if blank, then confirm.`
+    ? `Drafted from ${input.sourceKind} attachment via HomeAsset (mock — live vision unavailable). Enter brand and model if blank, then confirm.`
     : purchaseHints.looksLikeRetailPurchase
-      ? `Drafted from retailer ${input.sourceKind} via Ask HomeAsset (mock). Enter brand and model if blank, then confirm.`
-      : `Drafted from ${input.sourceKind} via Ask HomeAsset (mock). Enter brand and model if blank, then confirm.`;
+      ? `Drafted from retailer ${input.sourceKind} via HomeAsset (mock). Enter brand and model if blank, then confirm.`
+      : `Drafted from ${input.sourceKind} via HomeAsset (mock). Enter brand and model if blank, then confirm.`;
   notes = mergePriceIntoNotes(notes, purchaseHints.price);
   const suggestedAsset: AssetIntakeSuggested = {
     name: product?.name ?? "Unidentified asset",
@@ -2659,7 +2659,7 @@ async function answerReminderSchedule(input: {
   } else {
     lines.push(
       "This home has no upcoming maintenance reminders saved.",
-      "Add one from Notifications → Add reminder. Ask HomeAsset only lists reminders you already saved — it does not invent them.",
+      "Add one from Notifications → Add reminder. HomeAsset only lists reminders you already saved — it does not invent them.",
     );
   }
 

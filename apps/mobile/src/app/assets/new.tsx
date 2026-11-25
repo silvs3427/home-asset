@@ -32,7 +32,7 @@ function asCategory(value: string | null | undefined): AssetCategory {
 
 /**
  * Create an asset on the current home.
- * Primary path: free-text → Format with Ask HomeAsset → edit draft fields → Save.
+ * Primary path: free-text → Format with HomeAsset → edit draft fields → Save.
  * AI never writes the ledger; Save is the homeowner confirm.
  */
 export default function NewAssetScreen() {
@@ -106,7 +106,7 @@ export default function NewAssetScreen() {
       setError(
         err instanceof Error
           ? err.message
-          : "Ask HomeAsset could not format that.",
+          : "HomeAsset could not format that.",
       );
     } finally {
       setFormatting(false);
@@ -194,7 +194,7 @@ export default function NewAssetScreen() {
             <ActivityIndicator color={colors.brand} />
           ) : (
             <Text style={styles.secondaryLabel}>
-              Format with Ask HomeAsset
+              Format with HomeAsset
             </Text>
           )}
         </Pressable>

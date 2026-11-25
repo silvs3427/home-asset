@@ -19,7 +19,7 @@ import { colors } from "@/lib/theme";
 
 /**
  * AI customer support — Settings → Support.
- * Warm app/account help; distinct from Ask HomeAsset ledger Q&A.
+ * Warm app/account help; distinct from HomeAsset ledger entry.
  * No long instructional fluff — How to use owns the guide.
  */
 export default function SupportScreen() {

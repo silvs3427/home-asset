@@ -863,7 +863,7 @@ aiRoutes.post("/confirm-asset-intake", async (c) => {
       privacy: {
         writes: true,
         confirmedByUser: true,
-        note: "Saved only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
+        note: "Saved only because you confirmed. HomeAsset never auto-writes your ledger.",
       },
     });
   } catch (err) {
@@ -1154,7 +1154,7 @@ contractorAiRoutes.get("/status", (c) => {
 
 /**
  * Account-level AI customer support (Settings → Support).
- * Distinct from Ask HomeAsset ledger Q&A. Signed-in only; optional home label.
+ * Distinct from HomeAsset ledger entry. Signed-in only; optional home label.
  */
 export const supportAiRoutes = new Hono<{ Variables: AuthVariables }>();
 

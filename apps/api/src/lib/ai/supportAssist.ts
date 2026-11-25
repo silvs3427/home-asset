@@ -8,7 +8,7 @@ import { resolveAiMode, type AiMode } from "./provider.js";
 
 export const SUPPORT_OFF_TOPIC_MESSAGE =
   "Support helps with the HomeAsset app and your account — sign-in, Settings, notifications, privacy, and getting unstuck. " +
-  "It can't help with coding projects or general chat. For equipment manuals and home ledger questions, use Ask HomeAsset from Home.";
+  "It can't help with coding projects or general chat. For equipment manuals and home ledger questions, use HomeAsset from Home.";
 
 export const SUPPORT_SYSTEM_BLURB =
   "You are HomeAsset Support — a warm, clear customer-support assistant for homeowners using the HomeAsset phone app. " +
@@ -16,7 +16,7 @@ export const SUPPORT_SYSTEM_BLURB =
   "Stay privacy-first: never invent account facts, balances, emails on file, billing status, or ledger contents you were not given. " +
   "You may use only the product knowledge below plus any home label the request includes. " +
   "If the question is about equipment manuals, maintenance schedules, recalls, or what's on their home ledger, " +
-  "politely point them to Home → Ask HomeAsset (that is the ledger helper). " +
+  "politely point them to Home → HomeAsset (that is the ledger helper). " +
   "Refuse coding projects, homework, and unrelated general chat. " +
   "When you cannot solve it with in-app steps, set escalate to true and say a human can help — " +
   "ask them to leave a short note in Support and check Settings → Security for security concerns. " +
@@ -26,17 +26,17 @@ export const SUPPORT_SYSTEM_BLURB =
 export const SUPPORT_PRODUCT_KNOWLEDGE = `
 HomeAsset is homeowner-only (no contractor login face). Brand: Mets blue + orange.
 
-Home screen actions (top→bottom): Ask HomeAsset → View Assets → Add or Update an Asset → Contractors → Notifications → Settings.
+Home screen actions (top→bottom): HomeAsset → View Assets → Add or Update an Asset → Notifications → Settings. Contractors live under Settings.
 From other screens, Home (orange, top right) returns to Home.
 
-Ask HomeAsset (Home): Talk or Text for home/ledger help (equipment, manuals, maintenance reminders you already saved, recalls). Not a general coding chatbot. Caps ~10/min and ~40/day. Never writes the ledger by asking.
-Support (Settings → Support): app/account help — distinct from Ask HomeAsset. Separate fair-use caps.
+HomeAsset (Home): Talk or Text for what the homeowner wants to do (equipment, manuals, maintenance reminders you already saved, recalls). Steering wheel for the ledger — not a help FAQ or AI persona. Caps ~10/min and ~40/day. Never writes the ledger by asking.
+Support (Settings → Support): app/account help — distinct from HomeAsset entry. Separate fair-use caps.
 
 View Assets: search/filter equipment; categories and document types are homeowner-defined words.
-Add or Update: Scan a picture, Upload a PDF, or Free text → Format with Ask HomeAsset; approve-before-official.
-Contractors: Invite (browser link for pros), Review submissions (approve before official), Past contractors directory.
+Add or Update: Scan a picture, Upload a PDF, or Free text → Format with HomeAsset; approve-before-official.
+Contractors (Settings → Contractors): Invite (browser link for pros), Review submissions (approve before official), Past contractors directory.
 Notifications: reminders + notices; Check safety recalls; monthly automatic recall scan also runs. Push prefs under Settings → Push & in-app.
-Settings: Add another home, How to use, Privacy, Security (app lock / Face ID), Support, Push & in-app, sign out.
+Settings: Add another home, Contractors, How to use, Privacy, Security (app lock / Face ID), Support, Push & in-app, sign out.
 App lock: Settings → Security — idle lock; biometrics stay on the phone OS.
 Privacy: homeowner owns the record; approve-before-official; AI keys stay on the server; no silent ledger adds.
 Sign out: Settings → Sign out.
@@ -148,12 +148,12 @@ export function mockSupportAnswer(
       mode,
       escalate: false,
       nextSteps: [
-        "Open Home → Ask HomeAsset",
+        "Open Home → HomeAsset",
         "Ask your equipment or ledger question there",
       ],
       answer:
         "That sounds like a home or equipment question — I hear you wanting a clear answer from your record. " +
-        "Support stays on the app and account. Open Home → Ask HomeAsset (Talk or Text) for manuals, maintenance, recalls, and what’s saved on this home. " +
+        "Support stays on the app and account. Open Home → HomeAsset (Talk or Text) for manuals, maintenance, recalls, and what’s saved on this home. " +
         "Asking never writes your ledger.",
       privacy: supportPrivacy(),
     };
@@ -210,11 +210,11 @@ export function mockSupportAnswer(
       mode,
       escalate: false,
       nextSteps: [
-        "Home → Ask HomeAsset for ledger help",
+        "Home → HomeAsset for ledger help",
         "Settings → Support for app/account help",
       ],
       answer:
-        "Ask HomeAsset (from Home) answers home and ledger questions. " +
+        "HomeAsset (from Home) answers home and ledger questions. " +
         "This Support screen is for the app itself — sign-in, Settings, notifications, privacy, and getting unstuck. " +
         "Use whichever matches what you need; neither writes your ledger without your confirm.",
       privacy: supportPrivacy(),
@@ -260,13 +260,13 @@ export function mockSupportAnswer(
     escalate: false,
     nextSteps: [
       "Settings → How to use for the full guide",
-      "Home → Ask HomeAsset for ledger/equipment questions",
+      "Home → HomeAsset for ledger/equipment questions",
       "Reply here with the screen you’re on if you’re stuck",
     ],
     answer:
       "Thanks for reaching out — I’m here to help with the HomeAsset app and your account. " +
       "Tell me what you’re trying to do (for example sign out, push alerts, app lock, or an invite link), " +
-      "and I’ll give plain steps. For equipment manuals or what’s on your home record, use Home → Ask HomeAsset instead.",
+      "and I’ll give plain steps. For equipment manuals or what’s on your home record, use Home → HomeAsset instead.",
     privacy: supportPrivacy(),
   };
 }
@@ -329,7 +329,7 @@ export async function answerCustomerSupport(input: {
       code: topic.code,
       answer: topic.message,
       escalate: false,
-      nextSteps: ["Home → Ask HomeAsset for ledger help"],
+      nextSteps: ["Home → HomeAsset for ledger help"],
       privacy: supportPrivacy(),
     };
   }

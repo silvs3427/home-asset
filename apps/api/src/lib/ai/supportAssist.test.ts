@@ -62,7 +62,7 @@ describe("mockSupportAnswer", () => {
     const res = mockSupportAnswer("What filter size is in my HVAC manual?", {
       redirectToAsk: true,
     });
-    assert.match(res.answer, /Ask HomeAsset/i);
+    assert.match(res.answer, /HomeAsset/i);
     assert.equal(res.escalate, false);
   });
 });

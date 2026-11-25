@@ -13,7 +13,7 @@ export type PickedUpload = {
   name: string;
   mimeType: string;
   suggestedType: DocumentType;
-  /** Present when picked for Ask HomeAsset vision / OCR. */
+  /** Present when picked for HomeAsset vision / OCR. */
   base64?: string | null;
 };
 
@@ -123,7 +123,7 @@ export async function pickDocumentFile(
   };
 }
 
-/** PDF-only pick for Ask HomeAsset invoice / paperwork intake. */
+/** PDF-only pick for HomeAsset invoice / paperwork intake. */
 export async function pickPdfFile(
   options: PickForAiOptions = {},
 ): Promise<PickedUpload | null> {

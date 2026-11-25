@@ -319,7 +319,7 @@ function answerReminderSchedule(input: {
   } else {
     lines.push(
       "This home has no upcoming maintenance reminders saved.",
-      "Add one from Notifications → Add reminder. Ask HomeAsset only lists reminders you already saved — it does not invent them.",
+      "Add one from Notifications → Add reminder. HomeAsset only lists reminders you already saved — it does not invent them.",
     );
   }
 

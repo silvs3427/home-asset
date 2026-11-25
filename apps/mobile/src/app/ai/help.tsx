@@ -19,11 +19,12 @@ import { pickAudioFile } from "@/lib/documents";
 import { colors } from "@/lib/theme";
 
 /**
- * Ask HomeAsset — Talk or Text prompt for home / ledger help.
- * Typed or voice-note ask → how-to answer. Never writes the ledger.
+ * HomeAsset entry — Talk or Text steering wheel for home / ledger work.
+ * Typed or voice-note → how-to answer. Never writes the ledger.
  * Photo / purchase-screenshot drafts go through asset intake (approve-before-official).
+ * No AI persona name; How-to lives in Settings; Support is separate.
  */
-export default function AskHomeAssetScreen() {
+export default function HomeAssetEntryScreen() {
   const router = useRouter();
   const { user, accessToken, activeProperty } = useAuth();
   const [prompt, setPrompt] = useState("");
@@ -53,7 +54,7 @@ export default function AskHomeAssetScreen() {
     if (!accessToken || !activeProperty) return;
     const typed = prompt.trim();
     if (!typed && !voiceName) {
-      setError("Type a question or attach a voice note.");
+      setError("Type what you want to do, or attach a voice note.");
       return;
     }
     const question = voiceName
@@ -83,11 +84,11 @@ export default function AskHomeAssetScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="Ask HomeAsset" backLabel="Close" />
+      <ScreenHeader title="HomeAsset" backLabel="Close" />
 
       <KeyboardAwareScroll contentContainerStyle={styles.body}>
         {!canUseHomeTools ? (
-          <Text style={styles.empty}>Add a home first to use Ask HomeAsset.</Text>
+          <Text style={styles.empty}>Add a home first to use HomeAsset.</Text>
         ) : (
           <>
             <Text style={styles.title}>Talk or Text</Text>
@@ -95,7 +96,7 @@ export default function AskHomeAssetScreen() {
             <KeyboardAwareTextInput
               value={prompt}
               onChangeText={setPrompt}
-              placeholder="What are you looking for? How can we help with this home?"
+              placeholder="What do you want to do?"
               placeholderTextColor={colors.placeholder}
               style={[styles.input, styles.multiline]}
               multiline
@@ -192,7 +193,7 @@ export default function AskHomeAssetScreen() {
             {result ? (
               <View style={styles.answerBox}>
                 <Text style={styles.answerLabel}>
-                  {result.refused ? "Outside Ask HomeAsset" : "Answer"}
+                  {result.refused ? "Outside HomeAsset" : "Answer"}
                 </Text>
                 <Text style={styles.answer}>{result.answer}</Text>
                 {result.citations.length > 0 ? (

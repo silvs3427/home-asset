@@ -30,7 +30,7 @@ Run lint and typecheck before declaring any task done.
 - Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
 - Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
 - Docs: https://docs.expo.dev/router/introduction.md
-- **Settings / How to use:** when shipping user-facing features, update `src/lib/settingsContent.ts`. Home: Ask HomeAsset → View Assets → Add or Update an Asset → Contractors → Notifications → Settings. Ask HomeAsset is Talk or Text; Add or Update is scan / PDF / free-text. Contractors: invite, review, past directory. Colors from `src/lib/theme.ts` only. No long instructional copy on feature screens.
+- **Settings / How to use:** when shipping user-facing features, update `src/lib/settingsContent.ts`. Home: HomeAsset → View Assets → Add or Update an Asset → Notifications → Settings. Entry label HomeAsset (not Ask); empty prompt “What do you want to do?”; Talk or Text. Add or Update is scan / PDF / free-text. Contractors under Settings. Colors from `src/lib/theme.ts` only. No long instructional copy on feature screens.
 
 ## Building with EAS
 

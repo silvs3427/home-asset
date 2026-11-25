@@ -94,7 +94,7 @@ export default function AiScanScreen() {
       if (!picked) return;
       if (!picked.base64) {
         setError(
-          "Could not read that photo for Ask HomeAsset. Try taking it again.",
+          "Could not read that photo for HomeAsset. Try taking it again.",
         );
         return;
       }
