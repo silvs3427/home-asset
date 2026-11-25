@@ -2045,6 +2045,10 @@ export async function aiAssetIntake(
       intent: res.draft.intent,
       matchedAssetId: res.draft.matchedAssetId,
       suggestedAsset: res.draft.suggestedAsset,
+      sourceText: input.text ?? null,
+      sourceFilename: input.filename ?? null,
+      sourceMediaBase64: input.imageBase64 ?? null,
+      sourceMediaMimeType: input.mediaMimeType ?? null,
     });
     return { draft: res.draft, aiMode: res.aiMode };
   }
@@ -2059,6 +2063,18 @@ export async function aiAssetIntake(
   return parseJson(res);
 }
 
+function base64ToUint8Array(base64: string): Uint8Array {
+  const normalized = base64.includes(",")
+    ? base64.slice(base64.indexOf(",") + 1)
+    : base64;
+  const binary = globalThis.atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 export async function aiConfirmAssetIntake(
   accessToken: string,
   propertyId: string,
@@ -2066,16 +2082,23 @@ export async function aiConfirmAssetIntake(
     draftId: string;
     intent: "add" | "update";
     matchedAssetId?: string | null;
+    /** When true (default), store the pasted email / PDF / photo on the asset after approve. */
+    attachSourceDocument?: boolean;
     assetOverrides: AssetIntakeSuggested;
   },
 ): Promise<{
   asset: PublicAsset;
   intent: "add" | "update";
+  sourceDocument?: PublicDocument | null;
   privacy: { writes: boolean; confirmedByUser: boolean; note: string };
 }> {
   if (useCloud()) {
     const { takeAssetIntakeDraft } = await import("./aiEdge");
-    const { cloudCreateAsset, cloudUpdateAsset } = await import("./cloud");
+    const {
+      cloudCreateAsset,
+      cloudUpdateAsset,
+      cloudCreateDocumentFromBytes,
+    } = await import("./cloud");
     const held = takeAssetIntakeDraft(input.draftId);
     if (!held || held.propertyId !== propertyId) {
       throw new ApiError(
@@ -2103,6 +2126,8 @@ export async function aiConfirmAssetIntake(
       throw new ApiError("Asset name is required.", "client", 400);
     }
     const matchedId = input.matchedAssetId ?? held.matchedAssetId;
+    let asset: PublicAsset;
+    let intent: "add" | "update";
     if (input.intent === "update" && matchedId) {
       const updated = await cloudUpdateAsset(
         accessToken,
@@ -2110,24 +2135,93 @@ export async function aiConfirmAssetIntake(
         matchedId,
         base,
       );
-      return {
-        asset: updated.asset,
-        intent: "update",
-        privacy: {
-          writes: true,
-          confirmedByUser: true,
-          note: "Updated only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
-        },
-      };
+      asset = updated.asset;
+      intent = "update";
+    } else {
+      const created = await cloudCreateAsset(accessToken, propertyId, base);
+      asset = created.asset;
+      intent = "add";
     }
-    const created = await cloudCreateAsset(accessToken, propertyId, base);
+
+    let sourceDocument: PublicDocument | null = null;
+    if (input.attachSourceDocument !== false) {
+      const purchaseDate =
+        base.purchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(base.purchaseDate)
+          ? base.purchaseDate
+          : null;
+      if (held.sourceMediaBase64 && held.sourceMediaMimeType) {
+        const bytes = base64ToUint8Array(held.sourceMediaBase64);
+        if (bytes.byteLength > 0) {
+          const mime = held.sourceMediaMimeType.toLowerCase();
+          const isPdf = mime === "application/pdf" || mime.includes("pdf");
+          const isImage = mime.startsWith("image/");
+          const ext = isPdf
+            ? "pdf"
+            : mime.includes("png")
+              ? "png"
+              : mime.includes("webp")
+                ? "webp"
+                : "jpg";
+          const filename =
+            held.sourceFilename?.trim() ||
+            `purchase-source-${Date.now()}.${ext}`;
+          const { document } = await cloudCreateDocumentFromBytes(propertyId, {
+            title: isPdf
+              ? `Purchase PDF: ${filename}`
+              : `Purchase photo: ${filename}`,
+            docType: isPdf ? "receipt" : isImage ? "photo" : "receipt",
+            documentDate: purchaseDate,
+            assetId: asset.id,
+            source: "ai_fetched",
+            mimeType: held.sourceMediaMimeType,
+            originalFilename: filename,
+            bytes,
+          });
+          sourceDocument = document;
+        }
+      } else if (held.sourceText && held.sourceText.trim().length >= 12) {
+        const bodyText = [
+          "HomeAsset purchase / order source",
+          "",
+          `Source kind: ${held.sourceKind}`,
+          held.sourceFilename ? `Filename: ${held.sourceFilename}` : null,
+          "",
+          "---",
+          "Original pasted text (homeowner-provided):",
+          held.sourceText.trim(),
+        ]
+          .filter((line) => line != null)
+          .join("\n");
+        const { document } = await cloudCreateDocumentFromBytes(propertyId, {
+          title:
+            held.sourceKind === "email"
+              ? "Order email (pasted)"
+              : held.sourceKind === "invoice"
+                ? "Invoice / receipt (pasted)"
+                : "Purchase notes (pasted)",
+          docType: "receipt",
+          documentDate: purchaseDate,
+          assetId: asset.id,
+          source: "ai_fetched",
+          mimeType: "text/plain",
+          originalFilename: "purchase-source.txt",
+          bytes: new TextEncoder().encode(bodyText),
+        });
+        sourceDocument = document;
+      }
+    }
+
     return {
-      asset: created.asset,
-      intent: "add",
+      asset,
+      intent,
+      sourceDocument,
       privacy: {
         writes: true,
         confirmedByUser: true,
-        note: "Saved only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
+        note:
+          intent === "update"
+            ? "Updated only because you confirmed. Ask HomeAsset never auto-writes your ledger."
+            : "Saved only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
       },
     };
   }

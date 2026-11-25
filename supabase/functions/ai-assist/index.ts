@@ -1074,6 +1074,19 @@ const RETAILER_SCREENSHOT_GUIDANCE =
   "Prefer the title/brand text over guessing from the product hero image alone. " +
   "Ignore ads, ratings, cart chrome, and Alexa badges unless they name the product. ";
 
+/** Retailer order emails + invoice/receipt PDFs (purchase inbox — paste/attach; no OAuth). */
+const RETAILER_ORDER_EMAIL_PDF_GUIDANCE =
+  "Retailer ORDER EMAILS (Amazon, Best Buy, Home Depot, Walmart, Target, manufacturer stores) " +
+  "and invoice/receipt PDFs are VALID purchase sources when pasted or attached. " +
+  "Extract ONE primary home product when the order lists several items (prefer the clearest durable home good). " +
+  "Read Subject / Order confirmation / Shipped / Delivered lines, item TITLE, brand, model, " +
+  "Order date / Ordered on / Purchase date / Invoice date, and Total / Item price / Grand total. " +
+  "purchaseDate = that order or invoice date as YYYY-MM-DD (never invent). " +
+  "Put a grounded price into notes as \"Purchase price: $…\" — do not invent a price. " +
+  "Guess a short free-text category (e.g. Robot vacuum, Vacuum, Appliance) when the title implies it. " +
+  "Do NOT treat Amazon/retailer \"From:\" as installerVendor. " +
+  "Ignore shipping ads, tracking chrome, and payment-method blurbs that do not name the product. ";
+
 const SCAN_IDENTIFY_SYSTEM =
   `${HOME_SCOPE_SYSTEM_BLURB} ` +
   "You identify ONE home product for a homeowner ledger from a photo, purchase screenshot, and/or short hint. " +
@@ -1103,6 +1116,49 @@ function mergePriceIntoNotes(
     : `Purchase price: ${price}`;
   if (notes && /purchase price:/i.test(notes)) return notes;
   return notes ? `${notes}\n${line}`.slice(0, 2000) : line;
+}
+
+/** Heuristic purchase fields from order-email / receipt text (mock + grounding). */
+function extractPurchaseHintsFromText(text: string): {
+  purchaseDate: string | null;
+  price: string | null;
+  looksLikeRetailPurchase: boolean;
+} {
+  const raw = text.trim();
+  if (!raw) {
+    return {
+      purchaseDate: null,
+      price: null,
+      looksLikeRetailPurchase: false,
+    };
+  }
+  const looksLikeRetailPurchase =
+    /\b(amazon|best\s*buy|home\s*depot|walmart|target|order\s*confirmation|your\s+order|ordered\s+on|last\s+purchased|invoice|receipt|grand\s*total|order\s*#)\b/i.test(
+      raw,
+    ) || /\$\s?\d{1,5}(?:\.\d{2})?/.test(raw);
+
+  let purchaseDate: string | null = null;
+  const labeled = raw.match(
+    /\b(?:last\s+purchased|order(?:ed)?\s+(?:on|date)|purchase\s+date|invoice\s+date)\s*[:\-]?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+20\d{2}|20\d{2}-\d{2}-\d{2})/i,
+  );
+  if (labeled?.[1]) {
+    purchaseDate = nullableDate(labeled[1]);
+  }
+  if (!purchaseDate) {
+    const iso = raw.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+    if (iso?.[1]) purchaseDate = iso[1];
+    else {
+      const us = raw.match(
+        /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+20\d{2})\b/i,
+      );
+      if (us?.[1]) purchaseDate = nullableDate(us[1]);
+    }
+  }
+
+  const priceMatch = raw.match(/\$\s?(\d{1,5}(?:\.\d{2})?)/);
+  const price = priceMatch?.[1] ? `$${priceMatch[1]}` : null;
+
+  return { purchaseDate, price, looksLikeRetailPurchase };
 }
 
 async function liveIdentifyFromVision(input: {
@@ -1845,11 +1901,13 @@ const ASSET_INTAKE_SYSTEM =
   "When an image or PDF is attached: (1) read logos and brand marks first, (2) OCR ALL visible text on nameplates, " +
   "data plates, stickers, invoices, receipts, and purchase screenshots, (3) use product shape/type only as support. " +
   RETAILER_SCREENSHOT_GUIDANCE +
+  RETAILER_ORDER_EMAIL_PDF_GUIDANCE +
   "Prefer exact printed values over guesses. Transcribe model and serial character-for-character " +
   "(watch O vs 0, I vs 1, S vs 5). " +
   "Look for labels such as: Manufacturer / Mfr / Brand, Model / Mod / Model No / Catalog No, " +
   "Serial / Ser / S/N / SN, Capacity / Tons / Ton / BTU / MBH / kW / Gallons / SEER / AFUE / HSPF / EER, " +
   "Refrigerant, Voltage / Volts / Phase, Date / DOM / Install, Last purchased / order date, Price. " +
+  "For sourceKind=email or invoice (including PDF), prioritize order/invoice purchase fields over install fields. " +
   "Put capacity, price (as \"Purchase price: $…\"), and other plate/receipt facts into suggestedAsset.notes " +
   "when there is no dedicated field — e.g. \"Capacity: 3 ton / 36000 BTU · SEER 16\". " +
   "purchaseDate from \"Last purchased\", order date, or invoice date when visible (YYYY-MM-DD). " +
@@ -1864,7 +1922,6 @@ const ASSET_INTAKE_SYSTEM =
   "If the logo or product is unclear, leave manufacturer/model null, set confidence ≤0.35, and list missingFields. " +
   "Dates YYYY-MM-DD or null. Fill only facts grounded in the input or attached media. " +
   "missingFields = keys still unknown that a homeowner should confirm.";
-
 /**
  * Multi-source Ask HomeAsset intake: photo label / email / invoice / notes →
  * one distinct asset draft with Add or Update. Never writes the ledger.
@@ -1906,13 +1963,17 @@ async function formatAssetIntake(input: {
       const mediaNote = hasMedia
         ? `mediaAttached=true mime=${input.mediaMimeType} (read the attached ${
             input.mediaMimeType === "application/pdf" ? "PDF" : "photo"
-          } carefully for nameplate / proposal / invoice text OR retailer purchase/order screenshot — OCR title, brand, last-purchased, price)`
+          } carefully for nameplate / proposal / invoice/receipt text, retailer purchase/order screenshot, OR email PDF export — OCR title, brand, order/last-purchased date, price)`
         : "mediaAttached=false";
+      const purchaseHint =
+        input.sourceKind === "email" || input.sourceKind === "invoice"
+          ? "Treat this as a purchase/order or invoice source when it looks like a retailer order email or receipt. Fill purchaseDate + Purchase price in notes when grounded.\n"
+          : "";
       const content = await chatJsonText({
         live: input.live,
         system: ASSET_INTAKE_SYSTEM,
         user:
-          `sourceKind=${input.sourceKind}\n${mediaNote}\n` +
+          `sourceKind=${input.sourceKind}\n${mediaNote}\n${purchaseHint}` +
           `existingAssets=${existingJson}\ninput:\n${query || "(see attached media)"}`,
         media: hasMedia
           ? {
@@ -2032,25 +2093,48 @@ async function formatAssetIntake(input: {
   }
 
   const product = matchCatalogProducts(query || "appliance")[0];
+  const purchaseHints = extractPurchaseHintsFromText(query);
+  const isoHit = query.match(/\b(20\d{2}-\d{2}-\d{2})\b/)?.[1] ?? null;
+  const purchaseDate =
+    purchaseHints.purchaseDate ??
+    (input.sourceKind === "email" || input.sourceKind === "invoice"
+      ? isoHit
+      : null);
   const installDate =
-    input.text?.match(/\b(20\d{2}-\d{2}-\d{2})\b/)?.[1] ?? null;
+    input.sourceKind === "email" || input.sourceKind === "invoice"
+      ? null
+      : isoHit;
   const from = input.text?.match(/^From:\s*(.+)$/im)?.[1]
     ?.replace(/<[^>]+>/g, "")
     .replace(/["']/g, "")
     .trim();
+  const installerVendor =
+    purchaseHints.looksLikeRetailPurchase ||
+    (from != null &&
+      /\b(amazon|best\s*buy|home\s*depot|walmart|target|noreply|no-reply|orders?@)\b/i.test(
+        from,
+      ))
+      ? null
+      : from && from.length <= 120
+        ? from
+        : null;
+  let notes: string | null = hasMedia
+    ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (mock — live vision unavailable). Enter brand and model if blank, then confirm.`
+    : purchaseHints.looksLikeRetailPurchase
+      ? `Drafted from retailer ${input.sourceKind} via Ask HomeAsset (mock). Enter brand and model if blank, then confirm.`
+      : `Drafted from ${input.sourceKind} via Ask HomeAsset (mock). Enter brand and model if blank, then confirm.`;
+  notes = mergePriceIntoNotes(notes, purchaseHints.price);
   const suggestedAsset: AssetIntakeSuggested = {
     name: product?.name ?? "Unidentified asset",
     category: (product?.category as AssetCategory) ?? "other",
     manufacturer: product?.manufacturer ?? null,
     model: product?.model ?? null,
     serial: null,
-    purchaseDate: null,
+    purchaseDate,
     installDate,
-    installerVendor: from && from.length <= 120 ? from : null,
+    installerVendor,
     location: null,
-    notes: hasMedia
-      ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (mock — live vision unavailable). Enter brand and model if blank, then confirm.`
-      : `Drafted from ${input.sourceKind} via Ask HomeAsset (mock). Enter brand and model if blank, then confirm.`,
+    notes,
     warrantyEndDate: null,
     warrantyTerm: null,
   };

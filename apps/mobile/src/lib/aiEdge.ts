@@ -117,6 +117,11 @@ const assetIntakeDraftById = new Map<
       warrantyEndDate: string | null;
       warrantyTerm: string | null;
     };
+    /** Held until confirm so we can attach the source email/PDF/photo after approve. */
+    sourceText: string | null;
+    sourceFilename: string | null;
+    sourceMediaBase64: string | null;
+    sourceMediaMimeType: string | null;
   }
 >();
 
@@ -214,9 +219,19 @@ export function rememberAssetIntakeDraft(
       warrantyEndDate: string | null;
       warrantyTerm: string | null;
     };
+    sourceText?: string | null;
+    sourceFilename?: string | null;
+    sourceMediaBase64?: string | null;
+    sourceMediaMimeType?: string | null;
   },
 ): void {
-  assetIntakeDraftById.set(draftId, draft);
+  assetIntakeDraftById.set(draftId, {
+    ...draft,
+    sourceText: draft.sourceText?.trim() || null,
+    sourceFilename: draft.sourceFilename?.trim() || null,
+    sourceMediaBase64: draft.sourceMediaBase64?.trim() || null,
+    sourceMediaMimeType: draft.sourceMediaMimeType?.trim() || null,
+  });
 }
 
 export function takeAssetIntakeDraft(draftId: string) {

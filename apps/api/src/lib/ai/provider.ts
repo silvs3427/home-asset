@@ -220,6 +220,21 @@ export const RETAILER_SCREENSHOT_GUIDANCE =
   "Prefer the title/brand text over guessing from the product hero image alone. " +
   "Ignore ads, ratings, cart chrome, and Alexa badges unless they name the product. ";
 
+/**
+ * Shared guidance: retailer order emails + invoice/receipt PDFs (purchase inbox).
+ * Paste / attach on phone — no Amazon OAuth and no inbound mailbox required for this slice.
+ */
+export const RETAILER_ORDER_EMAIL_PDF_GUIDANCE =
+  "Retailer ORDER EMAILS (Amazon, Best Buy, Home Depot, Walmart, Target, manufacturer stores) " +
+  "and invoice/receipt PDFs are VALID purchase sources when pasted or attached. " +
+  "Extract ONE primary home product when the order lists several items (prefer the clearest durable home good). " +
+  "Read Subject / Order confirmation / Shipped / Delivered lines, item TITLE, brand, model, " +
+  "Order date / Ordered on / Purchase date / Invoice date, and Total / Item price / Grand total. " +
+  "purchaseDate = that order or invoice date as YYYY-MM-DD (never invent). " +
+  "Put a grounded price into notes as \"Purchase price: $…\" — do not invent a price. " +
+  "Guess a short free-text category (e.g. Robot vacuum, Vacuum, Appliance) when the title implies it. " +
+  "Do NOT treat Amazon/retailer \"From:\" as installerVendor. " +
+  "Ignore shipping ads, tracking chrome, and payment-method blurbs that do not name the product. ";
 const SCAN_IDENTIFY_SYSTEM =
   `${HOME_SCOPE_SYSTEM_BLURB} ` +
   "You identify ONE home product for a homeowner ledger from a photo, purchase screenshot, and/or short hint. " +
@@ -638,6 +653,50 @@ function extractLikelyDate(text: string): string | null {
   return null;
 }
 
+/** Heuristic purchase fields from order-email / receipt text (mock + grounding). */
+export function extractPurchaseHintsFromText(text: string): {
+  purchaseDate: string | null;
+  price: string | null;
+  looksLikeRetailPurchase: boolean;
+} {
+  const raw = text.trim();
+  if (!raw) {
+    return {
+      purchaseDate: null,
+      price: null,
+      looksLikeRetailPurchase: false,
+    };
+  }
+  const looksLikeRetailPurchase =
+    /\b(amazon|best\s*buy|home\s*depot|walmart|target|order\s*confirmation|your\s+order|ordered\s+on|last\s+purchased|invoice|receipt|grand\s*total|order\s*#)\b/i.test(
+      raw,
+    ) || /\$\s?\d{1,5}(?:\.\d{2})?/.test(raw);
+
+  let purchaseDate: string | null = null;
+  const labeled = raw.match(
+    /\b(?:last\s+purchased|order(?:ed)?\s+(?:on|date)|purchase\s+date|invoice\s+date)\s*[:\-]?\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+20\d{2}|20\d{2}-\d{2}-\d{2})/i,
+  );
+  if (labeled?.[1]) {
+    purchaseDate = nullableIsoDate(labeled[1]);
+  }
+  if (!purchaseDate) {
+    const likely = extractLikelyDate(raw);
+    purchaseDate = likely ? nullableIsoDate(likely) : null;
+  }
+
+  const priceMatch = raw.match(/\$\s?(\d{1,5}(?:\.\d{2})?)/);
+  const price = priceMatch?.[1] ? `$${priceMatch[1]}` : null;
+
+  return { purchaseDate, price, looksLikeRetailPurchase };
+}
+
+function isRetailerMailbox(name: string | null): boolean {
+  if (!name) return false;
+  return /\b(amazon|best\s*buy|home\s*depot|walmart|target|noreply|no-reply|orders?@|shipment|marketplace)\b/i.test(
+    name,
+  );
+}
+
 function extractContractorName(text: string): string | null {
   const from = text.match(/^From:\s*(.+)$/im);
   if (from?.[1]) {
@@ -933,10 +992,12 @@ const ASSET_INTAKE_LIVE_SYSTEM =
   "When an image or PDF is attached: (1) read logos and brand marks first, (2) OCR ALL visible text on nameplates, " +
   "data plates, stickers, invoices, receipts, and purchase screenshots, (3) use product shape/type only as support. " +
   RETAILER_SCREENSHOT_GUIDANCE +
+  RETAILER_ORDER_EMAIL_PDF_GUIDANCE +
   "Prefer exact printed values over guesses. Transcribe model and serial character-for-character " +
   "(watch O vs 0, I vs 1, S vs 5). " +
   "Look for Manufacturer/Brand, Model, Serial, Capacity (tons/BTU/kW/gallons), SEER/AFUE/HSPF, refrigerant, voltage, " +
   "Last purchased / order date, and price. " +
+  "For sourceKind=email or invoice (including PDF), prioritize order/invoice purchase fields over install fields. " +
   "Put capacity, price (as \"Purchase price: $…\"), and other plate/receipt facts into suggestedAsset.notes when there is no dedicated field. " +
   "purchaseDate from \"Last purchased\", order date, or invoice date when visible (YYYY-MM-DD). " +
   "identificationLabel should be brand + model when known (e.g. \"iRobot Roomba 505X\"). " +
@@ -949,7 +1010,6 @@ const ASSET_INTAKE_LIVE_SYSTEM =
   "Do not invent serial numbers, model numbers, capacity, or an unrelated make/model (never default to Generac/Carrier/Rheem). " +
   "If the logo or product is unclear, leave manufacturer/model null, set confidence ≤0.35, and list missingFields. " +
   "Dates YYYY-MM-DD or null. Fill only facts grounded in the input or attached media.";
-
 /**
  * Multi-source Ask HomeAsset intake → one distinct asset draft (Add or Update).
  * Never writes — homeowner must confirm.
@@ -991,10 +1051,14 @@ export async function formatAssetIntake(input: {
       );
       const mediaNote = hasMedia
         ? `mediaAttached=true mime=${mediaMimeType} ` +
-          `(physical product photo, nameplate, invoice/PDF, OR retailer purchase/order screenshot — OCR title, brand, last-purchased, price)`
+          `(physical product photo, nameplate, invoice/receipt PDF, retailer purchase/order screenshot, OR email PDF export — OCR title, brand, order/last-purchased date, price)`
         : "mediaAttached=false";
+      const purchaseHint =
+        input.sourceKind === "email" || input.sourceKind === "invoice"
+          ? "Treat this as a purchase/order or invoice source when it looks like a retailer order email or receipt. Fill purchaseDate + Purchase price in notes when grounded.\n"
+          : "";
       const userText =
-        `sourceKind=${input.sourceKind}\n${mediaNote}\n` +
+        `sourceKind=${input.sourceKind}\n${mediaNote}\n${purchaseHint}` +
         `existingAssets=${existingJson}\ninput:\n${query || "(see attached media)"}`;
       const userContent: Array<Record<string, unknown>> = [
         { type: "text", text: userText },
@@ -1162,24 +1226,42 @@ export async function formatAssetIntake(input: {
   }
 
   const product = matchCatalogProducts(query || "appliance")[0];
-  const installDate = extractLikelyDate(query);
-  const installerVendor = extractContractorName(query);
+  const purchaseHints = extractPurchaseHintsFromText(query);
+  const likelyDateRaw = extractLikelyDate(query);
+  const likelyDateIso = likelyDateRaw ? nullableIsoDate(likelyDateRaw) : null;
+  const purchaseDate =
+    purchaseHints.purchaseDate ??
+    (input.sourceKind === "email" || input.sourceKind === "invoice"
+      ? likelyDateIso
+      : null);
+  const installDate =
+    input.sourceKind === "email" || input.sourceKind === "invoice"
+      ? null
+      : likelyDateIso && /^\d{4}-\d{2}-\d{2}$/.test(likelyDateIso)
+        ? likelyDateIso
+        : null;
+  const rawInstaller = extractContractorName(query);
+  const installerVendor =
+    purchaseHints.looksLikeRetailPurchase || isRetailerMailbox(rawInstaller)
+      ? null
+      : rawInstaller;
+  let notes: string | null = hasMedia
+    ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`
+    : purchaseHints.looksLikeRetailPurchase
+      ? `Drafted from retailer ${input.sourceKind} via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`
+      : `Drafted from ${input.sourceKind} via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`;
+  notes = mergePriceIntoNotes(notes, purchaseHints.price);
   const suggestedAsset: AssetIntakeSuggestedFields = {
     name: product?.name ?? "Unidentified asset",
     category: product?.category ?? "other",
     manufacturer: product?.manufacturer ?? null,
     model: product?.model ?? null,
     serial: null,
-    purchaseDate: null,
-    installDate:
-      installDate && /^\d{4}-\d{2}-\d{2}$/.test(installDate)
-        ? installDate
-        : null,
+    purchaseDate,
+    installDate,
     installerVendor,
     location: null,
-    notes: hasMedia
-      ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`
-      : `Drafted from ${input.sourceKind} via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`,
+    notes,
     warrantyEndDate: null,
     warrantyTerm: null,
   };
