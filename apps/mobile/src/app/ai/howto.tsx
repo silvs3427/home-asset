@@ -167,7 +167,7 @@ export default function AiHowtoScreen() {
           <View style={styles.resultBox}>
             <Text style={styles.sectionLabel}>
               {result.refused
-                ? "Outside Ask HomeAsset"
+                ? "Outside HomeAsset"
                 : result.grounded
                   ? "Grounded answer"
                   : "Not enough sources"}{" "}

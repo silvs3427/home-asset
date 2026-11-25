@@ -147,7 +147,7 @@ export default function SuggestManualsScreen() {
 
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.copy}>
-          Ask HomeAsset looked for manuals and spec sheets for{" "}
+          HomeAsset looked for manuals and spec sheets for{" "}
           {manufacturer} {model}. Choose what to keep — nothing is saved until
           you confirm.
         </Text>

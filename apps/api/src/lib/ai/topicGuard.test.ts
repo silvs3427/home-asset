@@ -25,7 +25,7 @@ describe("Ask HomeAsset topic guard", () => {
     assert.equal(result.allowed, false);
     if (!result.allowed) {
       assert.equal(result.code, "off_topic");
-      assert.match(result.message, /Ask HomeAsset|coding projects/i);
+      assert.match(result.message, /HomeAsset|coding projects/i);
     }
   });
 

@@ -377,7 +377,7 @@ function formatEdgeErrorBody(payload: EdgeErrorBody | null | undefined): string 
     code === "off_topic" ||
     code === "burst"
   ) {
-    return friendly || "Ask HomeAsset could not complete that ask.";
+    return friendly || "HomeAsset could not complete that ask.";
   }
   const reason = payload.reason?.trim() ?? "";
   // Stale edge deploy: phone sends asset-intake but old ai-assist schema rejects it.
@@ -390,7 +390,7 @@ function formatEdgeErrorBody(payload: EdgeErrorBody | null | undefined): string 
   ) {
     const hint =
       payload.hint?.trim() ||
-      "Ask HomeAsset on the server is out of date. Redeploy ai-assist from the latest app code (no new phone install).";
+      "HomeAsset on the server is out of date. Redeploy ai-assist from the latest app code (no new phone install).";
     return friendly
       ? `${friendly} — ${hint}`
       : hint;

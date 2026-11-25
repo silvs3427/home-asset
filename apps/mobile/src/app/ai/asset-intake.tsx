@@ -122,7 +122,7 @@ export default function AssetIntakeScreen() {
       if (!picked) return;
       if (!picked.base64) {
         setError(
-          "Could not read that photo for Ask HomeAsset. Try taking it again.",
+          "Could not read that photo for HomeAsset. Try taking it again.",
         );
         return;
       }
@@ -153,7 +153,7 @@ export default function AssetIntakeScreen() {
       if (!picked) return;
       if (!picked.base64) {
         setError(
-          "Could not read that PDF for Ask HomeAsset. Try another file.",
+          "Could not read that PDF for HomeAsset. Try another file.",
         );
         return;
       }

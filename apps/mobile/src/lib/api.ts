@@ -1423,7 +1423,7 @@ export type AiHowToResponse = {
   privacy: { writes: false; note: string };
 };
 
-/** Settings → Support — product/account help (not ledger Ask HomeAsset). */
+/** Settings → Support — product/account help (not ledger HomeAsset entry). */
 export type AiSupportResponse = {
   mode: "mock" | "live";
   answer: string;
@@ -2220,8 +2220,8 @@ export async function aiConfirmAssetIntake(
         confirmedByUser: true,
         note:
           intent === "update"
-            ? "Updated only because you confirmed. Ask HomeAsset never auto-writes your ledger."
-            : "Saved only because you confirmed. Ask HomeAsset never auto-writes your ledger.",
+            ? "Updated only because you confirmed. HomeAsset never auto-writes your ledger."
+            : "Saved only because you confirmed. HomeAsset never auto-writes your ledger.",
       },
     };
   }
@@ -2338,7 +2338,7 @@ export async function aiConfirmSuggestedManuals(
       const isLinkStub =
         typeof textContent === "string" &&
         (/Not fetched automatically/i.test(textContent) ||
-          /Link suggested by Ask HomeAsset/i.test(textContent));
+          /Link suggested by HomeAsset/i.test(textContent));
 
       // Prefer real PDF download when we have a public https source URL.
       const canFetchUrl =
@@ -2429,7 +2429,7 @@ export async function aiConfirmSuggestedManuals(
       privacy: {
         writes: true,
         confirmedByUser: true,
-        note: "Saved only because you confirmed. Ask HomeAsset never auto-adds manuals.",
+        note: "Saved only because you confirmed. HomeAsset never auto-adds manuals.",
       },
     };
   }

@@ -1505,7 +1505,7 @@ describe("HomeAsset API — AI assist (EPIC 6)", () => {
     assert.equal(body.refused, true);
     assert.equal(body.code, "off_topic");
     assert.equal(body.privacy.writes, false);
-    assert.match(body.answer, /home help|coding projects|Ask HomeAsset/i);
+    assert.match(body.answer, /home help|coding projects|HomeAsset/i);
   });
 
   it("enforces per-user Ask HomeAsset burst rate limits", async () => {
@@ -1598,7 +1598,7 @@ describe("HomeAsset API — AI assist (EPIC 6)", () => {
     });
     assert.equal(ledger.status, 200);
     const ledgerBody = (await ledger.json()) as { answer: string };
-    assert.match(ledgerBody.answer, /Ask HomeAsset/i);
+    assert.match(ledgerBody.answer, /HomeAsset/i);
 
     const frustrated = await app.request("/ai/support", {
       method: "POST",

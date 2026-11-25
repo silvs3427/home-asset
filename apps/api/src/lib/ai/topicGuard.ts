@@ -1,16 +1,16 @@
 /**
- * Soft topic guard for Ask HomeAsset — keep asks on home / ledger scope.
+ * Soft topic guard for HomeAsset entry — keep asks on home / ledger scope.
  * Mirrors supabase/functions/_shared/topicGuard.ts (keep in sync).
  */
 
 export const OFF_TOPIC_MESSAGE =
-  "Ask HomeAsset stays on home help: your ledger, equipment, manuals, maintenance, recalls, and intake. It can't help with coding projects or general chat unrelated to your home.";
+  "HomeAsset stays on home help: your ledger, equipment, manuals, maintenance, recalls, and intake. It can't help with coding projects or general chat unrelated to your home.";
 
 export const HOME_SCOPE_SYSTEM_BLURB =
-  "You are Ask HomeAsset — a homeowner home-ledger assistant only. " +
+  "Help the homeowner with their HomeAsset home ledger only — no AI persona name. " +
   "Help with home equipment, manuals, maintenance, recalls, warranties, contractor work notes, and asset intake. " +
   "Refuse coding projects, software engineering, homework, and general chat unrelated to the home. " +
-  "If the request is off-topic, reply with a short refusal that Ask HomeAsset is for home help only.";
+  "If the request is off-topic, reply with a short refusal that HomeAsset is for home help only.";
 
 const CODING_PATTERNS: RegExp[] = [
   /\b(write|generate|create|debug|fix|refactor|implement)\b.{0,40}\b(code|function|class|script|program|api|endpoint|sql query)\b/i,

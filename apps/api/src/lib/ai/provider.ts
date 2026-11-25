@@ -151,7 +151,7 @@ function unidentifiedScanResult(
     raw && !looksLikeGenericFilename(raw) ? raw : "Unidentified asset";
   const notes =
     opts?.notes?.trim() ||
-    "Ask HomeAsset could not confidently identify brand or model from what you sent. Enter make and model, then confirm — nothing is saved until you do.";
+    "HomeAsset could not confidently identify brand or model from what you sent. Enter make and model, then confirm — nothing is saved until you do.";
   const catalogProduct: CatalogProduct = {
     id: UNKNOWN_CATALOG_ID,
     matchTerms: [],
@@ -507,7 +507,7 @@ export async function identifyProduct(input: {
             vision.notes ??
             (vision.unsure
               ? "Low confidence — please confirm brand and model before saving."
-              : "Identified via Ask HomeAsset from your photo or purchase screenshot. Confirm before saving."),
+              : "Identified via HomeAsset from your photo or purchase screenshot. Confirm before saving."),
         },
         manuals,
       };
@@ -518,7 +518,7 @@ export async function identifyProduct(input: {
     // Media present but live vision failed / mock — never invent Generac via "home equipment".
     return unidentifiedScanResult(mode, {
       notes: hasMedia
-        ? "Ask HomeAsset could not read brand or model from that photo or purchase screenshot. Enter make and model, then confirm — nothing is saved until you do."
+        ? "HomeAsset could not read brand or model from that photo or purchase screenshot. Enter make and model, then confirm — nothing is saved until you do."
         : undefined,
     });
   }
@@ -1246,10 +1246,10 @@ export async function formatAssetIntake(input: {
       ? null
       : rawInstaller;
   let notes: string | null = hasMedia
-    ? `Drafted from ${input.sourceKind} attachment via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`
+    ? `Drafted from ${input.sourceKind} attachment via HomeAsset (${mode}). Enter brand and model if blank, then confirm.`
     : purchaseHints.looksLikeRetailPurchase
-      ? `Drafted from retailer ${input.sourceKind} via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`
-      : `Drafted from ${input.sourceKind} via Ask HomeAsset (${mode}). Enter brand and model if blank, then confirm.`;
+      ? `Drafted from retailer ${input.sourceKind} via HomeAsset (${mode}). Enter brand and model if blank, then confirm.`
+      : `Drafted from ${input.sourceKind} via HomeAsset (${mode}). Enter brand and model if blank, then confirm.`;
   notes = mergePriceIntoNotes(notes, purchaseHints.price);
   const suggestedAsset: AssetIntakeSuggestedFields = {
     name: product?.name ?? "Unidentified asset",
