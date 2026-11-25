@@ -4,6 +4,7 @@ import {
   listPropertyLabels,
   normalizeLabelValue,
   rememberPropertyLabel,
+  renamePropertyLabel,
   type PropertyLabelKind,
 } from "../lib/propertyLabels.js";
 import { requireAuth, type AuthVariables } from "../middleware/requireAuth.js";
@@ -13,6 +14,22 @@ const kindSchema = z.enum(["asset_category", "document_type"]);
 const rememberSchema = z.object({
   kind: kindSchema,
   value: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .transform((v) => normalizeLabelValue(v)),
+});
+
+const renameSchema = z.object({
+  kind: kindSchema,
+  oldValue: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .transform((v) => normalizeLabelValue(v)),
+  newValue: z
     .string()
     .trim()
     .min(1)
@@ -125,6 +142,60 @@ labelRoutes.post("/", async (c) => {
       201,
     );
   } catch (err) {
+    return mapOwnershipError(err, c);
+  }
+});
+
+/** Rename a category / doc-type across this home (cascades to assets or documents). */
+labelRoutes.patch("/", async (c) => {
+  const claims = c.get("claims");
+  const propertyId = c.req.param("propertyId");
+  if (!propertyId) {
+    return c.json({ error: "not_found", message: "Home not found." }, 404);
+  }
+  const body = await c.req.json().catch(() => null);
+  const parsed = renameSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "invalid_input",
+        message:
+          "Provide kind, oldValue, and newValue (non-empty, max 80 characters).",
+      },
+      400,
+    );
+  }
+  try {
+    const result = renamePropertyLabel(
+      propertyId,
+      claims.sub,
+      parsed.data.kind,
+      parsed.data.oldValue,
+      parsed.data.newValue,
+    );
+    return c.json({
+      label: {
+        id: result.label.id,
+        value: result.label.value,
+        kind: result.label.kind,
+        createdAt: result.label.createdAt,
+        updatedAt: result.label.updatedAt,
+      },
+      updatedAssets: result.updatedAssets,
+      updatedDocuments: result.updatedDocuments,
+      privacy: {
+        writes: true,
+        confirmedByUser: true,
+        note: "Renamed only because you confirmed. Home-scoped; no silent renames.",
+      },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "EMPTY_LABEL") {
+      return c.json(
+        { error: "invalid_input", message: "Value cannot be empty." },
+        400,
+      );
+    }
     return mapOwnershipError(err, c);
   }
 });

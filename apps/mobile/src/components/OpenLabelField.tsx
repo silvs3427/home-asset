@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -13,6 +14,7 @@ import {
   listPropertyLabels,
   normalizeLabelValue,
   rememberPropertyLabel,
+  renamePropertyLabel,
   type PropertyLabelKind,
 } from "@/lib/api";
 import { colors } from "@/lib/theme";
@@ -27,6 +29,13 @@ type Props = {
   placeholder?: string;
   /** Soft starter text when the list is empty (not a forced chip list). */
   emptyHint?: string;
+  /** Called after a home-wide rename so parent screens can refresh lists. */
+  onRenamed?: (next: {
+    oldValue: string;
+    newValue: string;
+    updatedAssets: number;
+    updatedDocuments: number;
+  }) => void;
 };
 
 function displayLabel(kind: PropertyLabelKind, value: string): string {
@@ -37,7 +46,8 @@ function displayLabel(kind: PropertyLabelKind, value: string): string {
 
 /**
  * Open category / document-type field: type a custom value; once used for this
- * home it stays available as a chip. No fixed pre-list.
+ * home it stays available as a chip. Long-press a chip to rename it across
+ * this home (cascades to assets / documents). No fixed pre-list.
  */
 export function OpenLabelField(props: Props) {
   const {
@@ -49,11 +59,15 @@ export function OpenLabelField(props: Props) {
     onChange,
     placeholder,
     emptyHint,
+    onRenamed,
   } = props;
   const [options, setOptions] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [renamingFrom, setRenamingFrom] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,6 +142,71 @@ export function OpenLabelField(props: Props) {
     }
   }
 
+  function beginRename(item: string) {
+    setRenamingFrom(item);
+    setRenameDraft(item);
+  }
+
+  async function applyRename() {
+    if (!renamingFrom) return;
+    const next = normalizeLabelValue(renameDraft);
+    if (!next) {
+      Alert.alert("Name required", "Enter a new category name.");
+      return;
+    }
+    if (next.toLowerCase() === renamingFrom.trim().toLowerCase() && next === renamingFrom) {
+      setRenamingFrom(null);
+      setRenameDraft("");
+      return;
+    }
+    setRenaming(true);
+    try {
+      const res = await renamePropertyLabel(
+        accessToken,
+        propertyId,
+        kind,
+        renamingFrom,
+        next,
+      );
+      const oldKey = renamingFrom.trim().toLowerCase();
+      setOptions((prev) => {
+        const withoutOld = prev.filter((v) => v.toLowerCase() !== oldKey);
+        const withoutNew = withoutOld.filter(
+          (v) => v.toLowerCase() !== res.label.value.toLowerCase(),
+        );
+        return [...withoutNew, res.label.value].sort((a, b) =>
+          a.localeCompare(b, undefined, { sensitivity: "base" }),
+        );
+      });
+      if (value.trim().toLowerCase() === oldKey) {
+        onChange(res.label.value);
+      }
+      onRenamed?.({
+        oldValue: renamingFrom,
+        newValue: res.label.value,
+        updatedAssets: res.updatedAssets,
+        updatedDocuments: res.updatedDocuments,
+      });
+      setRenamingFrom(null);
+      setRenameDraft("");
+      const count =
+        kind === "asset_category" ? res.updatedAssets : res.updatedDocuments;
+      Alert.alert(
+        "Category renamed",
+        count > 0
+          ? `Updated to “${res.label.value}” on ${count} item${count === 1 ? "" : "s"} in this home.`
+          : `Saved as “${res.label.value}” for this home.`,
+      );
+    } catch (err) {
+      Alert.alert(
+        "Could not rename",
+        err instanceof Error ? err.message : "Try again.",
+      );
+    } finally {
+      setRenaming(false);
+    }
+  }
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
@@ -143,7 +222,10 @@ export function OpenLabelField(props: Props) {
               <Pressable
                 key={item}
                 accessibilityRole="button"
+                accessibilityHint="Long press to rename across this home"
                 onPress={() => onChange(item)}
+                onLongPress={() => beginRename(item)}
+                delayLongPress={350}
                 style={[styles.chip, selected && styles.chipSelected]}
               >
                 <Text
@@ -163,6 +245,62 @@ export function OpenLabelField(props: Props) {
           {emptyHint ?? "Nothing saved yet — type your own below."}
         </Text>
       ) : null}
+      {chips.length > 0 ? (
+        <Text style={styles.renameHint}>
+          Long-press a chip to rename it for this whole home.
+        </Text>
+      ) : null}
+
+      {renamingFrom ? (
+        <View style={styles.renameBox}>
+          <Text style={styles.renameTitle}>
+            Rename “{displayLabel(kind, renamingFrom)}”
+          </Text>
+          <View style={styles.addRow}>
+            <KeyboardAwareTextInput
+              style={styles.input}
+              value={renameDraft}
+              onChangeText={setRenameDraft}
+              placeholder="New name"
+              placeholderTextColor={colors.placeholder}
+              autoCapitalize="words"
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                void applyRename();
+              }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              disabled={renaming || !renameDraft.trim()}
+              onPress={() => {
+                void applyRename();
+              }}
+              style={({ pressed }) => [
+                styles.addBtn,
+                pressed && styles.pressed,
+                (renaming || !renameDraft.trim()) && styles.disabled,
+              ]}
+            >
+              {renaming ? (
+                <ActivityIndicator color={colors.onBrand} />
+              ) : (
+                <Text style={styles.addLabel}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setRenamingFrom(null);
+              setRenameDraft("");
+            }}
+            style={styles.cancelRename}
+          >
+            <Text style={styles.cancelRenameLabel}>Cancel</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={styles.addRow}>
         <KeyboardAwareTextInput
           style={styles.input}
@@ -219,11 +357,16 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginBottom: 8,
   },
+  renameHint: {
+    fontSize: 12,
+    color: colors.muted,
+    marginBottom: 8,
+  },
   chips: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   chip: {
     borderWidth: 1,
@@ -244,6 +387,30 @@ const styles = StyleSheet.create({
   },
   chipLabelSelected: {
     color: colors.onBrand,
+  },
+  renameBox: {
+    marginBottom: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  renameTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.ink,
+    marginBottom: 8,
+  },
+  cancelRename: {
+    marginTop: 8,
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  cancelRenameLabel: {
+    color: colors.brandMuted,
+    fontSize: 13,
+    fontWeight: "600",
   },
   addRow: {
     flexDirection: "row",

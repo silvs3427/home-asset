@@ -482,6 +482,61 @@ describe("HomeAsset API — asset registry", () => {
     assert.ok(docBody.labels.some((row) => row.value === "HOA letter"));
   });
 
+  it("renames an asset category across the home", async () => {
+    const app = createApp();
+    const auth = await signup(app, "rename-cat@example.com");
+    const home = await createHome(app, auth.accessToken, "Rename Home");
+    const a = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({ name: "Roomba", category: "Robot vac" }),
+    });
+    assert.equal(a.status, 201);
+    const b = await app.request(`/properties/${home.id}/assets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({ name: "Mop", category: "Robot vac" }),
+    });
+    assert.equal(b.status, 201);
+
+    const renamed = await app.request(`/properties/${home.id}/labels`, {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${auth.accessToken}`,
+      },
+      body: JSON.stringify({
+        kind: "asset_category",
+        oldValue: "Robot vac",
+        newValue: "Floor robots",
+      }),
+    });
+    assert.equal(renamed.status, 200);
+    const renamedBody = (await renamed.json()) as {
+      label: { value: string };
+      updatedAssets: number;
+    };
+    assert.equal(renamedBody.label.value, "Floor robots");
+    assert.equal(renamedBody.updatedAssets, 2);
+
+    const list = await app.request(`/properties/${home.id}/assets`, {
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    const listBody = (await list.json()) as {
+      assets: Array<{ category: string }>;
+    };
+    assert.ok(
+      listBody.assets.every((row) => row.category === "Floor robots"),
+      "all assets should use the new category name",
+    );
+  });
+
   it("stores warranty end date and term on an asset", async () => {
     const app = createApp();
     const auth = await signup(app, "warranty@example.com");

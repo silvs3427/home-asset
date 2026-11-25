@@ -388,7 +388,14 @@ export default function AssetDetailScreen() {
           <>
             <Text style={styles.eyebrow}>{activeProperty.name}</Text>
             <Text style={styles.title}>{asset.name}</Text>
-            <Text style={styles.copy}>{categoryLabel(asset.category)}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint="Opens edit so you can change or rename the category"
+              onPress={() => setEditing(true)}
+            >
+              <Text style={styles.copy}>{categoryLabel(asset.category)}</Text>
+              <Text style={styles.categoryEditHint}>Tap to change category</Text>
+            </Pressable>
 
             <View style={styles.facts}>
               <Fact label="Manufacturer" value={asset.manufacturer} />
@@ -547,7 +554,7 @@ export default function AssetDetailScreen() {
                   pressed && styles.pressed,
                 ]}
               >
-                <Text style={styles.secondaryLabel}>Find manuals</Text>
+                <Text style={styles.secondaryLabel}>Find manuals & warranty</Text>
               </Pressable>
             ) : null}
 
@@ -1000,6 +1007,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: colors.copy,
+  },
+  categoryEditHint: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.brandMuted,
   },
   facts: {
     marginTop: 24,

@@ -86,6 +86,170 @@ export async function cloudListPropertyLabels(
   }
 }
 
+export async function cloudRenamePropertyLabel(
+  _accessToken: string,
+  propertyId: string,
+  kind: PropertyLabelKind,
+  oldValueRaw: string,
+  newValueRaw: string,
+): Promise<{
+  label: PublicPropertyLabel & { kind: PropertyLabelKind };
+  updatedAssets: number;
+  updatedDocuments: number;
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  try {
+    await requireSession();
+    const supabase = requireSupabaseClient();
+    const oldValue = normalizeLabelValue(oldValueRaw);
+    const newValue = normalizeLabelValue(newValueRaw);
+    if (!oldValue || !newValue) {
+      throw new ApiError("Value cannot be empty.", "client", 400);
+    }
+
+    const { data, error } = await supabase.rpc("rename_property_label", {
+      p_property_id: propertyId,
+      p_kind: kind,
+      p_old_value: oldValue,
+      p_new_value: newValue,
+    });
+    if (error) {
+      // Fallback when RPC not applied yet: client-side cascade via RLS.
+      console.warn("[cloud] rename_property_label RPC failed; using client cascade", {
+        message: error.message,
+      });
+      return cloudRenamePropertyLabelClientFallback(
+        propertyId,
+        kind,
+        oldValue,
+        newValue,
+      );
+    }
+    const payload = data as {
+      label?: {
+        id: string;
+        value: string;
+        kind: PropertyLabelKind;
+        createdAt: string;
+        updatedAt: string;
+      };
+      updatedAssets?: number;
+      updatedDocuments?: number;
+      privacy?: { writes: boolean; confirmedByUser: boolean; note: string };
+    };
+    if (!payload?.label) {
+      throw new ApiError("Could not rename that category.", "server", 502);
+    }
+    return {
+      label: {
+        id: payload.label.id,
+        value: payload.label.value,
+        kind: payload.label.kind ?? kind,
+        createdAt: payload.label.createdAt,
+        updatedAt: payload.label.updatedAt,
+      },
+      updatedAssets: payload.updatedAssets ?? 0,
+      updatedDocuments: payload.updatedDocuments ?? 0,
+      privacy: payload.privacy ?? {
+        writes: true,
+        confirmedByUser: true,
+        note: "Renamed only because you confirmed. Home-scoped; no silent renames.",
+      },
+    };
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    mapCloudError(err, "Could not rename category.");
+  }
+}
+
+async function cloudRenamePropertyLabelClientFallback(
+  propertyId: string,
+  kind: PropertyLabelKind,
+  oldValue: string,
+  newValue: string,
+): Promise<{
+  label: PublicPropertyLabel & { kind: PropertyLabelKind };
+  updatedAssets: number;
+  updatedDocuments: number;
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  const supabase = requireSupabaseClient();
+  const oldKey = oldValue.toLowerCase();
+  const now = new Date().toISOString();
+  let updatedAssets = 0;
+  let updatedDocuments = 0;
+
+  if (kind === "asset_category") {
+    const { data: rows, error } = await supabase
+      .from("assets")
+      .select("id, category")
+      .eq("property_id", propertyId);
+    if (error) mapCloudError(error, "Could not rename category.");
+    const matches = ((rows as Array<{ id: string; category: string }>) ?? []).filter(
+      (row) => row.category.trim().toLowerCase() === oldKey,
+    );
+    for (const row of matches) {
+      const { error: updErr } = await supabase
+        .from("assets")
+        .update({ category: newValue, updated_at: now })
+        .eq("id", row.id)
+        .eq("property_id", propertyId);
+      if (updErr) mapCloudError(updErr, "Could not rename category on assets.");
+      updatedAssets += 1;
+    }
+  } else {
+    const { data: rows, error } = await supabase
+      .from("documents")
+      .select("id, doc_type")
+      .eq("property_id", propertyId);
+    if (error) mapCloudError(error, "Could not rename document type.");
+    const matches = (
+      (rows as Array<{ id: string; doc_type: string }>) ?? []
+    ).filter((row) => row.doc_type.trim().toLowerCase() === oldKey);
+    for (const row of matches) {
+      const { error: updErr } = await supabase
+        .from("documents")
+        .update({ doc_type: newValue, updated_at: now })
+        .eq("id", row.id)
+        .eq("property_id", propertyId);
+      if (updErr) mapCloudError(updErr, "Could not rename document type.");
+      updatedDocuments += 1;
+    }
+  }
+
+  const remembered = await cloudRememberPropertyLabel(
+    "",
+    propertyId,
+    kind,
+    newValue,
+  );
+  const newKey = newValue.toLowerCase();
+  if (oldKey !== newKey) {
+    const { data: oldRows } = await supabase
+      .from("property_labels")
+      .select("id, value")
+      .eq("property_id", propertyId)
+      .eq("kind", kind);
+    const oldLabel = ((oldRows as Array<{ id: string; value: string }>) ?? []).find(
+      (row) => row.value.trim().toLowerCase() === oldKey,
+    );
+    if (oldLabel) {
+      await supabase.from("property_labels").delete().eq("id", oldLabel.id);
+    }
+  }
+
+  return {
+    label: remembered.label,
+    updatedAssets,
+    updatedDocuments,
+    privacy: {
+      writes: true,
+      confirmedByUser: true,
+      note: "Renamed only because you confirmed. Home-scoped; no silent renames.",
+    },
+  };
+}
+
 export async function cloudRememberPropertyLabel(
   _accessToken: string,
   propertyId: string,

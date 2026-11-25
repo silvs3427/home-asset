@@ -597,6 +597,43 @@ export async function rememberPropertyLabel(
   return parseJson(res);
 }
 
+/**
+ * Rename a home-scoped category / document-type label and cascade to assets
+ * (or documents) that already use the old name. Homeowner-confirmed only.
+ */
+export async function renamePropertyLabel(
+  accessToken: string,
+  propertyId: string,
+  kind: PropertyLabelKind,
+  oldValue: string,
+  newValue: string,
+): Promise<{
+  label: PublicPropertyLabel & { kind: PropertyLabelKind };
+  updatedAssets: number;
+  updatedDocuments: number;
+  privacy: { writes: boolean; confirmedByUser: boolean; note: string };
+}> {
+  if (useCloud()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./cloud").cloudRenamePropertyLabel(
+      accessToken,
+      propertyId,
+      kind,
+      oldValue,
+      newValue,
+    );
+  }
+  const res = await fetch(
+    `${API_BASE_URL}/properties/${propertyId}/labels`,
+    {
+      method: "PATCH",
+      headers: authHeaders(accessToken),
+      body: JSON.stringify({ kind, oldValue, newValue }),
+    },
+  );
+  return parseJson(res);
+}
+
 export async function createAsset(
   accessToken: string,
   propertyId: string,
@@ -1364,8 +1401,13 @@ export type SuggestedDocsManual = {
   title: string;
   sourceUrl: string | null;
   preview: string;
-  kind: "manual" | "spec" | "other";
+  kind: "manual" | "spec" | "warranty" | "other";
   selectedByDefault: boolean;
+};
+
+export type SuggestedWarrantyHint = {
+  term: string | null;
+  notes: string | null;
 };
 
 export type SuggestManualsDraft = {
@@ -1375,6 +1417,10 @@ export type SuggestManualsDraft = {
   model: string;
   identificationLabel: string;
   manuals: SuggestedDocsManual[];
+  /** Public warranty term/notes when found — draft only until confirm. */
+  warrantyHint?: SuggestedWarrantyHint | null;
+  /** Honest empty/partial search note (not a ledger write). */
+  searchNote?: string | null;
   expiresAt: string;
   privacy: {
     writes: false;
@@ -2237,7 +2283,7 @@ export async function aiConfirmAssetIntake(
 }
 
 /**
- * After make + model are on an asset: draft manuals / spec sheets for approve.
+ * After make + model are on an asset: draft manuals / specs / warranty docs for approve.
  * Cloud edge searches catalog + (live) public web; nothing stored until confirm.
  */
 export async function aiSuggestManuals(
@@ -2270,8 +2316,10 @@ export async function aiSuggestManuals(
         id: m.id,
         title: m.title,
         sourceUrl: m.sourceUrl ?? null,
+        kind: m.kind ?? "manual",
       })),
       manualContents: res.manualContents ?? {},
+      warrantyHint: res.draft.warrantyHint ?? null,
     });
     return { draft: res.draft, aiMode: res.aiMode };
   }
@@ -2284,6 +2332,9 @@ export async function aiSuggestManuals(
       model: input.model,
       identificationLabel: `${input.manufacturer} ${input.model}`,
       manuals: [],
+      warrantyHint: null,
+      searchNote:
+        "Local demo has no live web search — use the cloud phone path to find manuals.",
       expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
       privacy: {
         writes: false,
@@ -2295,6 +2346,14 @@ export async function aiSuggestManuals(
   };
 }
 
+function vaultDocTypeForKind(
+  kind: "manual" | "spec" | "warranty" | "other" | undefined,
+): string {
+  if (kind === "warranty") return "warranty";
+  if (kind === "spec") return "spec";
+  return "manual";
+}
+
 export async function aiConfirmSuggestedManuals(
   accessToken: string,
   propertyId: string,
@@ -2302,16 +2361,21 @@ export async function aiConfirmSuggestedManuals(
     draftId: string;
     assetId: string;
     selectedManualIds: string[];
+    /** Apply draft warranty term onto the asset (approve-before-official). */
+    applyWarrantyHint?: boolean;
   },
 ): Promise<{
   documents: PublicDocument[];
   storedManualCount: number;
   failed: Array<{ id: string; title: string; reason: string }>;
+  warrantyApplied: boolean;
   privacy: { writes: boolean; confirmedByUser: boolean; note: string };
 }> {
   if (useCloud()) {
     const { takeManualsDraft, invokeAiAssist } = await import("./aiEdge");
-    const { cloudCreateDocumentFromBytes } = await import("./cloud");
+    const { cloudCreateDocumentFromBytes, cloudUpdateAsset } = await import(
+      "./cloud"
+    );
     const held = takeManualsDraft(input.draftId);
     if (
       !held ||
@@ -2325,7 +2389,10 @@ export async function aiConfirmSuggestedManuals(
       );
     }
     const metaById = new Map(
-      held.manuals.map((m) => [m.id, { title: m.title, sourceUrl: m.sourceUrl }]),
+      held.manuals.map((m) => [
+        m.id,
+        { title: m.title, sourceUrl: m.sourceUrl, kind: m.kind },
+      ]),
     );
     const documents: PublicDocument[] = [];
     const failed: Array<{ id: string; title: string; reason: string }> = [];
@@ -2334,6 +2401,7 @@ export async function aiConfirmSuggestedManuals(
       const meta = metaById.get(manualId);
       const title = meta?.title || manualId;
       const sourceUrl = meta?.sourceUrl?.trim() || "";
+      const docType = vaultDocTypeForKind(meta?.kind);
       const textContent = held.manualContents[manualId];
       const isLinkStub =
         typeof textContent === "string" &&
@@ -2357,6 +2425,7 @@ export async function aiConfirmSuggestedManuals(
             sourceUrl,
             title,
             assetId: input.assetId,
+            docType,
           });
           if (fetched.ok && fetched.document) {
             documents.push(fetched.document);
@@ -2393,7 +2462,7 @@ export async function aiConfirmSuggestedManuals(
         const bytes = new TextEncoder().encode(textContent);
         const { document } = await cloudCreateDocumentFromBytes(propertyId, {
           title,
-          docType: "manual",
+          docType,
           assetId: input.assetId,
           source: "ai_fetched",
           mimeType: "text/plain",
@@ -2412,7 +2481,23 @@ export async function aiConfirmSuggestedManuals(
       });
     }
 
-    if (documents.length === 0 && failed.length > 0) {
+    let warrantyApplied = false;
+    if (
+      input.applyWarrantyHint &&
+      held.warrantyHint &&
+      (held.warrantyHint.term || held.warrantyHint.notes)
+    ) {
+      await cloudUpdateAsset(accessToken, propertyId, input.assetId, {
+        warrantyTerm: held.warrantyHint.term,
+      });
+      warrantyApplied = true;
+    }
+
+    if (
+      documents.length === 0 &&
+      failed.length > 0 &&
+      !warrantyApplied
+    ) {
       throw new ApiError(
         failed.length === 1
           ? failed[0]!.reason
@@ -2426,10 +2511,11 @@ export async function aiConfirmSuggestedManuals(
       documents,
       storedManualCount: documents.length,
       failed,
+      warrantyApplied,
       privacy: {
         writes: true,
         confirmedByUser: true,
-        note: "Saved only because you confirmed. HomeAsset never auto-adds manuals.",
+        note: "Saved only because you confirmed. HomeAsset never auto-adds manuals or warranty docs.",
       },
     };
   }

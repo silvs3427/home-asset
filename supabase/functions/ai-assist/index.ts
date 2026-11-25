@@ -38,6 +38,16 @@ import {
   HOME_SCOPE_SYSTEM_BLURB,
 } from "../_shared/topicGuard.ts";
 import { fetchManualPdf } from "../_shared/fetchManual.ts";
+import {
+  buildMakeModelSearchQuery,
+  extractHttpsUrlsFromText,
+  harvestGroundingDocs,
+  inferDocKind,
+  mergeAndRankSuggestedDocs,
+  parseSuggestedDocumentsJson,
+  type SuggestedDocKind,
+  type WarrantyHint,
+} from "../_shared/suggestWebDocs.ts";
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
@@ -118,10 +128,15 @@ const RequestSchema = z
     manufacturer: z.string().max(120).optional().nullable(),
     model: z.string().max(120).optional().nullable(),
     existingAssets: z.array(ExistingAssetSchema).max(100).optional(),
-    /** Public https URL of a suggested manual / spec (fetch-manual). */
+    /** Public https URL of a suggested manual / spec / warranty (fetch-manual). */
     sourceUrl: z.string().url().max(2048).optional().nullable(),
     /** Display title hint for filename when fetching a manual. */
     title: z.string().max(200).optional().nullable(),
+    /** Vault doc_type after approve (default manual). */
+    docType: z
+      .enum(["manual", "warranty", "spec", "other"])
+      .optional()
+      .nullable(),
   })
   .strict();
 
@@ -338,6 +353,7 @@ Deno.serve(async (req) => {
             emailIntake: true,
             assetIntake: true,
             suggestManuals: true,
+            suggestWarranties: true,
             fetchManual: true,
             permitsSuggest: true,
             submitToLedger: false,
@@ -624,11 +640,13 @@ Deno.serve(async (req) => {
             model: mdl,
             identificationLabel: `${mfr} ${mdl}`,
             manuals: manualsDraft.manuals,
+            warrantyHint: manualsDraft.warrantyHint,
+            searchNote: manualsDraft.searchNote,
             expiresAt: new Date(Date.now() + DRAFT_TTL_MS).toISOString(),
             privacy: {
               writes: false,
               confirmRequired: true,
-              note: "Suggested docs only. Nothing is stored until you choose which to keep.",
+              note: "Suggested docs only. Nothing is stored until you choose which to keep — including warranty PDFs and warranty-term hints.",
             },
           },
           aiMode: manualsDraft.mode,
@@ -675,6 +693,13 @@ Deno.serve(async (req) => {
         }
 
         const title = (body.title ?? "").trim() || "Manual";
+        const requestedDocType = (body.docType ?? "manual").trim() || "manual";
+        const vaultDocType =
+          requestedDocType === "warranty"
+            ? "warranty"
+            : requestedDocType === "spec"
+              ? "spec"
+              : "manual";
         const fetched = await fetchManualPdf({
           sourceUrl,
           titleHint: title,
@@ -694,7 +719,8 @@ Deno.serve(async (req) => {
 
         const documentId = crypto.randomUUID();
         const safeName =
-          fetched.filename.replace(/[^\w.\-()+ ]+/g, "_") || "manual.pdf";
+          fetched.filename.replace(/[^\w.\-()+ ]+/g, "_") ||
+          `${vaultDocType}.pdf`;
         const storageKey = `${body.propertyId}/${documentId}/${safeName}`;
         const uploadBody = new Blob([fetched.bytes], {
           type: fetched.mimeType,
@@ -721,7 +747,7 @@ Deno.serve(async (req) => {
             property_id: body.propertyId,
             asset_id: assetId,
             title: title.slice(0, 200),
-            doc_type: "manual",
+            doc_type: vaultDocType,
             document_date: null,
             source: "ai_fetched",
             mime_type: fetched.mimeType,
@@ -1460,8 +1486,8 @@ async function chatJsonText(args: {
 }
 
 /**
- * After make + model are known: suggest manuals / spec sheets for approve.
- * Catalog first; live Gemini may add public manufacturer links (draft only).
+ * After make + model are known: suggest manuals / specs / warranty docs for approve.
+ * Catalog first; live Gemini Google Search + grounding URLs (draft only).
  * Never writes the ledger — phone stores only after homeowner confirm.
  */
 async function suggestManualsForMakeModel(input: {
@@ -1475,10 +1501,12 @@ async function suggestManualsForMakeModel(input: {
     title: string;
     sourceUrl: string | null;
     preview: string;
-    kind: "manual" | "spec" | "other";
+    kind: SuggestedDocKind;
     selectedByDefault: boolean;
   }>;
   manualContents: Record<string, string>;
+  warrantyHint: WarrantyHint | null;
+  searchNote: string | null;
 }> {
   const qMfr = input.manufacturer.toLowerCase().trim();
   const qMdl = input.model.toLowerCase().trim();
@@ -1500,10 +1528,12 @@ async function suggestManualsForMakeModel(input: {
     title: string;
     sourceUrl: string | null;
     preview: string;
-    kind: "manual" | "spec" | "other";
+    kind: SuggestedDocKind;
     selectedByDefault: boolean;
   }> = [];
   const manualContents: Record<string, string> = {};
+  let warrantyHint: WarrantyHint | null = null;
+  let searchNote: string | null = null;
 
   if (catalogProduct) {
     catalogProduct.manuals.forEach((m, index) => {
@@ -1520,92 +1550,137 @@ async function suggestManualsForMakeModel(input: {
   }
 
   if (input.live.mode === "live") {
+    const { queryLines } = buildMakeModelSearchQuery(
+      input.manufacturer,
+      input.model,
+    );
     try {
-      const content = await chatJsonTextWithOptionalSearch({
+      const search = await chatJsonTextWithOptionalSearch({
         live: input.live,
         system:
           `${HOME_SCOPE_SYSTEM_BLURB} ` +
-          "Find official manufacturer owner's manuals and spec sheets for ONE home equipment model. " +
-          "Prefer direct https links to manufacturer.com / support / literature PDFs (URL path ending in .pdf). " +
-          "Do NOT return retailer listings, blogs, search pages, or HTML-only product pages when a PDF exists. " +
-          "Reply with JSON only: {documents:[{title,url,kind:\"manual\"|\"spec\"|\"other\",note}]}. " +
-          "Include at most 5 high-confidence docs. If unsure of a URL, omit it — never invent domains. " +
-          "This is a draft for homeowner approve; do not claim documents are already stored.",
-        user: `manufacturer=${input.manufacturer}\nmodel=${input.model}\nFind public manuals and spec sheets (prefer direct PDF URLs).`,
+          "Find official manufacturer owner's manuals, spec sheets, AND limited-warranty / warranty PDFs " +
+          "for ONE home equipment / appliance model. " +
+          "Use brand_aliases when provided (e.g. Roomba → iRobot). " +
+          "Prefer direct https manufacturer / support / literature URLs ending in .pdf. " +
+          "Do NOT return retailer listings, blogs, generic search pages, or invent domains. " +
+          "Reply with JSON only: " +
+          '{documents:[{title,url,kind:"manual"|"spec"|"warranty"|"other",note}],' +
+          "warrantyHint:{term,notes}|null}. " +
+          "warrantyHint.term is a short public term like \"1 year limited\" when known; " +
+          "never invent a calendar end date without purchase date. " +
+          "Include at most 6 high-confidence docs. This is a draft for homeowner approve — nothing is stored yet.",
+        user: queryLines,
         useGoogleSearch: input.live.provider === "gemini",
       });
-      const jsonMatch = content?.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]) as {
-          documents?: Array<{
-            title?: string;
-            url?: string;
-            kind?: string;
-            note?: string;
-          }>;
-        };
-        const seenUrls = new Set(
-          manuals
-            .map((m) => m.sourceUrl?.toLowerCase())
-            .filter(Boolean) as string[],
-        );
-        for (const doc of parsed.documents ?? []) {
-          const title = String(doc.title ?? "").trim().slice(0, 160);
-          const url = String(doc.url ?? "").trim();
-          if (!title || !/^https:\/\//i.test(url)) continue;
-          // Skip obviously non-file hosts; prefer pdf-looking paths when ranking later.
-          try {
-            const host = new URL(url).hostname.toLowerCase();
-            if (
-              host === "example.invalid" ||
-              host === "example.com" ||
-              host.endsWith(".invalid") ||
-              host.endsWith(".test")
-            ) {
-              continue;
-            }
-          } catch {
-            continue;
-          }
-          const urlKey = url.toLowerCase();
-          if (seenUrls.has(urlKey)) continue;
-          seenUrls.add(urlKey);
-          const kind =
-            doc.kind === "spec" || doc.kind === "manual" || doc.kind === "other"
-              ? doc.kind
-              : "manual";
-          const id = `web-${manuals.length + 1}-${crypto.randomUUID().slice(0, 8)}`;
-          const note = String(doc.note ?? "").trim().slice(0, 280);
-          const isLikelyPdf = /\.pdf(\?|#|$)/i.test(url);
-          // Do NOT store a fake text "link stub" — approve will fetch real PDF bytes.
-          // Empty content marks this as URL-backed (phone calls fetch-manual).
-          manuals.push({
-            id,
-            title,
-            sourceUrl: url,
-            preview:
-              note ||
-              (isLikelyPdf
+      if (search.searchError) {
+        console.error("suggest-manuals search warning", {
+          manufacturer: input.manufacturer,
+          model: input.model,
+          searchError: search.searchError.slice(0, 300),
+        });
+        searchNote = search.searchError.slice(0, 200);
+      }
+
+      const fromJson = parseSuggestedDocumentsJson(search.text);
+      if (fromJson.warrantyHint) warrantyHint = fromJson.warrantyHint;
+
+      const fromGrounding = harvestGroundingDocs(search.groundingChunks);
+      const fromTextUrls = (search.text ? extractHttpsUrlsFromText(search.text) : [])
+        .map((url) => {
+          const titleGuess =
+            inferDocKind("document", url) === "warranty"
+              ? "Warranty document"
+              : inferDocKind("document", url) === "spec"
+                ? "Spec sheet"
+                : "Owner / product document";
+          return {
+            title: titleGuess,
+            url,
+            kind: inferDocKind(titleGuess, url),
+            note: "Found in search results — saved as a real file only after you confirm.",
+          };
+        });
+
+      const merged = mergeAndRankSuggestedDocs(
+        [fromJson.documents, fromGrounding, fromTextUrls],
+        8,
+      );
+      const seenUrls = new Set(
+        manuals
+          .map((m) => m.sourceUrl?.toLowerCase())
+          .filter(Boolean) as string[],
+      );
+      for (const doc of merged) {
+        const urlKey = doc.url.toLowerCase();
+        if (seenUrls.has(urlKey)) continue;
+        seenUrls.add(urlKey);
+        const id = `web-${manuals.length + 1}-${crypto.randomUUID().slice(0, 8)}`;
+        const isLikelyPdf = /\.pdf(\?|#|$)/i.test(doc.url);
+        const kind: SuggestedDocKind = doc.kind;
+        manuals.push({
+          id,
+          title: doc.title,
+          sourceUrl: doc.url,
+          preview:
+            doc.note ||
+            (kind === "warranty"
+              ? isLikelyPdf
+                ? "Warranty PDF — saved only after you confirm."
+                : "Warranty source — HomeAsset will try to download a real PDF when you confirm."
+              : isLikelyPdf
                 ? "Manufacturer PDF — saved as a real file only after you confirm."
                 : "Suggested source — HomeAsset will try to download a real PDF when you confirm."),
-            kind,
-            selectedByDefault: manuals.length === 0,
-          });
-          // Intentionally omit manualContents[id] for web URLs — confirm fetches PDF.
-          if (manuals.length >= 6) break;
-        }
+          kind,
+          selectedByDefault:
+            manuals.length === 0 ||
+            (kind === "warranty" &&
+              !manuals.some((m) => m.kind === "warranty")),
+        });
+        // Intentionally omit manualContents[id] for web URLs — confirm fetches PDF.
+        if (manuals.length >= 8) break;
       }
-    } catch {
+
+      if (manuals.length === 0 && !searchNote) {
+        searchNote =
+          "Web search returned no downloadable manuals or warranty PDFs for this make and model yet.";
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Web search failed unexpectedly.";
+      console.error("suggest-manuals live search failed", {
+        manufacturer: input.manufacturer,
+        model: input.model,
+        message: message.slice(0, 400),
+      });
+      searchNote = message.slice(0, 200);
       // keep catalog-only draft
     }
+  } else if (manuals.length === 0) {
+    searchNote =
+      "Live AI search is off on the server, so only built-in catalog manuals are available.";
   }
 
   return {
     mode: input.live.mode,
     manuals,
     manualContents,
+    warrantyHint,
+    searchNote,
   };
 }
+
+type GeminiGroundingEnvelope = {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+    groundingMetadata?: {
+      groundingChunks?: Array<{
+        web?: { uri?: string; title?: string; domain?: string };
+      }>;
+      webSearchQueries?: string[];
+    };
+  }>;
+};
 
 /** Gemini may use Google Search grounding; OpenAI path is plain JSON chat. */
 async function chatJsonTextWithOptionalSearch(args: {
@@ -1613,7 +1688,13 @@ async function chatJsonTextWithOptionalSearch(args: {
   system: string;
   user: string;
   useGoogleSearch?: boolean;
-}): Promise<string | null> {
+}): Promise<{
+  text: string | null;
+  groundingChunks: Array<{
+    web?: { uri?: string; title?: string; domain?: string };
+  }>;
+  searchError: string | null;
+}> {
   if (args.live.provider === "gemini" && args.useGoogleSearch) {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/` +
@@ -1629,35 +1710,88 @@ async function chatJsonTextWithOptionalSearch(args: {
             parts: [{ text: `${args.system}\n\n${args.user}` }],
           },
         ],
+        // REST snake_case tool name for Gemini Developer API.
         tools: [{ google_search: {} }],
-        generationConfig: { temperature: 0 },
+        // Slightly higher temp helps search-grounded synthesis; URLs still filtered.
+        generationConfig: { temperature: 0.2 },
       }),
     });
     const rawText = await response.text();
     if (!response.ok) {
-      // Fall back to non-search chat if the tool is unavailable on this model/key.
-      return chatJsonText({
-        live: args.live,
-        system: args.system,
-        user: args.user,
+      console.error("suggest-manuals gemini google_search HTTP", {
+        status: response.status,
+        body: rawText.slice(0, 400),
       });
+      // Fall back to non-search chat if the tool is unavailable on this model/key.
+      try {
+        const fallback = await chatJsonText({
+          live: args.live,
+          system: args.system,
+          user: args.user,
+        });
+        return {
+          text: fallback,
+          groundingChunks: [],
+          searchError: `Google Search tool unavailable (HTTP ${response.status}); used model knowledge only.`,
+        };
+      } catch (fallbackErr) {
+        const msg =
+          fallbackErr instanceof Error
+            ? fallbackErr.message
+            : "Fallback chat failed";
+        return {
+          text: null,
+          groundingChunks: [],
+          searchError: `Google Search failed (HTTP ${response.status}); ${msg}`.slice(
+            0,
+            240,
+          ),
+        };
+      }
     }
-    const envelope = JSON.parse(rawText) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    return (
-      envelope.candidates?.[0]?.content?.parts
+    let envelope: GeminiGroundingEnvelope;
+    try {
+      envelope = JSON.parse(rawText) as GeminiGroundingEnvelope;
+    } catch {
+      return {
+        text: null,
+        groundingChunks: [],
+        searchError: "Google Search returned an unreadable response.",
+      };
+    }
+    const candidate = envelope.candidates?.[0];
+    const text =
+      candidate?.content?.parts
         ?.map((p) => p.text ?? "")
         .join("")
-        .trim() || null
-    );
+        .trim() || null;
+    const groundingChunks = candidate?.groundingMetadata?.groundingChunks ?? [];
+    return {
+      text,
+      groundingChunks,
+      searchError: null,
+    };
   }
-  return chatJsonText({
-    live: args.live,
-    system: args.system,
-    user: args.user,
-  });
+  try {
+    const text = await chatJsonText({
+      live: args.live,
+      system: args.system,
+      user: args.user,
+    });
+    return {
+      text,
+      groundingChunks: [],
+      searchError:
+        args.live.provider === "openai"
+          ? "OpenAI path has no live web search — results may be limited."
+          : null,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Chat failed";
+    return { text: null, groundingChunks: [], searchError: msg.slice(0, 200) };
+  }
 }
+
 
 async function formatContractor(input: {
   inputText: string;

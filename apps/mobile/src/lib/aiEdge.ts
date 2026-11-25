@@ -240,7 +240,7 @@ export function takeAssetIntakeDraft(draftId: string) {
   return value;
 }
 
-/** Manual / spec suggestions held until homeowner confirms (cloud path). */
+/** Manual / spec / warranty suggestions held until homeowner confirms (cloud path). */
 const manualsDraftById = new Map<
   string,
   {
@@ -248,8 +248,14 @@ const manualsDraftById = new Map<
     assetId: string;
     manufacturer: string;
     model: string;
-    manuals: Array<{ id: string; title: string; sourceUrl: string | null }>;
+    manuals: Array<{
+      id: string;
+      title: string;
+      sourceUrl: string | null;
+      kind: "manual" | "spec" | "warranty" | "other";
+    }>;
     manualContents: Record<string, string>;
+    warrantyHint: { term: string | null; notes: string | null } | null;
   }
 >();
 
@@ -260,11 +266,20 @@ export function rememberManualsDraft(
     assetId: string;
     manufacturer: string;
     model: string;
-    manuals: Array<{ id: string; title: string; sourceUrl: string | null }>;
+    manuals: Array<{
+      id: string;
+      title: string;
+      sourceUrl: string | null;
+      kind: "manual" | "spec" | "warranty" | "other";
+    }>;
     manualContents: Record<string, string>;
+    warrantyHint?: { term: string | null; notes: string | null } | null;
   },
 ): void {
-  manualsDraftById.set(draftId, draft);
+  manualsDraftById.set(draftId, {
+    ...draft,
+    warrantyHint: draft.warrantyHint ?? null,
+  });
 }
 
 export function takeManualsDraft(draftId: string) {

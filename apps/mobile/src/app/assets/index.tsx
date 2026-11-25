@@ -2,6 +2,7 @@ import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,8 @@ import {
   categoryLabel,
   listAssets,
   listPropertyLabels,
+  normalizeLabelValue,
+  renamePropertyLabel,
   type PublicAsset,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -39,6 +42,9 @@ export default function AssetsListScreen() {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     () => new Set(),
   );
+  const [renamingCategory, setRenamingCategory] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   const load = useCallback(async () => {
     if (!accessToken || !activeProperty) {
@@ -162,6 +168,54 @@ export default function AssetsListScreen() {
     });
   }, []);
 
+  const applyCategoryRename = useCallback(async () => {
+    if (!accessToken || !activeProperty || !renamingCategory) return;
+    const next = normalizeLabelValue(renameDraft);
+    if (!next) {
+      Alert.alert("Name required", "Enter a new category name.");
+      return;
+    }
+    setRenaming(true);
+    try {
+      const res = await renamePropertyLabel(
+        accessToken,
+        activeProperty.id,
+        "asset_category",
+        renamingCategory,
+        next,
+      );
+      if (
+        categoryFilter &&
+        categoryFilter.toLowerCase() === renamingCategory.toLowerCase()
+      ) {
+        setCategoryFilter(res.label.value);
+      }
+      setRenamingCategory(null);
+      setRenameDraft("");
+      await load();
+      Alert.alert(
+        "Category renamed",
+        res.updatedAssets > 0
+          ? `Updated to “${res.label.value}” on ${res.updatedAssets} asset${res.updatedAssets === 1 ? "" : "s"}.`
+          : `Saved as “${res.label.value}”.`,
+      );
+    } catch (err) {
+      Alert.alert(
+        "Could not rename",
+        err instanceof Error ? err.message : "Try again.",
+      );
+    } finally {
+      setRenaming(false);
+    }
+  }, [
+    accessToken,
+    activeProperty,
+    renamingCategory,
+    renameDraft,
+    categoryFilter,
+    load,
+  ]);
+
   if (!user) {
     return <Redirect href="/sign-in" />;
   }
@@ -239,9 +293,15 @@ export default function AssetsListScreen() {
                   key={cat.toLowerCase()}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
+                  accessibilityHint="Long press to rename this category for the whole home"
                   onPress={() =>
                     setCategoryFilter(on ? null : cat)
                   }
+                  onLongPress={() => {
+                    setRenamingCategory(cat);
+                    setRenameDraft(cat);
+                  }}
+                  delayLongPress={350}
                   style={[styles.chip, on && styles.chipOn]}
                 >
                   <Text
@@ -253,6 +313,61 @@ export default function AssetsListScreen() {
               );
             })}
           </ScrollView>
+        ) : null}
+
+        {knownCategories.length > 0 ? (
+          <Text style={styles.renameHint}>
+            Long-press a category to rename it across this home.
+          </Text>
+        ) : null}
+
+        {renamingCategory ? (
+          <View style={styles.renameBox}>
+            <Text style={styles.renameTitle}>
+              Rename “{categoryLabel(renamingCategory)}”
+            </Text>
+            <View style={styles.renameRow}>
+              <TextInput
+                value={renameDraft}
+                onChangeText={setRenameDraft}
+                placeholder="New category name"
+                placeholderTextColor={colors.placeholder}
+                style={styles.renameInput}
+                autoCapitalize="words"
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  void applyCategoryRename();
+                }}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={renaming || !renameDraft.trim()}
+                onPress={() => {
+                  void applyCategoryRename();
+                }}
+                style={[
+                  styles.renameSave,
+                  (renaming || !renameDraft.trim()) && styles.renameDisabled,
+                ]}
+              >
+                {renaming ? (
+                  <ActivityIndicator color={colors.onBrand} />
+                ) : (
+                  <Text style={styles.renameSaveLabel}>Save</Text>
+                )}
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setRenamingCategory(null);
+                setRenameDraft("");
+              }}
+              style={styles.renameCancel}
+            >
+              <Text style={styles.renameCancelLabel}>Cancel</Text>
+            </Pressable>
+          </View>
         ) : null}
 
         <View style={styles.toolbar}>
@@ -488,6 +603,67 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: colors.surface,
+  },
+  renameHint: {
+    marginTop: 6,
+    fontSize: 12,
+    color: colors.muted,
+  },
+  renameBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  renameTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.ink,
+    marginBottom: 8,
+  },
+  renameRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  renameInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: colors.ink,
+  },
+  renameSave: {
+    backgroundColor: colors.brand,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minWidth: 64,
+    alignItems: "center",
+  },
+  renameSaveLabel: {
+    color: colors.onBrand,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  renameDisabled: {
+    opacity: 0.55,
+  },
+  renameCancel: {
+    marginTop: 8,
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  renameCancelLabel: {
+    color: colors.brandMuted,
+    fontSize: 13,
+    fontWeight: "600",
   },
   chipOn: {
     backgroundColor: colors.accent,
