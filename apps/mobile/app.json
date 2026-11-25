@@ -23,7 +23,6 @@
     },
     "android": {
       "package": "com.homeasset.app",
-      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#002D72",
         "foregroundImage": "./assets/android-icon-foreground.png",
