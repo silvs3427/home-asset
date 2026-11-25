@@ -2413,6 +2413,18 @@ export async function aiConfirmSuggestedManuals(
         !!sourceUrl &&
         /^https:\/\//i.test(sourceUrl) &&
         !isUnfetchableManualUrl(sourceUrl);
+      // Other draft https URLs (grounding alternates) if the primary is hotlink-blocked.
+      const alternateUrls = held.manuals
+        .filter((m) => m.id !== manualId)
+        .map((m) => m.sourceUrl?.trim() || "")
+        .filter(
+          (u) =>
+            !!u &&
+            /^https:\/\//i.test(u) &&
+            !isUnfetchableManualUrl(u) &&
+            u.toLowerCase() !== sourceUrl.toLowerCase(),
+        )
+        .slice(0, 6);
       if (canFetchUrl) {
         try {
           const fetched = await invokeAiAssist<{
@@ -2420,12 +2432,14 @@ export async function aiConfirmSuggestedManuals(
             document?: PublicDocument;
             reason?: string;
             code?: string;
+            fetchCode?: string;
           }>("fetch-manual", {
             propertyId,
             sourceUrl,
             title,
             assetId: input.assetId,
             docType,
+            alternateUrls,
           });
           if (fetched.ok && fetched.document) {
             documents.push(fetched.document);

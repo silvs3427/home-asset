@@ -130,6 +130,8 @@ const RequestSchema = z
     existingAssets: z.array(ExistingAssetSchema).max(100).optional(),
     /** Public https URL of a suggested manual / spec / warranty (fetch-manual). */
     sourceUrl: z.string().url().max(2048).optional().nullable(),
+    /** Other grounding / draft https URLs to try if the primary is hotlink-blocked. */
+    alternateUrls: z.array(z.string().url().max(2048)).max(8).optional(),
     /** Display title hint for filename when fetching a manual. */
     title: z.string().max(200).optional().nullable(),
     /** Vault doc_type after approve (default manual). */
@@ -700,9 +702,14 @@ Deno.serve(async (req) => {
             : requestedDocType === "spec"
               ? "spec"
               : "manual";
+        const alternateUrls = (body.alternateUrls ?? [])
+          .map((u) => String(u ?? "").trim())
+          .filter(Boolean)
+          .slice(0, 8);
         const fetched = await fetchManualPdf({
           sourceUrl,
           titleHint: title,
+          alternateUrls,
         });
         if (!fetched.ok) {
           return jsonResponse({
@@ -712,7 +719,10 @@ Deno.serve(async (req) => {
             fetchCode: fetched.code,
             privacy: {
               writes: false,
-              note: "Nothing was stored. HomeAsset does not save broken links as manuals.",
+              note:
+                fetched.code === "hotlink_blocked"
+                  ? "Nothing was stored. The manufacturer blocked the download — try another suggestion or upload the PDF on the asset."
+                  : "Nothing was stored. HomeAsset does not save broken links as manuals.",
             },
           });
         }
