@@ -2,12 +2,21 @@
  * Resolve a suggested manual URL to real file bytes (prefer PDF).
  * Used on homeowner approve — never store HTML interstitial pages as manuals.
  * SSRF-hardened: https only, no private/link-local hosts.
+ *
+ * Manufacturer CDNs often hotlink-block bare bots (403). We send a browser-like
+ * User-Agent + Referer, retry a few referer strategies, then try alternate
+ * grounding URLs from the same suggest draft.
  */
 
 /** Stay under Storage bucket limit (15 MiB) with headroom. */
 export const MAX_MANUAL_BYTES = 14 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 25_000;
 const MAX_HTML_PDF_CANDIDATES = 3;
+const MAX_ALTERNATE_URLS = 6;
+
+/** Browser-like UA — bare custom agents are commonly hotlink-blocked (403). */
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 
 const PDF_MAGIC = new TextEncoder().encode("%PDF");
 
@@ -27,6 +36,7 @@ export type FetchManualFailure = {
     | "invalid_url"
     | "blocked_host"
     | "fetch_failed"
+    | "hotlink_blocked"
     | "not_a_file"
     | "too_large"
     | "html_no_pdf";
@@ -128,6 +138,70 @@ export function parseSafeHttpsUrl(
   return { ok: true, url };
 }
 
+/** HTTP statuses that usually mean hotlink / bot / geo block — not "missing file". */
+export function isHotlinkHttpStatus(status: number): boolean {
+  return status === 401 || status === 403 || status === 451;
+}
+
+export function reasonForHttpStatus(status: number): {
+  reason: string;
+  code: FetchManualFailure["code"];
+} {
+  if (isHotlinkHttpStatus(status)) {
+    return {
+      code: "hotlink_blocked",
+      reason:
+        "The manufacturer site blocked the download (hotlink / access rule). " +
+        "HomeAsset tried browser-style headers and any alternate links from the same search. " +
+        "Nothing was stored — open the link on your phone or upload the PDF on the asset.",
+    };
+  }
+  if (status === 404) {
+    return {
+      code: "fetch_failed",
+      reason:
+        "That file link is gone (HTTP 404). Try another suggestion or upload the PDF yourself.",
+    };
+  }
+  if (status === 429) {
+    return {
+      code: "fetch_failed",
+      reason:
+        "The manufacturer site rate-limited the download. Wait a moment and try again, or upload the PDF yourself.",
+    };
+  }
+  return {
+    code: "fetch_failed",
+    reason: `The source returned HTTP ${status} — the file was not available to download.`,
+  };
+}
+
+/**
+ * Referer strategies: many CDNs require a same-site Referer; some reject bots
+ * with none; a few allow Google search referrals.
+ */
+export function buildRefererStrategies(url: URL): Array<string | null> {
+  const origin = url.origin;
+  const parentPath = url.pathname.replace(/\/[^/]*$/, "/") || "/";
+  const parent = `${origin}${parentPath}`;
+  const strategies: Array<string | null> = [
+    `${origin}/`,
+    parent,
+    null,
+    "https://www.google.com/",
+  ];
+  // Dedupe while preserving order.
+  const seen = new Set<string>();
+  const out: Array<string | null> = [];
+  for (const s of strategies) {
+    const key = s === null ? "__null__" : s;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 function filenameFromUrl(url: URL, fallback: string): string {
   const last = url.pathname.split("/").filter(Boolean).pop() ?? "";
   const decoded = decodeURIComponent(last).replace(/[^\w.\-()+ ]+/g, "_");
@@ -151,11 +225,40 @@ function contentTypeIsHtml(header: string | null): boolean {
   return header.toLowerCase().includes("text/html");
 }
 
-async function fetchBytes(
+function browserHeaders(
+  target: URL,
+  referer: string | null,
+): Record<string, string> {
+  let fetchSite = "none";
+  if (referer) {
+    try {
+      const refHost = new URL(referer).hostname.toLowerCase();
+      fetchSite =
+        refHost === target.hostname.toLowerCase() ? "same-origin" : "cross-site";
+    } catch {
+      fetchSite = "cross-site";
+    }
+  }
+  const headers: Record<string, string> = {
+    Accept:
+      "application/pdf,application/octet-stream;q=0.9,text/html;q=0.8,*/*;q=0.5",
+    "Accept-Language": "en-US,en;q=0.9",
+    "User-Agent": BROWSER_UA,
+    // Hint we are navigating for a document (not a silent scrapers-only profile).
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": fetchSite,
+  };
+  if (referer) headers.Referer = referer;
+  return headers;
+}
+
+async function fetchBytesOnce(
   url: URL,
+  referer: string | null,
 ): Promise<
   | { ok: true; bytes: Uint8Array; contentType: string | null; finalUrl: string }
-  | { ok: false; reason: string; code: FetchManualFailure["code"] }
+  | { ok: false; reason: string; code: FetchManualFailure["code"]; status?: number }
 > {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -164,16 +267,15 @@ async function fetchBytes(
       method: "GET",
       redirect: "follow",
       signal: controller.signal,
-      headers: {
-        Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.5",
-        "User-Agent": "HomeAssetManualFetch/1.0",
-      },
+      headers: browserHeaders(url, referer),
     });
     if (!response.ok) {
+      const mapped = reasonForHttpStatus(response.status);
       return {
         ok: false,
-        reason: `The source returned HTTP ${response.status} — file was not available.`,
-        code: "fetch_failed",
+        reason: mapped.reason,
+        code: mapped.code,
+        status: response.status,
       };
     }
     // Re-check final URL after redirects (SSRF).
@@ -243,6 +345,40 @@ async function fetchBytes(
   }
 }
 
+/**
+ * Fetch bytes with referer retries when the CDN hotlink-blocks the first attempt.
+ */
+async function fetchBytes(
+  url: URL,
+): Promise<
+  | { ok: true; bytes: Uint8Array; contentType: string | null; finalUrl: string }
+  | { ok: false; reason: string; code: FetchManualFailure["code"] }
+> {
+  const strategies = buildRefererStrategies(url);
+  let lastFail: {
+    reason: string;
+    code: FetchManualFailure["code"];
+  } | null = null;
+
+  for (const referer of strategies) {
+    const result = await fetchBytesOnce(url, referer);
+    if (result.ok) return result;
+    lastFail = { reason: result.reason, code: result.code };
+    // Only rotate referer strategies on hotlink-ish blocks.
+    if (result.code !== "hotlink_blocked") {
+      return { ok: false, reason: result.reason, code: result.code };
+    }
+  }
+
+  return (
+    lastFail ?? {
+      ok: false,
+      reason: reasonForHttpStatus(403).reason,
+      code: "hotlink_blocked",
+    }
+  );
+}
+
 /** Pull absolute https PDF hrefs from a simple HTML page (no full DOM). */
 export function extractPdfLinksFromHtml(
   html: string,
@@ -281,7 +417,7 @@ function scorePdfCandidate(urlStr: string, pageHost: string): number {
     if (u.hostname.toLowerCase() === pageHost) score += 50;
     if (/\.pdf$/i.test(u.pathname)) score += 20;
     const path = u.pathname.toLowerCase();
-    if (/manual|owner|literature|support|docs|document|spec/.test(path)) {
+    if (/manual|owner|literature|support|docs|document|spec|warrant/.test(path)) {
       score += 15;
     }
     if (/blog|forum|reddit|pinterest|facebook/.test(u.hostname)) score -= 40;
@@ -315,19 +451,14 @@ function bytesToResult(
   };
 }
 
-/**
- * Download a suggested manual URL into real PDF bytes, or fail honestly.
- * Prefer direct PDFs; if the URL is an HTML landing page, try a few linked PDFs.
- */
-export async function fetchManualPdf(input: {
-  sourceUrl: string;
-  titleHint?: string;
-}): Promise<FetchManualResult> {
-  const parsed = parseSafeHttpsUrl(input.sourceUrl);
+async function resolveOneUrl(
+  sourceUrl: string,
+  titleHint: string,
+): Promise<FetchManualResult> {
+  const parsed = parseSafeHttpsUrl(sourceUrl);
   if (!parsed.ok) {
     return { ok: false, reason: parsed.reason, code: parsed.code };
   }
-  const titleHint = (input.titleHint ?? "manual").trim() || "manual";
 
   const first = await fetchBytes(parsed.url);
   if (!first.ok) return first;
@@ -373,13 +504,25 @@ export async function fetchManualPdf(input: {
     };
   }
 
+  let sawHotlink = false;
   for (const candidate of candidates) {
     const next = await fetchBytes(new URL(candidate));
-    if (!next.ok) continue;
+    if (!next.ok) {
+      if (next.code === "hotlink_blocked") sawHotlink = true;
+      continue;
+    }
     if (looksLikePdf(next.bytes) || contentTypeIsPdf(next.contentType)) {
       const result = bytesToResult(next.bytes, next.finalUrl, titleHint);
       if (result.ok) return result;
     }
+  }
+
+  if (sawHotlink) {
+    return {
+      ok: false,
+      reason: reasonForHttpStatus(403).reason,
+      code: "hotlink_blocked",
+    };
   }
 
   return {
@@ -387,6 +530,86 @@ export async function fetchManualPdf(input: {
     reason:
       "Found links on that page, but none returned a real PDF. Nothing was stored for this suggestion.",
     code: "html_no_pdf",
+  };
+}
+
+/** Normalize + dedupe alternate https URLs (skip primary / invalid). */
+export function normalizeAlternateUrls(
+  primary: string,
+  alternates: string[] | null | undefined,
+): string[] {
+  const primaryKey = primary.trim().toLowerCase();
+  const seen = new Set<string>(primaryKey ? [primaryKey] : []);
+  const out: string[] = [];
+  for (const raw of alternates ?? []) {
+    const trimmed = String(raw ?? "").trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    const safe = parseSafeHttpsUrl(trimmed);
+    if (!safe.ok) continue;
+    seen.add(key);
+    out.push(safe.url.toString());
+    if (out.length >= MAX_ALTERNATE_URLS) break;
+  }
+  return out;
+}
+
+/**
+ * Download a suggested manual URL into real PDF bytes, or fail honestly.
+ * Prefer direct PDFs; if the URL is an HTML landing page, try a few linked PDFs.
+ * On hotlink / fetch failure, try alternate grounding URLs from the same suggest draft.
+ */
+export async function fetchManualPdf(input: {
+  sourceUrl: string;
+  titleHint?: string;
+  /** Other https candidates from the same suggest draft / grounding set. */
+  alternateUrls?: string[] | null;
+}): Promise<FetchManualResult> {
+  const titleHint = (input.titleHint ?? "manual").trim() || "manual";
+  const primary = input.sourceUrl.trim();
+  const queue = [primary, ...normalizeAlternateUrls(primary, input.alternateUrls)];
+
+  let lastFail: FetchManualFailure | null = null;
+  for (const url of queue) {
+    const result = await resolveOneUrl(url, titleHint);
+    if (result.ok) return result;
+    lastFail = result;
+    // Keep trying alternates when this URL was blocked or unreachable.
+    if (
+      result.code !== "hotlink_blocked" &&
+      result.code !== "fetch_failed" &&
+      result.code !== "html_no_pdf" &&
+      result.code !== "not_a_file"
+    ) {
+      // invalid_url / blocked_host / too_large on primary — still try alternates
+      // for invalid primary only if we have more; for too_large stop.
+      if (result.code === "too_large") return result;
+    }
+  }
+
+  if (lastFail) {
+    // If we exhausted alternates after hotlink, keep the clear hotlink message.
+    if (
+      lastFail.code === "hotlink_blocked" ||
+      queue.length > 1
+    ) {
+      return {
+        ok: false,
+        code: lastFail.code === "hotlink_blocked" ? "hotlink_blocked" : lastFail.code,
+        reason:
+          lastFail.code === "hotlink_blocked"
+            ? lastFail.reason
+            : `${lastFail.reason} Tried ${queue.length} link${queue.length === 1 ? "" : "s"} from the search — nothing was stored.`,
+      };
+    }
+    return lastFail;
+  }
+
+  return {
+    ok: false,
+    reason: "No downloadable PDF URL was provided.",
+    code: "invalid_url",
   };
 }
 
